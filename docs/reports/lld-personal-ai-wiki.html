@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLD — Personal AI Wiki</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{ margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1120px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent), var(--bg);
+  color:var(--fg); transition:background .3s, color .3s; }
+h1{ font-size:1.9rem; margin:.2rem 0; }
+h2{ font-size:1.32rem; margin:2.3rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.05rem; margin:1.3rem 0 .4rem; color:var(--accent-2); }
+a{ color:var(--accent-2); }
+code{ font-family:ui-monospace, monospace; background:color-mix(in srgb,var(--accent) 10%, var(--surface)); padding:.04rem .34rem; border-radius:5px; font-size:.87em; }
+pre{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.8rem 1rem; overflow:auto; box-shadow:0 1px 8px var(--shadow); font-size:.8rem; line-height:1.45; margin:.8rem 0; }
+pre code{ background:none; padding:0; white-space:pre; font-size:inherit; }
+.theme-btn{ position:sticky; top:.5rem; float:right; z-index:5; cursor:pointer; user-select:none; padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+.lead{ font-size:1.06rem; }
+.sub{ color:var(--muted); font-size:.94rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0; background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0; box-shadow:0 1px 8px var(--shadow); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.cols{ display:flex; flex-wrap:wrap; gap:1rem; }
+.cols > .card-box{ flex:1 1 300px; }
+.card-box{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.8rem 1rem; box-shadow:0 1px 8px var(--shadow); }
+.card-box h3{ margin-top:.2rem; }
+ul.tight li{ margin:.26rem 0; }
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface); margin:1rem 0; font-size:.88rem; border:1px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.48rem .7rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+.badge{ display:inline-block; font-size:.7rem; padding:.04rem .5rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
+.badge.llm{ color:var(--warn-2); border-color:var(--warn); } .badge.det{ color:var(--ok-2); border-color:var(--ok); } .badge.rec{ color:var(--accent-2); border-color:var(--accent); }
+.rpt-c4 .boundary{ border:1.6px dashed var(--accent); border-radius:12px; padding:1.9rem 1rem 1rem; margin:.7rem 0; position:relative; display:flex; flex-wrap:wrap; gap:.6rem; background:color-mix(in srgb, var(--accent) 5%, transparent); }
+.rpt-c4 .boundary::before{ content:attr(data-label); position:absolute; top:-.7rem; left:.9rem; background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600; }
+.rpt-c4 .comp{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.5rem .8rem; min-width:7rem; font-size:.82rem; box-shadow:0 1px 6px var(--shadow); border-left:4px solid var(--accent); flex:1 1 8rem; }
+.rpt-c4 .comp b{ color:var(--accent); } .rpt-c4 .comp .s{ font-size:.74rem; color:var(--muted); }
+figure.diagram{ margin:1.2rem 0; } figure.diagram svg{ width:100%; height:auto; display:block; overflow:visible; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.35rem; text-align:center; }
+.card{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; filter:url(#dropshadow); transition:stroke .15s, stroke-width .15s; }
+.node:hover .card{ stroke:var(--accent); stroke-width:2.5; }
+.bar-accent{ fill:var(--accent); } .bar-ok{ fill:var(--ok); } .bar-warn{ fill:var(--warn); } .bar-term{ fill:var(--danger); }
+.t-title{ fill:var(--fg); font:600 13px system-ui, sans-serif; } .t-sub{ fill:var(--muted); font:11px system-ui, sans-serif; }
+text{ pointer-events:none; }
+.conn-a{ fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:5 5; }
+.flow{ fill:none; stroke:var(--accent); stroke-width:2.6; stroke-dasharray:8 6; animation:dash 1.1s linear infinite; }
+.flow-ok{ fill:none; stroke:var(--ok); stroke-width:2.6; stroke-dasharray:8 6; animation:dash 1.1s linear infinite; }
+@keyframes dash{ to{ stroke-dashoffset:-14; } }
+@media (prefers-reduced-motion: reduce){ .flow,.flow-ok{ animation:none; } }
+.lbl-bg{ fill:var(--bg); } .lbl{ fill:var(--fg); font:11px system-ui, sans-serif; }
+.boundary-rect{ fill:none; stroke:var(--accent); stroke-width:1.6; stroke-dasharray:7 6; opacity:.85; }
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+.toc{ columns:2; font-size:.9rem; } .toc a{ display:block; margin:.2rem 0; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Сменить тему">🌙 / ☀️</label>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="dropshadow" x="-20%" y="-20%" width="140%" height="160%">
+    <feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="var(--shadow)" flood-opacity="1"/>
+  </filter>
+  <marker id="arrA" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--accent)"/></marker>
+  <marker id="arrOk" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--ok)"/></marker>
+</defs></svg>
+
+<main class="report">
+<h1>LLD — Personal AI Wiki</h1>
+<p class="sub">Low-Level Design · дополняет <code>hld-personal-ai-wiki.html</code> · сформировано 2026-06-21</p>
+<p class="lead">Детальный дизайн: раскладка модулей, схема БД, контракты, операции харнесса, ingest/чанкинг,
+retrieval, очередь задач, API+MCP, веб-UI, конфигурация, безопасность/деплой/тесты. Все развилки согласованы
+пошагово (см. §13 «Журнал решений»).</p>
+
+<div class="note"><b>Стек:</b> Python 3.12 · <code>uv</code> · FastAPI (async) · Jinja2 + HTMX + Cytoscape.js (вендорный) ·
+PostgreSQL 16 + <code>pgvector</code> · Redis + <code>arq</code> · OpenAI-совместимый LLM (URL/ключ в admin-UI) ·
+MCP Python SDK (Streamable HTTP) · Docker Compose.</div>
+
+<h3>Оглавление</h3>
+<nav class="toc">
+<a href="#s1">§1 Раскладка модулей</a>
+<a href="#s2">§2 Схема БД</a>
+<a href="#s3">§3 Контракты</a>
+<a href="#s4">§4 Операции харнесса</a>
+<a href="#s5">§5 Ingest и чанкинг</a>
+<a href="#s6">§6 Retrieval</a>
+<a href="#s7">§7 Jobs/worker</a>
+<a href="#s8">§8 API + MCP</a>
+<a href="#s9">§9 Web UI</a>
+<a href="#s10">§10 Конфигурация</a>
+<a href="#s11">§11 Безопасность/деплой/тесты</a>
+<a href="#s12">§12 Сводные диаграммы</a>
+<a href="#s13">§13 Журнал решений</a>
+</nav>
+
+<!-- §1 -->
+<h2 id="s1">§1 · Раскладка модулей и зависимости</h2>
+<p>src-layout, пакет <code>paw</code>, один образ — два процесса (<code>api</code> uvicorn, <code>worker</code> arq). MCP смонтирован в app.</p>
+<pre><code>src/paw/
+  config.py                # pydantic-settings: env (инфра/секреты)
+  main.py                  # FastAPI factory: mount /api/v1, /mcp, / (web)
+  worker.py                # arq WorkerSettings
+  db/        models.py session.py repos/
+  storage/   base.py postgres.py [s3.py]
+  providers/ base.py openai_compat.py      # ChatProvider + EmbeddingProvider
+  harness/   loop.py tools.py ops/{ingest,query,lint,format,init,chat}.py prompts/
+  ingest/    loaders/{md,pdf,docx,html,epub,url}.py chunking.py extract.py pipeline.py
+  vector/    embed.py search.py reindex.py
+  graph/     repo.py traverse.py
+  jobs/      tasks.py progress.py
+  services/  domains.py articles.py sources.py chat.py settings.py
+  api/       deps.py auth.py errors.py pagination.py routers/*  web/{routes.py,templates/,static/}
+  mcp/       server.py tools.py
+  security/  csrf.py sanitize.py uploads.py secrets.py ssrf.py
+  audit/     log.py
+alembic/</code></pre>
+<p><b>Правила зависимостей (без циклов):</b> <code>api/web/mcp → services + retrieval</code>; <code>services → db.repos, storage, vector, graph, jobs, harness</code>;
+<code>harness → providers</code> и storage/vector/graph <b>через tools</b>; <code>ingest/vector/graph/storage/providers → db</code>; <code>db, config</code> — листья.</p>
+
+<!-- §2 -->
+<h2 id="s2">§2 · Схема БД (DDL, индексы, каскады)</h2>
+<p>PostgreSQL 16 + pgvector. UUID PK (<code>gen_random_uuid</code>), фикс <code>vector(dim)</code> из конфига, FTS <code>'simple'</code>.</p>
+<pre><code>CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS citext;
+
+CREATE TYPE user_role     AS ENUM ('admin','editor','viewer');
+CREATE TYPE source_status AS ENUM ('uploaded','extracted','ingested','failed');
+CREATE TYPE rev_origin    AS ENUM ('ai','user');
+CREATE TYPE job_type      AS ENUM ('ingest','lint','format','reindex');
+CREATE TYPE job_status    AS ENUM ('queued','running','succeeded','failed','cancelled');
+
+CREATE TABLE users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email citext UNIQUE NOT NULL, pw_hash text NOT NULL,
+  role user_role NOT NULL DEFAULT 'viewer', created_at timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE api_keys (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  prefix text NOT NULL, hash text NOT NULL, scopes text[] NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(), last_used timestamptz, revoked_at timestamptz);
+CREATE INDEX ON api_keys(prefix);
+
+CREATE TABLE app_settings (         -- singleton: wiki-defaults + LLM-провайдер (api_key -> шифротекст)
+  id boolean PRIMARY KEY DEFAULT true CHECK (id), settings jsonb NOT NULL DEFAULT '{}');
+
+CREATE TABLE domains (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE, source_prefix text NOT NULL, wiki_prefix text NOT NULL,
+  config jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE blobs (                 -- StorageBackend: мелкие тела (bytea)
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  data bytea NOT NULL, content_type text, created_at timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE sources (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+  storage_ref text NOT NULL,         -- 'blob:uuid' | 'lo:oid' | 's3:key'
+  filename text, type text NOT NULL, url text, checksum text NOT NULL,
+  status source_status NOT NULL DEFAULT 'uploaded', created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (domain_id, checksum));
+
+CREATE TABLE articles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+  slug text NOT NULL, title text NOT NULL, storage_ref text NOT NULL, summary text,
+  current_rev int NOT NULL DEFAULT 1,                -- optimistic lock
+  updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE (domain_id, slug));
+
+CREATE TABLE article_revisions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  rev_no int NOT NULL, storage_ref text NOT NULL,
+  author_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  origin rev_origin NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (article_id, rev_no));
+
+CREATE TABLE entities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+  name text NOT NULL, type text NOT NULL,
+  article_id uuid REFERENCES articles(id) ON DELETE SET NULL,   -- каноническая страница
+  UNIQUE (domain_id, type, name));
+CREATE TABLE article_entities (
+  article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  entity_id  uuid NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  PRIMARY KEY (article_id, entity_id));
+
+CREATE TABLE links (
+  src_article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  dst_article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  type text NOT NULL DEFAULT 'related',   -- related|parent|child|references|depends_on (app-allowlist)
+  PRIMARY KEY (src_article_id, dst_article_id, type));
+CREATE INDEX ON links(dst_article_id);                -- backlinks
+
+CREATE TABLE citations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  source_id  uuid NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  span text, UNIQUE (article_id, source_id, span));
+
+CREATE TABLE chunks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  ord int NOT NULL, kind text NOT NULL DEFAULT 'section',   -- section | summary
+  text text NOT NULL, heading_path text,
+  tsv tsvector,
+  embedding vector(N),                  -- N = dim из setup-wizard (managed migration)
+  embedding_version text NOT NULL,
+  UNIQUE (article_id, ord));
+CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX ON chunks USING gin (tsv);
+CREATE INDEX ON chunks(embedding_version);
+
+CREATE TABLE chunk_entities (        -- chunk-level entity index (§5)
+  chunk_id  uuid NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+  entity_id uuid NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  PRIMARY KEY (chunk_id, entity_id));
+CREATE INDEX ON chunk_entities(entity_id);
+
+CREATE TABLE chat_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE chat_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  role text NOT NULL, content text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX ON chat_messages(session_id, created_at);
+
+CREATE TABLE jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type job_type NOT NULL, domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+  status job_status NOT NULL DEFAULT 'queued', progress real NOT NULL DEFAULT 0,
+  log jsonb NOT NULL DEFAULT '[]', error text, cancel_requested boolean NOT NULL DEFAULT false,
+  heartbeat_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
+  started_at timestamptz, finished_at timestamptz);
+CREATE INDEX ON jobs(domain_id, status);
+
+CREATE TABLE audit_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  action text NOT NULL, target_type text, target_id uuid,
+  meta jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now());</code></pre>
+<table class="rpt-table">
+  <thead><tr><th>Удаление</th><th>Каскад</th></tr></thead>
+  <tbody>
+    <tr><td>domain</td><td>→ sources, articles, entities, jobs, chat (всё по FK)</td></tr>
+    <tr><td>article</td><td>→ revisions, chunks(→chunk_entities), citations, links(оба), article_entities</td></tr>
+    <tr><td>source</td><td>→ citations (FK); статьи-сироты → app-логика (пере-оценка/regenerate)</td></tr>
+  </tbody>
+</table>
+<p class="sub">Миграции: Alembic; первая создаёт extensions+enums+tables. <b>Размерность вектора</b> задаётся в admin-UI при первичной настройке и применяется управляемой миграцией (ALTER колонки <code>embedding</code> + пересоздание HNSW); смена dim позже → та же процедура + <code>reindex</code>.</p>
+
+<!-- §3 -->
+<h2 id="s3">§3 · Контракты StorageBackend / Chat / Embedding / Vision</h2>
+<pre><code>class StorageBackend(Protocol):
+    async def put(self, data: bytes, *, content_type: str | None = None) -> str: ...   # -> ref
+    async def get(self, ref: str) -> bytes: ...
+    async def open(self, ref: str) -> AsyncIterator[bytes]: ...    # стрим для крупных
+    async def delete(self, ref: str) -> None: ...
+    async def exists(self, ref: str) -> bool: ...
+# PostgresStorage: мелкое -> blobs.bytea (ref 'blob:uuid'); крупное -> Large Object (ref 'lo:oid').
+
+class ChatProvider(Protocol):
+    async def chat(self, messages: list[Message], *, model: str,
+                   tools: list[ToolSpec] | None = None, temperature: float = 0.2,
+                   response_format: dict | None = None) -> ChatResult: ...
+    def stream(self, messages: list[Message], *, model: str,
+               temperature: float = 0.2) -> AsyncIterator[str]: ...   # токены для SSE
+
+class EmbeddingProvider(Protocol):
+    async def embed(self, texts: list[str], *, model: str) -> list[list[float]]: ...
+
+class VisionProvider(Protocol):                       # OCR / описание изображений (ingest)
+    async def describe(self, image: bytes, *, model: str, prompt: str | None = None) -> str: ...
+# OpenAICompatProvider реализует все три; connection + модели берутся из admin-настроек.
+# structured(messages, schema, model, retries) -> validated pydantic; ретрай с текстом ошибки.</code></pre>
+<div class="note">Шов: <code>harness</code> → <code>ChatProvider</code>, <code>vector</code> → <code>EmbeddingProvider</code>, <code>ingest</code> → <code>VisionProvider</code> (для изображений/сканов). Слабая модель без нативного tool-calling → fallback на JSON-mode. Добавить другой бэкенд = новая реализация.</div>
+
+<!-- §4 -->
+<h2 id="s4">§4 · Операции харнесса</h2>
+<p><b>Цикл</b> (<code>harness/loop.py</code>): <code>system + task + tools</code> → <code>chat → tool_calls → результаты → повтор</code> до финала / <code>max_steps</code>. Каждый шаг → progress.
+<b>Гарды:</b> <code>max_steps</code> + per-step timeout; write-scope (<code>target.domain_id == ctx.domain_id</code>); нет деструктивных tools; контент источника — недоверенные данные; выход валидируется схемой до записи.</p>
+<table class="rpt-table">
+  <thead><tr><th>Tool</th><th>Тип</th><th>Назначение</th></tr></thead>
+  <tbody>
+    <tr><td><code>read_source(id)</code></td><td>read</td><td>нормализованный текст</td></tr>
+    <tr><td><code>search_wiki(q)</code></td><td>read</td><td>гибрид вектор+FTS+BFS</td></tr>
+    <tr><td><code>get_article(slug)</code> · <code>list_articles()</code></td><td>read</td><td>статьи домена</td></tr>
+    <tr><td><code>upsert_article(slug,title,md,summary,entities[],citations[])</code></td><td><b>write</b></td><td>статья + ревизия (origin=ai)</td></tr>
+    <tr><td><code>add_link(src,dst,type)</code></td><td><b>write</b></td><td>ребро графа</td></tr>
+    <tr><td><code>report_issue(article,type,detail,fix)</code></td><td>collect</td><td>для Lint</td></tr>
+  </tbody>
+</table>
+<table class="rpt-table">
+  <thead><tr><th>Операция</th><th>Триггер</th><th>Выход (pydantic)</th><th>Записи</th></tr></thead>
+  <tbody>
+    <tr><td><b>Ingest</b> <span class="badge det">structured pipeline</span></td><td>job</td><td><code>IngestResult{sources:[{articles[],entities[],links[],citations[]}]}</code></td><td>да</td></tr>
+    <tr><td><b>Query</b></td><td>sync/stream</td><td><code>QueryResult{answer_md,refs[],passages[]}</code></td><td>нет</td></tr>
+    <tr><td><b>Lint</b></td><td>job</td><td><code>LintResult{issues[]}</code></td><td>нет</td></tr>
+    <tr><td><b>Fix</b></td><td>job</td><td>ревизии</td><td>да</td></tr>
+    <tr><td><b>Init</b></td><td>sync</td><td><code>Domain</code></td><td>домен/индекс</td></tr>
+    <tr><td><b>Format</b></td><td>job</td><td>ревизия (без смены фактов)</td><td>да</td></tr>
+    <tr><td><b>Chat</b></td><td>sync/stream</td><td><code>ChatTurn{answer_md,refs[]}</code></td><td>нет</td></tr>
+  </tbody>
+</table>
+<p class="sub">Связи: явные (LLM <code>add_link</code>/<code>link_suggestions</code>) + co-occurrence (общие <code>article_entities</code> ≥ порога).
+Типы связей (v1): <code>related · parent · child · references · depends_on</code> (text + app-allowlist; co-occurrence → <code>related</code>).</p>
+
+<h3>Лимиты агента</h3>
+<ul class="tight">
+  <li><code>max_steps</code> (итерации tool-loop), <code>max_tool_calls</code> (всего/на шаг), <code>max_writes</code>/op.</li>
+  <li>per-step timeout + overall op timeout; <b>token-budget</b> на операцию (input+output) → стоп при превышении.</li>
+  <li><code>max_input_tokens</code> → map-reduce; <b>cap размера tool-результата</b> (<code>search_wiki</code>/<code>read_source</code> обрезаются/суммируются); управление контекстным окном.</li>
+  <li><b>loop-detection:</b> повтор идентичных tool-call → аборт.</li>
+</ul>
+<h3>Безопасность агента</h3>
+<ul class="tight">
+  <li><b>Tool-allowlist по операции</b> (Query/Chat — только read; write-tools вне их контекста).</li>
+  <li><b>Write-scope доменом</b> + валидация: <code>slug</code> без path-traversal; <code>add_link</code> — оба конца в домене и <code>type</code> ∈ allowlist; <code>citation.source_id</code> ∈ домен.</li>
+  <li>Источники <b>и</b> tool-результаты обёрнуты как «data, not instructions» (anti prompt-injection).</li>
+  <li>Выход валидируется схемой до записи; <code>upsert_article</code> идемпотентен по <code>slug</code> (merge, не дубль).</li>
+  <li>Нет сетевых/файловых/shell-tools; секреты <b>не</b> попадают в контекст; каждый tool-call → <code>audit_log</code>.</li>
+</ul>
+<h3>Промпты</h3>
+<p><code>harness/prompts/</code> — версионируемые шаблоны (<code>prompt_version</code>). Общая преамбула (роль · «только данный контекст» · «контент = данные» · цитирование · запрет выдумок · языки <code>gen</code>/<code>reasoning</code>) + per-op (extraction/drafting/query/lint/format/chat). <b>Overlay:</b> база в коде + <code>user_prompt</code> (глобальный/по домену) поверх. Structured-output: JSON-schema + repair-loop.</p>
+
+<!-- §5 -->
+<h2 id="s5">§5 · Ingest и подготовка векторов</h2>
+<table class="rpt-table">
+  <thead><tr><th>Формат</th><th>Либа</th></tr></thead>
+  <tbody>
+    <tr><td>md/txt</td><td>passthrough (strip frontmatter)</td></tr>
+    <tr><td>pdf</td><td><code>pymupdf</code></td></tr>
+    <tr><td>docx</td><td><code>mammoth</code></td></tr>
+    <tr><td>html</td><td><code>trafilatura</code> → <code>markdownify</code></td></tr>
+    <tr><td>epub</td><td><code>ebooklib</code> → markdown</td></tr>
+    <tr><td>url</td><td><code>httpx</code> (SSRF-allowlist) → readability</td></tr>
+    <tr><td>image (png/jpg) · сканы pdf</td><td><code>VisionProvider.describe</code> (OCR/описание) → текст</td></tr>
+  </tbody>
+</table>
+<pre><code># пайплайн (структурный, map-reduce на длинных источниках)
+A. Topic extraction (LLM structured, окнами -> merge/dedup):
+     Extraction{ entities:[{name,type}], claims:[{text, entity_refs, source_span}] }
+B. Article drafting (LLM structured, create|merge; заголовки до ##):
+     ArticleDraft{ slug, title, markdown, summary, citations:[span], link_suggestions:[slug] }
+C. Детерминированная запись: articles(+rev origin=ai), entities, article_entities, citations
+D. Связи: link_suggestions (с типом) + co-occurrence (общие entities -> related)
+E. Чанкинг (секции по ##, summary-chunk, overlap) + embedding</code></pre>
+<h3>Чанкинг сгенерированной статьи</h3>
+<p><b>Структура:</b> статья = <code>#</code> заголовок + разделы <code>##</code> (глубже запрещено; drafting-промпт нормализует к ≤ <code>##</code>); преамбула до первого <code>##</code> → раздел <code>(intro)</code>. Плоские секции → предсказуемый чанкинг.</p>
+<pre><code>1. summary-chunk: отдельное LLM-обобщение всей статьи (2-4 предложения)
+      -> ord=0, kind='summary', heading_path='(summary)'   (+ дублируется в articles.summary)
+2. split по '##' -> [intro, sec1, sec2, ...]
+3. на секцию: len &lt;= target -> 1 chunk; иначе semantic split (breakpoint по эмбеддингам
+   предложений, порог из конфига), bounded target_size
+4. overlap: к каждому chunk (кроме первого) спереди добавляются последние 1-2 предложения
+   предыдущего chunk (sliding window) -> связность на стыках
+5. heading_path = '## &lt;секция&gt;' (преамбула -> '(intro)'); kind='section'
+6. chunk -> embed -> chunks(kind,ord,heading_path,text,tsv,embedding,version) + chunk_entities</code></pre>
+<table class="rpt-table">
+  <thead><tr><th>ord</th><th>kind</th><th>heading_path</th><th>text (начало)</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td><code>summary</code></td><td><code>(summary)</code></td><td>«QUIC — UDP-транспорт: TLS+мультиплексирование, без HoL-блокировки…»</td></tr>
+    <tr><td>1</td><td><code>section</code></td><td><code>(intro)</code></td><td>«QUIC — транспорт поверх UDP, объединяет…»</td></tr>
+    <tr><td>2</td><td><code>section</code></td><td><code>## История</code></td><td>«Разработан Google в 2012, RFC 9000…»</td></tr>
+    <tr><td>3</td><td><code>section</code></td><td><code>## Сравнение с TCP</code></td><td>«QUIC устраняет head-of-line…» (часть 1)</td></tr>
+    <tr><td>4</td><td><code>section</code></td><td><code>## Сравнение с TCP</code></td><td>«[overlap: 1–2 предл. из ord 3] …продолжение»</td></tr>
+  </tbody>
+</table>
+<p class="sub"><b>summary-chunk</b> → article-level recall (находит статью целиком); <b>section-chunks</b> → точный фрагмент; <b>overlap</b> по предложениям сохраняет смысл на границах. <b>Chunk-level сущности</b> → <code>chunk_entities</code> (entity-scoped поиск).</p>
+<p><b>Change-detection:</b> <code>sha256</code> → <code>UNIQUE(domain_id, checksum)</code>. <b>Re-chunk</b> при изменении статьи (старые чанки удаляются → перечанковка); <b>каскад</b> при удалении (см. §2).
+<b>Bulk-upload:</b> zip/папка → распаковка (anti-zip-bomb §11) → пакетная регистрация источников → ingest. Крупные файлы стримятся в storage (без полной загрузки в память).</p>
+<div class="note warn"><b>Trade-off:</b> семантический чанкинг + summary-chunk тратят доп. эмбеддинги на ingest — дороже/медленнее фиксированного. Принято осознанно ради качества границ и article-level recall.</div>
+
+<!-- §6 -->
+<h2 id="s6">§6 · Retrieval: гибрид (RRF) + BFS</h2>
+<pre><code># vector arm
+SELECT c.id, row_number() OVER (ORDER BY c.embedding &lt;=&gt; :q) AS r
+FROM chunks c JOIN articles a ON a.id=c.article_id
+WHERE a.domain_id = :dom AND c.embedding_version = :ver
+ORDER BY c.embedding &lt;=&gt; :q LIMIT :k1;
+# fts arm
+SELECT c.id, row_number() OVER (ORDER BY ts_rank_cd(c.tsv, q) DESC) AS r
+FROM chunks c JOIN articles a ON a.id=c.article_id,
+     websearch_to_tsquery('simple', :q) q
+WHERE a.domain_id = :dom AND c.tsv @@ q LIMIT :k2;
+# merge: RRF  score = sum( weight_i / (rrf_k + rank_i) )  -> top-N (веса в конфиге)
+
+# BFS (только исходящие, cycle-safe)
+WITH RECURSIVE bfs(article_id, depth) AS (
+  SELECT unnest(:seed_ids), 0
+  UNION
+  SELECT l.dst_article_id, b.depth+1
+    FROM bfs b JOIN links l ON l.src_article_id = b.article_id
+   WHERE b.depth &lt; :max_depth
+) CYCLE article_id SET cyc USING path
+SELECT DISTINCT article_id FROM bfs;</code></pre>
+<p><b>Сборка контекста:</b> seed-пассажи (slug+heading_path+citations) + summary соседей + кросс-ссылки, token-budgeted по fused-score. <b>Reindex</b> (<code>vector/reindex.py</code>): чанки с <code>embedding_version != current</code> переэмбеддиваются батчами; поиск фильтрует <code>current</code>. <b>Reranking</b> — точка расширения (бэклог).
+<b>Query→entity:</b> извлечение сущностей из запроса → entity-boost через <code>chunk_entities</code>. <b>Кэш</b> эмбеддинга запроса. <b>Пустой контекст</b> → ответ «не знаю» (без выдумок).</p>
+
+<!-- §7 -->
+<h2 id="s7">§7 · Jobs / worker</h2>
+<div class="cols">
+  <div class="card-box"><h3>Задачи &amp; жизненный цикл</h3><ul class="tight">
+    <li><code>ingest_domain · lint_domain · fix_issues · format_articles · reindex_domain</code> (arq).</li>
+    <li>API создаёт <code>jobs</code>(queued) + enqueue с <code>job_id</code>; воркер: running → терминальный статус.</li>
+    <li><b>Heartbeat</b> + startup-reconciler помечает зависшие running как failed.</li>
+    <li><b>Job-lock по домену</b>: одна пишущая задача (ingest/fix/format/reindex) на домен за раз (Redis-лок) — исключает гонки записи.</li>
+  </ul></div>
+  <div class="card-box"><h3>Прогресс &amp; отмена</h3><ul class="tight">
+    <li>Redis pub/sub <code>job:{id}</code> + <b>replay</b> из <code>jobs.log</code>.</li>
+    <li>SSE <code>GET /jobs/{id}/events</code> (HTMX SSE-ext).</li>
+    <li><code>cancel_requested</code> → кооперативная проверка между шагами → cancelled, очистка частичного.</li>
+    <li>arq job-timeout + per-step LLM-timeout.</li>
+  </ul></div>
+</div>
+<div class="note"><b>Сериализация Ollama:</b> LLM-вызовы за Redis-локом <code>lock:model:{name}</code> — одна модель серийно, разные модели параллельно; concurrency воркера низкий.
+<b>Очереди arq:</b> LLM-задачи и лёгкие разнесены; ретраи на транзиентных ошибках (backoff, N попыток), ядовитые → dead-letter. Плановый lint/reindex/GC — admin-триггер в v1 (cron — бэклог).</div>
+
+<!-- §8 -->
+<h2 id="s8">§8 · API + MCP</h2>
+<p><b>Auth:</b> сессии <b>server-side в Redis</b> (cookie SameSite=Lax) ИЛИ API-ключ <code>Bearer paw_&lt;prefix&gt;.&lt;secret&gt;</code> (поиск по prefix, сверка sha256, revoke). <b>RBAC</b> <code>require_role()</code>. <b>CSRF</b> double-submit (api-key освобождён). <b>Ошибки:</b> RFC 9457 problem+json. <b>Пагинация:</b> cursor/keyset.</p>
+<table class="rpt-table">
+  <thead><tr><th>Метод · путь (<code>/api/v1</code>)</th><th>Назначение</th></tr></thead>
+  <tbody>
+    <tr><td><code>POST /auth/login · /logout</code></td><td>сессия</td></tr>
+    <tr><td><code>GET·POST /domains</code> · <code>POST …/init</code></td><td>домены (CRUD/Init)</td></tr>
+    <tr><td><code>POST /domains/{id}/sources</code></td><td>загрузка (multipart) / URL</td></tr>
+    <tr><td><code>POST /domains/{id}/{ingest|lint|format|reindex}</code></td><td>→ <code>job_id</code></td></tr>
+    <tr><td><code>GET /jobs/{id}</code> · <code>/events</code> (SSE) · <code>POST /cancel</code></td><td>задачи</td></tr>
+    <tr><td><code>POST /domains/{id}/query</code> · <code>POST /chat</code></td><td>RAG / follow-up (SSE-стрим ответа при <code>Accept: text/event-stream</code>)</td></tr>
+    <tr><td><code>GET·PUT /articles/{id}</code> · <code>/revisions</code> · <code>POST …/rollback</code></td><td>статьи (optimistic lock)</td></tr>
+    <tr><td><code>GET /domains/{id}/articles</code></td><td>листинг + FTS (cursor)</td></tr>
+    <tr><td><code>GET /graph?domain=&amp;root=&amp;depth=</code></td><td>подграф</td></tr>
+    <tr><td><code>GET·PUT /settings</code> · <code>/users</code> · <code>/api-keys</code></td><td>admin</td></tr>
+  </tbody>
+</table>
+<p><b>MCP</b> (<code>/mcp</code>, Streamable HTTP, auth по API-ключу, read-only): <code>search_wiki(query,domain,top_k?)</code> · <code>get_article(id|slug,domain)</code> · <code>list_links(article,domain)</code>.</p>
+<div class="note">Query/Chat отдают токены ответа по <b>SSE</b> (стриминг через <code>ChatProvider.stream()</code>). Лимит размера тела запроса; крупные загрузки источников — <b>стримом</b> в storage, не в память.</div>
+
+<!-- §9 -->
+<h2 id="s9">§9 · Web UI</h2>
+<table class="rpt-table">
+  <thead><tr><th>Путь</th><th>Содержание</th></tr></thead>
+  <tbody>
+    <tr><td><code>/login</code> · <code>/</code></td><td>вход · дашборд (домены)</td></tr>
+    <tr><td><code>/domains/{id}</code></td><td>индекс, список статей (FTS+cursor), кнопки Ingest/Lint/Format</td></tr>
+    <tr><td><code>/domains/{id}/sources</code></td><td>загрузка (файл/URL), удаление</td></tr>
+    <tr><td><code>/domains/{id}/graph</code></td><td>Cytoscape: подграф вокруг узла, глубина</td></tr>
+    <tr><td><code>/domains/{id}/query</code> · <code>/chat/{session}</code></td><td>запрос · тред</td></tr>
+    <tr><td><code>/articles/{id}</code></td><td>рендер + backlinks + citations + ревизии; правка (textarea+preview); rollback</td></tr>
+    <tr><td><code>/jobs/{id}</code></td><td>живой прогресс (SSE)</td></tr>
+  </tbody>
+</table>
+<p><b>HTMX:</b> job → <code>hx-post</code> + <code>sse-connect</code>; save → <code>hx-put</code>, 409 при конфликте; поиск → <code>hx-get</code> delay 300ms + «load more». <b>Рендер md</b> (<code>mistune</code>) → <b>санитайз</b> (<code>nh3</code> allowlist). <b>Ассеты</b> (htmx, sse-ext, cytoscape) — вендорятся локально, без CDN; CSP без inline-script.</p>
+<p class="sub"><b>Страница <code>/settings</code> (admin):</b> раздел «Подключение» (base_url, API-ключ, модель для статей, модель эмбеддингов + размерность, vision-модель), языки (ответ/формирование, рассуждения) и wiki-дефолты. Смена dim вызывает управляемое действие ALTER+reindex с предупреждением.</p>
+<p class="sub"><b>Язык интерфейса (UI i18n)</b> — отдельный параметр (RU/EN), независимо от языков контента/рассуждений. <b>Ответ Query/Chat</b> стримится в UI по SSE (постепенный рендер + санитайз).</p>
+
+<!-- §10 -->
+<h2 id="s10">§10 · Конфигурация</h2>
+<p>Эффективный конфиг = <b>env</b> ⊕ <b>global-defaults (DB, admin-UI)</b> ⊕ <b>domain-override</b>.</p>
+<table class="rpt-table">
+  <thead><tr><th>Слой</th><th>Где</th><th>Содержит</th></tr></thead>
+  <tbody>
+    <tr><td>App / инфра</td><td>env (<code>config.py</code>)</td><td><code>DATABASE_URL, REDIS_URL, SESSION_SECRET</code>, лимиты, allowlist, concurrency</td></tr>
+    <tr><td>Подключение + модели (admin-UI)</td><td><code>app_settings</code> (DB)</td><td><b>base_url</b> + <b>api_key</b> (шифруется, §11); <b>модель для статей</b> (chat/генерация); <b>embedding-модель + размерность (dim)</b>; <b>vision-модель</b> (отдельно)</td></tr>
+    <tr><td>Global wiki-defaults (admin-UI)</td><td><code>app_settings</code> (DB)</td><td><b>язык ответа/формирования статей</b>, <b>язык рассуждений</b>, <b>ui_language</b>, bfs_depth, hub_threshold, chunk-параметры, top_k, RRF-веса, <b>лимиты агента</b> (max_steps, token_budget, max_writes, max_tool_calls), <b>link_types allowlist</b>, таймауты, history_limit, retries</td></tr>
+    <tr><td>Per-domain</td><td><code>domains.config</code></td><td><code>DomainConfig</code>: chat_model, op_models, temperature, <b>gen_language, reasoning_language</b>, bfs/hub, chunk, retrieval, <b>agent_limits override</b>, user_prompt, enabled_ops, fts_regconfig</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>Раздел «Подключение» в admin-UI</b> (OpenAI-compatible): <code>base_url</code> + API-ключ (защищённо); <b>модель для статей</b> (chat/генерация); <b>модель эмбеддингов + размерность</b>; <b>vision-модель</b> — отдельно. Плюс <b>язык ответа/формирования статей</b> и <b>язык рассуждений</b>.<br>
+<b>embedding-модель + dim — глобальные</b> (HNSW фикс-dim): задаются при первичной настройке; <b>смена dim — управляемое действие</b> (ALTER vector-колонки + пересоздание HNSW + <code>reindex</code>), не «на лету». <code>chat_model</code> и языки переопределяемы по домену.</div>
+
+<!-- §11 -->
+<h2 id="s11">§11 · Безопасность, деплой, тестирование</h2>
+<div class="cols">
+  <div class="card-box"><h3>Безопасность</h3><ul class="tight">
+    <li>XSS: <code>nh3</code> allowlist + CSP (без inline-script).</li>
+    <li>CSRF: double-submit, SameSite=Lax.</li>
+    <li>Загрузки: magic-byte sniff, whitelist, max-size, anti-zip-bomb.</li>
+    <li>Prompt-injection: untrusted-делимитеры, write-scope, max_steps, валидация выхода.</li>
+    <li>SSRF: allowlist + блок private/link-local, https, size-cap.</li>
+    <li>Пароли argon2; API-ключи хешем, scopes, revoke; секреты в env/secrets.</li>
+    <li>Ключ LLM-провайдера в БД <b>шифруется</b> (Fernet, ключ из env); в контекст агента не попадает.</li>
+  </ul></div>
+  <div class="card-box"><h3>Деплой (compose)</h3><ul class="tight">
+    <li><code>traefik</code> (reverse-proxy, авто-TLS) · <code>api</code> (uvicorn) · <code>worker</code> (arq) · <code>postgres</code> (pgvector/pgvector:pg16) · <code>redis</code> (AOF).</li>
+    <li><b>Ingress:</b> Traefik терминирует TLS (Let's Encrypt/ACME), роутит по домену на <code>api</code>; HTTP→HTTPS redirect; SSE проксируется (без буферизации).</li>
+    <li><b>LLM-провайдер внешний</b> — URL/ключ в admin-UI (нет ollama-сервиса).</li>
+    <li>Миграции — <b>init-контейнер</b> (one-shot до api/worker); <b>setup-wizard</b> при первом старте (admin + подключение + dim/модели).</li>
+    <li>Бэкап: плановый <code>pg_dump</code> (cron/sidecar) + ретенция, процедура restore. Метрики Prometheus <code>/metrics</code> (api+worker).</li>
+    <li>Healthcheck на сервис; тома pgdata / redisdata / letsencrypt.</li>
+  </ul></div>
+  <div class="card-box"><h3>Тесты</h3><ul class="tight">
+    <li>Unit: чанкинг, RRF, BFS-билдер, sanitize, парсинг провайдера (mock).</li>
+    <li>Integration: testcontainers (PG+pgvector, Redis), stub-LLM.</li>
+    <li>API: httpx — auth/RBAC/CSRF/пагинация/ошибки. MCP: tools.</li>
+    <li>E2E: fixture-источники → ingest → query. CI: ruff + mypy + pytest.</li>
+  </ul></div>
+</div>
+
+<h3>Требования к ресурсам (старт, тюнить по корпусу)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Сервис</th><th>CPU</th><th>RAM</th><th>Диск / примечание</th></tr></thead>
+  <tbody>
+    <tr><td><code>traefik</code></td><td>0.25 vCPU</td><td>128–256 MB</td><td>том letsencrypt; ACME-кэш</td></tr>
+    <tr><td><code>api</code> (uvicorn)</td><td>0.5–1 vCPU</td><td>512 MB–1 GB</td><td>stateless; масштаб числом воркеров uvicorn</td></tr>
+    <tr><td><code>worker</code> (arq)</td><td>1–2 vCPU</td><td>1–2 GB</td><td>пики на ingest (парсинг + батч-embed)</td></tr>
+    <tr><td><code>postgres</code> + pgvector</td><td>1–2 vCPU</td><td>2–4 GB</td><td>pgdata = текст+векторы+LO; HNSW любит RAM</td></tr>
+    <tr><td><code>redis</code></td><td>0.25 vCPU</td><td>256–512 MB</td><td>AOF-том; очередь+сессии+pub/sub</td></tr>
+    <tr><td>LLM (внешний)</td><td>—</td><td>8–16 GB+ (GPU желателен)</td><td>вне инстанса; зависит от модели</td></tr>
+  </tbody>
+</table>
+<p class="sub">Оценки для команды (single instance). Главные потребители — <code>worker</code> во время ingest и <code>postgres</code> по мере роста корпуса (векторы); RAM postgres растить с размером HNSW-индекса.</p>
+
+<!-- §12 -->
+<h2 id="s12">§12 · Сводные диаграммы</h2>
+<figure class="diagram">
+<svg viewBox="0 0 920 450" role="img" aria-label="Компонентно-сетевая схема: Traefik, api, worker, postgres, redis, внешний LLM">
+  <rect class="boundary-rect" x="196" y="22" width="512" height="410" rx="14"/>
+  <rect class="lbl-bg" x="210" y="14" width="320" height="16"/>
+  <text class="lbl" x="216" y="26" font-weight="600">Docker Compose · один хост + домен</text>
+
+  <!-- externals left -->
+  <g class="node"><rect class="card" x="14" y="78" width="140" height="54" rx="12"/><rect class="bar-warn" x="22" y="88" width="5" height="34" rx="2.5"/><text class="t-title" x="84" y="100" text-anchor="middle">Браузер</text><text class="t-sub" x="84" y="118" text-anchor="middle">пользователь</text></g>
+  <g class="node"><rect class="card" x="14" y="186" width="140" height="54" rx="12"/><rect class="bar-warn" x="22" y="196" width="5" height="34" rx="2.5"/><text class="t-title" x="84" y="208" text-anchor="middle">MCP-клиент</text><text class="t-sub" x="84" y="226" text-anchor="middle">IDE / агент</text></g>
+
+  <!-- inside compose -->
+  <g class="node"><rect class="card" x="224" y="78" width="150" height="54" rx="12"/><rect class="bar-accent" x="232" y="88" width="5" height="34" rx="2.5"/><text class="t-title" x="299" y="100" text-anchor="middle">traefik</text><text class="t-sub" x="299" y="118" text-anchor="middle">TLS · Let's Encrypt</text></g>
+  <g class="node"><rect class="card" x="224" y="176" width="150" height="64" rx="12"/><rect class="bar-accent" x="232" y="188" width="5" height="40" rx="2.5"/><text class="t-title" x="299" y="202" text-anchor="middle">api</text><text class="t-sub" x="299" y="220" text-anchor="middle">uvicorn · /api/v1 /mcp /</text></g>
+  <g class="node"><rect class="card" x="224" y="300" width="150" height="64" rx="12"/><rect class="bar-accent" x="232" y="312" width="5" height="40" rx="2.5"/><text class="t-title" x="299" y="326" text-anchor="middle">worker</text><text class="t-sub" x="299" y="344" text-anchor="middle">arq</text></g>
+  <g class="node"><rect class="card" x="224" y="384" width="150" height="36" rx="10"/><rect class="bar-ok" x="232" y="392" width="5" height="20" rx="2.5"/><text class="t-title" x="299" y="406" text-anchor="middle">init (alembic)</text></g>
+  <g class="node"><rect class="card" x="460" y="78" width="210" height="56" rx="12"/><rect class="bar-ok" x="468" y="90" width="5" height="32" rx="2.5"/><text class="t-title" x="565" y="102" text-anchor="middle">postgres + pgvector</text><text class="t-sub" x="565" y="120" text-anchor="middle">:5432</text></g>
+  <g class="node"><rect class="card" x="460" y="188" width="210" height="56" rx="12"/><rect class="bar-ok" x="468" y="200" width="5" height="32" rx="2.5"/><text class="t-title" x="565" y="212" text-anchor="middle">redis</text><text class="t-sub" x="565" y="230" text-anchor="middle">:6379 · очередь/сессии/pubsub</text></g>
+
+  <!-- external right -->
+  <g class="node"><rect class="card" x="742" y="250" width="164" height="76" rx="12"/><rect class="bar-warn" x="750" y="264" width="5" height="48" rx="2.5"/><text class="t-title" x="824" y="284" text-anchor="middle">LLM (внешний)</text><text class="t-sub" x="824" y="302" text-anchor="middle">OpenAI-compatible</text></g>
+
+  <!-- edges -->
+  <path class="flow" marker-end="url(#arrA)" d="M154,105 H224"/>
+  <rect class="lbl-bg" x="160" y="86" width="48" height="15"/><text class="lbl" x="184" y="98" text-anchor="middle">HTTPS</text>
+  <path class="flow" marker-end="url(#arrA)" d="M154,213 C188,213 196,118 224,118"/>
+  <rect class="lbl-bg" x="158" y="150" width="74" height="15"/><text class="lbl" x="195" y="162" text-anchor="middle">MCP/Bearer</text>
+  <path class="flow" marker-end="url(#arrA)" d="M299,132 V176"/>
+  <rect class="lbl-bg" x="304" y="146" width="86" height="15"/><text class="lbl" x="347" y="158" text-anchor="middle">TLS term · SSE</text>
+
+  <path class="flow" marker-end="url(#arrA)" d="M374,194 C420,194 430,106 460,106"/>
+  <rect class="lbl-bg" x="384" y="120" width="62" height="15"/><text class="lbl" x="415" y="132" text-anchor="middle">SQL 5432</text>
+  <path class="flow" marker-end="url(#arrA)" d="M374,210 H460"/>
+  <rect class="lbl-bg" x="388" y="200" width="62" height="15"/><text class="lbl" x="419" y="212" text-anchor="middle">RESP 6379</text>
+  <path class="flow" marker-end="url(#arrA)" d="M374,226 C520,226 610,288 742,288"/>
+  <rect class="lbl-bg" x="470" y="250" width="96" height="15"/><text class="lbl" x="518" y="262" text-anchor="middle">OpenAI (stream)</text>
+
+  <path class="conn-a" marker-end="url(#arrA)" d="M374,318 C430,318 440,118 460,118"/>
+  <path class="conn-a" marker-end="url(#arrA)" d="M374,330 C430,330 440,226 460,226"/>
+  <rect class="lbl-bg" x="384" y="300" width="64" height="15"/><text class="lbl" x="416" y="312" text-anchor="middle">SQL · RESP</text>
+  <path class="conn-a" marker-end="url(#arrA)" d="M374,344 C560,344 650,310 742,310"/>
+  <rect class="lbl-bg" x="556" y="324" width="60" height="15"/><text class="lbl" x="586" y="336" text-anchor="middle">OpenAI</text>
+  <path class="conn-a" marker-end="url(#arrA)" d="M374,402 C600,402 660,402 660,134"/>
+  <rect class="lbl-bg" x="600" y="394" width="56" height="15"/><text class="lbl" x="628" y="406" text-anchor="middle">alembic</text>
+</svg>
+<figcaption>Компонентно-сетевая схема. Traefik терминирует TLS (домен · Let's Encrypt) и проксирует HTTP/SSE на <code>api</code>; <code>api</code>+<code>worker</code> делят <code>postgres</code>/<code>redis</code>; LLM — внешний (OpenAI-compatible). Прогресс job: <code>worker</code> → Redis pub/sub → <code>api</code> (SSE) → браузер.</figcaption>
+</figure>
+<figure class="diagram">
+<svg viewBox="0 0 900 320" role="img" aria-label="Цикл агента харнесса с гардами и записью">
+  <rect class="boundary-rect" x="188" y="40" width="552" height="120" rx="14"/>
+  <rect class="lbl-bg" x="200" y="32" width="372" height="16"/>
+  <text class="lbl" x="206" y="44" font-weight="600">loop · cycle ≤ max_steps · write-scope guard · per-step timeout</text>
+
+  <g class="node"><rect class="card" x="20" y="72" width="150" height="56" rx="12"/><rect class="bar-accent" x="28" y="82" width="5" height="36" rx="2.5"/><text class="t-title" x="95" y="96" text-anchor="middle">Task</text><text class="t-sub" x="95" y="114" text-anchor="middle">system + цель</text></g>
+  <g class="node"><rect class="card" x="210" y="72" width="180" height="56" rx="12"/><rect class="bar-accent" x="218" y="82" width="5" height="36" rx="2.5"/><text class="t-title" x="300" y="96" text-anchor="middle">chat (LLM)</text><text class="t-sub" x="300" y="114" text-anchor="middle">tool_calls?</text></g>
+  <g class="node"><rect class="card" x="470" y="72" width="200" height="56" rx="12"/><rect class="bar-warn" x="478" y="82" width="5" height="36" rx="2.5"/><text class="t-title" x="570" y="96" text-anchor="middle">tools exec</text><text class="t-sub" x="570" y="114" text-anchor="middle">read / search / write (scope)</text></g>
+
+  <path class="flow" marker-end="url(#arrA)" d="M170,100 H210"/>
+  <path class="flow" marker-end="url(#arrA)" d="M390,100 H470"/>
+  <rect class="lbl-bg" x="400" y="78" width="62" height="16"/><text class="lbl" x="431" y="90" text-anchor="middle">tool_calls</text>
+  <path class="conn-a" marker-end="url(#arrA)" d="M560,128 V146 Q560,150 555,150 L305,150 Q300,150 300,146 V130"/>
+  <rect class="lbl-bg" x="402" y="142" width="60" height="16"/><text class="lbl" x="432" y="154" text-anchor="middle">observe</text>
+
+  <g class="node"><rect class="card" x="150" y="244" width="320" height="56" rx="12"/><rect class="bar-ok" x="158" y="256" width="5" height="32" rx="2.5"/><text class="t-title" x="310" y="268" text-anchor="middle">validate schema → upsert (origin=ai)</text><text class="t-sub" x="310" y="286" text-anchor="middle">article + revision · add_link</text></g>
+  <path class="flow-ok" marker-end="url(#arrOk)" d="M260,128 C260,200 310,200 310,244"/>
+  <rect class="lbl-bg" x="318" y="186" width="118" height="16"/><text class="lbl" x="377" y="198" text-anchor="middle">final (stop) → write</text>
+</svg>
+<figcaption>Цикл харнесса: chat ↔ tools под гардами; финал валидируется схемой и пишется как ревизия (origin=ai). Query/Chat — тот же цикл без write-tools.</figcaption>
+</figure>
+
+<figure class="diagram">
+<svg viewBox="0 0 900 290" role="img" aria-label="Гибридный retrieval: вектор и FTS, слияние RRF, расширение BFS, сборка контекста">
+  <g class="node"><rect class="card" x="20" y="108" width="140" height="60" rx="12"/><rect class="bar-accent" x="28" y="120" width="5" height="36" rx="2.5"/><text class="t-title" x="90" y="134" text-anchor="middle">Запрос</text><text class="t-sub" x="90" y="152" text-anchor="middle">UI / MCP / API</text></g>
+  <g class="node"><rect class="card" x="210" y="28" width="190" height="58" rx="12"/><rect class="bar-accent" x="218" y="40" width="5" height="34" rx="2.5"/><text class="t-title" x="305" y="52" text-anchor="middle">Вектор</text><text class="t-sub" x="305" y="70" text-anchor="middle">embed → ANN (cosine)</text></g>
+  <g class="node"><rect class="card" x="210" y="190" width="190" height="58" rx="12"/><rect class="bar-warn" x="218" y="202" width="5" height="34" rx="2.5"/><text class="t-title" x="305" y="214" text-anchor="middle">FTS</text><text class="t-sub" x="305" y="232" text-anchor="middle">tsquery → ts_rank</text></g>
+  <g class="node"><rect class="card" x="450" y="108" width="160" height="60" rx="12"/><rect class="bar-accent" x="458" y="120" width="5" height="36" rx="2.5"/><text class="t-title" x="530" y="134" text-anchor="middle">RRF merge</text><text class="t-sub" x="530" y="152" text-anchor="middle">веса в конфиге</text></g>
+  <g class="node"><rect class="card" x="660" y="108" width="200" height="60" rx="12"/><rect class="bar-accent" x="668" y="120" width="5" height="36" rx="2.5"/><text class="t-title" x="760" y="134" text-anchor="middle">BFS (out)</text><text class="t-sub" x="760" y="152" text-anchor="middle">граф · глубина N</text></g>
+  <g class="node"><rect class="card" x="660" y="210" width="200" height="56" rx="12"/><rect class="bar-ok" x="668" y="222" width="5" height="32" rx="2.5"/><text class="t-title" x="760" y="234" text-anchor="middle">Контекст</text><text class="t-sub" x="760" y="252" text-anchor="middle">token-budgeted</text></g>
+
+  <path class="flow" marker-end="url(#arrA)" d="M160,138 C188,138 184,57 210,57"/>
+  <path class="flow" marker-end="url(#arrA)" d="M160,138 C188,138 184,219 210,219"/>
+  <path class="flow" marker-end="url(#arrA)" d="M400,57 C436,57 430,138 450,138"/>
+  <path class="flow" marker-end="url(#arrA)" d="M400,219 C436,219 430,138 450,138"/>
+  <path class="flow" marker-end="url(#arrA)" d="M610,138 H660"/>
+  <path class="flow-ok" marker-end="url(#arrOk)" d="M760,168 V210"/>
+</svg>
+<figcaption>Гибридный поиск: вектор + FTS → RRF → расширение по исходящим связям (BFS) → бюджетируемый контекст для харнесса. Тот же путь — UI, REST <code>/query</code>, MCP <code>search_wiki</code>.</figcaption>
+</figure>
+
+<h3>Пайплайны процессов (с задействованными компонентами)</h3>
+<p class="sub">Подпись под каждым шагом — компонент(ы): <span class="badge rec">api/worker/harness</span> · <span class="badge llm">провайдер LLM</span> · <span class="badge det">db/storage/graph/vector</span>.</p>
+
+<figure class="diagram">
+<svg viewBox="0 0 900 130" role="img" aria-label="Пайплайн Init">
+  <g class="node"><rect class="card" x="14"  y="32" width="150" height="64" rx="12"/><rect class="bar-accent" x="22"  y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="89"  y="60" text-anchor="middle">API init</text><text class="t-sub" x="89"  y="78" text-anchor="middle">api</text></g>
+  <g class="node"><rect class="card" x="184" y="32" width="150" height="64" rx="12"/><rect class="bar-ok"     x="192" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="259" y="60" text-anchor="middle">Создать домен</text><text class="t-sub" x="259" y="78" text-anchor="middle">services → db</text></g>
+  <g class="node"><rect class="card" x="354" y="32" width="150" height="64" rx="12"/><rect class="bar-ok"     x="362" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="429" y="60" text-anchor="middle">Префиксы+индекс</text><text class="t-sub" x="429" y="78" text-anchor="middle">storage + db</text></g>
+  <g class="node"><rect class="card" x="524" y="32" width="150" height="64" rx="12"/><rect class="bar-warn"   x="532" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="599" y="60" text-anchor="middle">Структура опц.</text><text class="t-sub" x="599" y="78" text-anchor="middle">harness → Chat</text></g>
+  <g class="node"><rect class="card" x="694" y="32" width="150" height="64" rx="12"/><rect class="bar-accent" x="702" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="769" y="60" text-anchor="middle">Domain</text><text class="t-sub" x="769" y="78" text-anchor="middle">ответ api</text></g>
+  <path class="flow" marker-end="url(#arrA)" d="M164,64 H184"/>
+  <path class="flow" marker-end="url(#arrA)" d="M334,64 H354"/>
+  <path class="conn-a" marker-end="url(#arrA)" d="M504,64 H524"/>
+  <path class="flow" marker-end="url(#arrA)" d="M674,64 H694"/>
+</svg>
+<figcaption>Init (sync): создание домена; шаг «Структура» (LLM) опционален (пунктир).</figcaption>
+</figure>
+
+<figure class="diagram">
+<svg viewBox="0 0 920 300" role="img" aria-label="Пайплайн Ingest">
+  <!-- top row -->
+  <g class="node"><rect class="card" x="14"  y="30" width="160" height="60" rx="12"/><rect class="bar-accent" x="22"  y="42" width="5" height="36" rx="2.5"/><text class="t-title" x="94"  y="56" text-anchor="middle">Старт job</text><text class="t-sub" x="94"  y="74" text-anchor="middle">api → redis</text></g>
+  <g class="node"><rect class="card" x="196" y="30" width="160" height="60" rx="12"/><rect class="bar-accent" x="204" y="42" width="5" height="36" rx="2.5"/><text class="t-title" x="276" y="56" text-anchor="middle">Lock + взять</text><text class="t-sub" x="276" y="74" text-anchor="middle">worker → redis</text></g>
+  <g class="node"><rect class="card" x="378" y="30" width="160" height="60" rx="12"/><rect class="bar-warn"   x="386" y="42" width="5" height="36" rx="2.5"/><text class="t-title" x="458" y="56" text-anchor="middle">Загрузка/OCR</text><text class="t-sub" x="458" y="74" text-anchor="middle">loaders/Vision→storage</text></g>
+  <g class="node"><rect class="card" x="560" y="30" width="160" height="60" rx="12"/><rect class="bar-warn"   x="568" y="42" width="5" height="36" rx="2.5"/><text class="t-title" x="640" y="56" text-anchor="middle">Извлеч. тем</text><text class="t-sub" x="640" y="74" text-anchor="middle">harness → Chat</text></g>
+  <g class="node"><rect class="card" x="742" y="30" width="160" height="60" rx="12"/><rect class="bar-warn"   x="750" y="42" width="5" height="36" rx="2.5"/><text class="t-title" x="822" y="56" text-anchor="middle">Черновики</text><text class="t-sub" x="822" y="74" text-anchor="middle">Chat (structured)</text></g>
+  <!-- bottom row -->
+  <g class="node"><rect class="card" x="560" y="200" width="160" height="60" rx="12"/><rect class="bar-ok" x="568" y="212" width="5" height="36" rx="2.5"/><text class="t-title" x="640" y="226" text-anchor="middle">Запись статей</text><text class="t-sub" x="640" y="244" text-anchor="middle">db + storage</text></g>
+  <g class="node"><rect class="card" x="378" y="200" width="160" height="60" rx="12"/><rect class="bar-ok" x="386" y="212" width="5" height="36" rx="2.5"/><text class="t-title" x="458" y="226" text-anchor="middle">Связи</text><text class="t-sub" x="458" y="244" text-anchor="middle">graph → db</text></g>
+  <g class="node"><rect class="card" x="196" y="200" width="160" height="60" rx="12"/><rect class="bar-warn" x="204" y="212" width="5" height="36" rx="2.5"/><text class="t-title" x="276" y="226" text-anchor="middle">Чанкинг</text><text class="t-sub" x="276" y="244" text-anchor="middle">chunking → Embed</text></g>
+  <g class="node"><rect class="card" x="14"  y="200" width="160" height="60" rx="12"/><rect class="bar-ok" x="22" y="212" width="5" height="36" rx="2.5"/><text class="t-title" x="94"  y="226" text-anchor="middle">Embed + upsert</text><text class="t-sub" x="94"  y="244" text-anchor="middle">vector → db (+chunk_entities)</text></g>
+  <!-- edges top -->
+  <path class="flow" marker-end="url(#arrA)" d="M174,60 H196"/>
+  <path class="flow" marker-end="url(#arrA)" d="M356,60 H378"/>
+  <path class="flow" marker-end="url(#arrA)" d="M538,60 H560"/>
+  <path class="flow" marker-end="url(#arrA)" d="M720,60 H742"/>
+  <!-- snake down -->
+  <path class="flow" marker-end="url(#arrA)" d="M822,90 C822,150 640,140 640,200"/>
+  <!-- edges bottom (right to left) -->
+  <path class="flow" marker-end="url(#arrA)" d="M560,230 H538"/>
+  <path class="flow" marker-end="url(#arrA)" d="M378,230 H356"/>
+  <path class="flow" marker-end="url(#arrA)" d="M196,230 H174"/>
+</svg>
+<figcaption>Ingest (async job, worker): загрузка→извлечение→черновики (LLM) → детерминированная запись · связи · семантический чанкинг · embedding. Прогресс: worker → Redis pub/sub → api (SSE). Каждый write — под write-scope + audit.</figcaption>
+</figure>
+
+<figure class="diagram">
+<svg viewBox="0 0 900 130" role="img" aria-label="Пайплайн Query">
+  <g class="node"><rect class="card" x="14"  y="32" width="138" height="64" rx="12"/><rect class="bar-accent" x="22"  y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="83"  y="60" text-anchor="middle">API query</text><text class="t-sub" x="83"  y="78" text-anchor="middle">api</text></g>
+  <g class="node"><rect class="card" x="162" y="32" width="138" height="64" rx="12"/><rect class="bar-warn"   x="170" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="231" y="60" text-anchor="middle">Embed</text><text class="t-sub" x="231" y="78" text-anchor="middle">vector → Embed</text></g>
+  <g class="node"><rect class="card" x="310" y="32" width="138" height="64" rx="12"/><rect class="bar-ok"     x="318" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="379" y="60" text-anchor="middle">Гибрид+RRF</text><text class="t-sub" x="379" y="78" text-anchor="middle">vector → db</text></g>
+  <g class="node"><rect class="card" x="458" y="32" width="138" height="64" rx="12"/><rect class="bar-ok"     x="466" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="527" y="60" text-anchor="middle">BFS</text><text class="t-sub" x="527" y="78" text-anchor="middle">graph → db</text></g>
+  <g class="node"><rect class="card" x="606" y="32" width="138" height="64" rx="12"/><rect class="bar-accent" x="614" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="675" y="60" text-anchor="middle">Сборка ctx</text><text class="t-sub" x="675" y="78" text-anchor="middle">harness</text></g>
+  <g class="node"><rect class="card" x="754" y="32" width="138" height="64" rx="12"/><rect class="bar-warn"   x="762" y="44" width="5" height="40" rx="2.5"/><text class="t-title" x="823" y="60" text-anchor="middle">Ответ stream</text><text class="t-sub" x="823" y="78" text-anchor="middle">Chat → SSE</text></g>
+  <path class="flow" marker-end="url(#arrA)" d="M152,64 H162"/>
+  <path class="flow" marker-end="url(#arrA)" d="M300,64 H310"/>
+  <path class="flow" marker-end="url(#arrA)" d="M448,64 H458"/>
+  <path class="flow" marker-end="url(#arrA)" d="M596,64 H606"/>
+  <path class="flow" marker-end="url(#arrA)" d="M744,64 H754"/>
+</svg>
+<figcaption>Query (sync/stream): без записи; тот же путь у Chat (+ история) и MCP <code>search_wiki</code> (до «Сборка ctx», без LLM-синтеза). Пустой контекст → «не знаю».</figcaption>
+</figure>
+
+<!-- §13 -->
+<h2 id="s13">§13 · Журнал решений</h2>
+<table class="rpt-table">
+  <thead><tr><th>§</th><th>Решение</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Модульный монолит + воркер; src-layout; пакет <code>paw</code>; <code>uv</code>; MCP смонтирован в app</td></tr>
+    <tr><td>2</td><td>UUID PK; <code>vector(dim)</code> фикс из конфига; FTS <code>'simple'</code>; entities + article_entities + canon; + <code>chunk_entities</code></td></tr>
+    <tr><td>3</td><td>Storage: bytea (мелкое) + Large Object (крупное); провайдеры <b>разделены</b> (Chat / Embedding / Vision)</td></tr>
+    <tr><td>4</td><td>Ingest = <b>структурный пайплайн</b> (LLM structured → детерминированная запись); связи = LLM + co-occurrence</td></tr>
+    <tr><td>5</td><td>Чанкинг: секции по <code>##</code> (≤H2) → semantic split внутри; <b>overlap по 1–2 предложениям</b>; <b>summary-chunk</b> (article-level, kind='summary'); <b>chunk-level</b> теги сущностей</td></tr>
+    <tr><td>6</td><td>Слияние <b>RRF</b> (веса); BFS <b>только исходящие</b>; reranking — бэклог</td></tr>
+    <tr><td>7</td><td>Сериализация LLM — Redis-лок по модели; прогресс — pub/sub + replay из <code>jobs.log</code></td></tr>
+    <tr><td>8</td><td>Сессии <b>server-side в Redis</b>; пагинация <b>cursor/keyset</b>; CSRF double-submit; ошибки RFC 9457</td></tr>
+    <tr><td>9</td><td>Редактор <b>textarea + preview</b>; граф <b>подграф вокруг узла</b>; ассеты вендорные</td></tr>
+    <tr><td>10</td><td>Admin-UI: подключение (URL/ключ) + <b>модели статей / эмбеддинга+dim / vision</b>; <b>язык ответа+статей</b> и <b>язык рассуждений</b> (глоб.+per-domain); embedding-модель+dim глобальные; смена dim = ALTER+reindex</td></tr>
+    <tr><td>11</td><td>Ollama внешний (не в compose); <code>EMBEDDING_DIM</code> не в env — в UI; миграции — <b>init-контейнер</b>; argon2; testcontainers</td></tr>
+    <tr><td>A</td><td><b>SSE-стриминг</b> ответов Query/Chat (<code>ChatProvider.stream()</code>)</td></tr>
+    <tr><td>B</td><td><b>Job-lock по домену</b> — одна пишущая задача на домен за раз</td></tr>
+    <tr><td>C</td><td>Ключ LLM-провайдера в БД <b>шифруется</b> (Fernet, ключ из env)</td></tr>
+    <tr><td>D</td><td><b>First-run setup-wizard</b> (admin + подключение + dim/модели)</td></tr>
+    <tr><td>Агент</td><td>Лимиты (max_steps, token-budget, max_writes, loop-detect) + безопасность (tool-allowlist по op, untrusted tool-output, audit каждого вызова)</td></tr>
+    <tr><td>Промпты</td><td>Код-файлы (versioned) + <code>user_prompt</code> overlay (глоб./домен)</td></tr>
+    <tr><td>Контент</td><td>Vision-модель (OCR/изображения); языки gen/reasoning + ui_language; bulk-upload (zip) в v1; типы связей <code>related/parent/child/references/depends_on</code></td></tr>
+    <tr><td>Деплой</td><td><b>Traefik</b> (reverse-proxy, авто-TLS Let's Encrypt); метрики Prometheus; бэкап pg_dump; таблица ресурсов на сервис</td></tr>
+  </tbody>
+</table>
+
+<h3>Отложено (LLD-бэклог / вне v1)</h3>
+<p class="sub"><b>Бэклог:</b> rate limiting, idempotency-ключи, soft-delete, reranking, resumable ingest, perf-пагинация графа, scheduled-jobs (cron lint/reindex/GC).
+<b>Вне v1:</b> per-domain ACL, hot-reload конфига, webhooks, eval-харнесс качества.</p>
+
+<h2>Следующий шаг</h2>
+<p>После одобрения LLD — переход к плану реализации (skill <code>writing-plans</code>): разбиение на инкременты, порядок, критерии готовности, тесты.</p>
+
+</main>
+</body>
+</html>

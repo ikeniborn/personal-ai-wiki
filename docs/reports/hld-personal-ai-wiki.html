@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HLD — Personal AI Wiki</title>
+<style>
+/* ---------- themes ---------- */
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1{ font-size:1.9rem; margin:.2rem 0 .2rem; }
+h2{ font-size:1.35rem; margin:2.4rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.08rem; margin:1.4rem 0 .4rem; color:var(--accent-2); }
+a{ color:var(--accent-2); }
+code{ font-family:ui-monospace, monospace; background:color-mix(in srgb,var(--accent) 10%, var(--surface));
+  padding:.05rem .35rem; border-radius:5px; font-size:.88em; }
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.cols{ display:flex; flex-wrap:wrap; gap:1rem; }
+.cols > .card-box{ flex:1 1 280px; }
+.card-box{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.8rem 1rem; box-shadow:0 1px 8px var(--shadow); }
+.card-box h3{ margin-top:.2rem; }
+ul.tight li{ margin:.28rem 0; }
+
+/* ---------- table ---------- */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+
+/* ---------- badges ---------- */
+.badge{ display:inline-block; font-size:.7rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
+.badge.llm{ color:var(--warn-2); border-color:var(--warn); }
+.badge.det{ color:var(--ok-2);  border-color:var(--ok); }
+.badge.rec{ color:var(--accent-2); border-color:var(--accent); }
+
+/* ---------- C4 ---------- */
+.rpt-c4 .boundary{
+  border:1.6px dashed var(--accent); border-radius:12px;
+  padding:1.9rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem;
+  background:color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.rpt-c4 .boundary::before{
+  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
+}
+.rpt-c4 .comp{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.55rem .85rem; min-width:7rem; font-size:.84rem; box-shadow:0 1px 6px var(--shadow);
+  border-left:4px solid var(--accent); flex:1 1 8rem;
+}
+.rpt-c4 .comp.ext{ border-left-color:var(--warn); }
+.rpt-c4 .comp.store{ border-left-color:var(--ok); }
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .sub{ font-size:.76rem; }
+
+/* ---------- svg diagrams ---------- */
+figure.diagram{ margin:1.2rem 0; }
+figure.diagram svg{ width:100%; height:auto; display:block; overflow:visible; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.35rem; text-align:center; }
+.card{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; filter:url(#dropshadow); transition:stroke .15s, stroke-width .15s; }
+.node:hover .card{ stroke:var(--accent); stroke-width:2.5; }
+.bar-accent{ fill:var(--accent); } .bar-ok{ fill:var(--ok); }
+.bar-warn{ fill:var(--warn); } .bar-term{ fill:var(--danger); }
+.t-title{ fill:var(--fg); font:600 13px system-ui, sans-serif; }
+.t-sub{ fill:var(--muted); font:11px system-ui, sans-serif; }
+.t-mono{ font-family:ui-monospace, monospace; }
+text{ pointer-events:none; }
+.conn{ fill:none; stroke:var(--line); stroke-width:2; }
+.conn-a{ fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:5 5; }
+.flow{ fill:none; stroke:var(--accent); stroke-width:2.6; stroke-dasharray:8 6; animation:dash 1.1s linear infinite; }
+.flow-ok{ fill:none; stroke:var(--ok); stroke-width:2.6; stroke-dasharray:8 6; animation:dash 1.1s linear infinite; }
+@keyframes dash{ to{ stroke-dashoffset:-14; } }
+@media (prefers-reduced-motion: reduce){ .flow,.flow-ok{ animation:none; } }
+.lbl-bg{ fill:var(--bg); }
+.lbl{ fill:var(--fg); font:11px system-ui, sans-serif; }
+.boundary-rect{ fill:none; stroke:var(--accent); stroke-width:1.6; stroke-dasharray:7 6; opacity:.85; }
+
+/* ---------- details ---------- */
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Сменить тему">🌙 / ☀️</label>
+
+<!-- shared SVG defs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="dropshadow" x="-20%" y="-20%" width="140%" height="160%">
+    <feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="var(--shadow)" flood-opacity="1"/>
+  </filter>
+  <marker id="arr"   markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--line)"/></marker>
+  <marker id="arrA"  markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--accent)"/></marker>
+  <marker id="arrOk" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--ok)"/></marker>
+</defs></svg>
+
+<main class="report">
+
+<h1>HLD — Personal AI Wiki</h1>
+<p class="sub">Веб-сервис · self-hosted, один инстанс на команду · сформировано 2026-06-21 · референс: <code>ikeniborn/obsidian-ai-wiki</code></p>
+<p class="lead">Командное веб-приложение, которое автоматически строит и поддерживает базу знаний (вики)
+из загруженных источников при помощи локального AI-харнесса. Переиспользует логику формирования вики
+из Obsidian-плагина (Ingest / Query / Lint+Fix / Init / Format над <em>доменом</em>) и отдаёт её через
+веб-UI, REST-API управления и удалённый MCP-сервер.</p>
+
+<div class="note"><b>Область документа.</b> Только HLD — контекст системы, container-вид, логические компоненты,
+потоки данных, модель данных и сквозные аспекты. Внутренности модулей, сигнатуры, схемы и шаблоны промптов
+переносятся в LLD.</div>
+
+<!-- ============================================================= -->
+<h2>1 · Цели и не-цели</h2>
+<div class="cols">
+  <div class="card-box">
+    <h3>Цели</h3>
+    <ul class="tight">
+      <li>Загрузка разнородных источников и надёжное хранение (PostgreSQL; объектное хранилище S3 — опционально).</li>
+      <li>Формирование и поддержка вики через AI-харнесс: <b>Ingest, Query, Lint+Fix, Init, Format, Chat</b>.</li>
+      <li>Хранение статей вики, <b>графа</b> связей между статьями и <b>векторов</b> по чанкам.</li>
+      <li>Ответы на вопросы по вики (RAG: гибрид вектор+FTS + BFS по графу) из UI и через <b>MCP</b>.</li>
+      <li>Просмотр и навигация: листинг статей, full-text поиск, граф связей, индекс домена.</li>
+      <li>Полноценный <b>REST-API</b> для загрузки, формирования, сохранения файлов и управления вики.</li>
+      <li>Многопользовательский доступ команды с ролями; работа офлайн на локальной LLM.</li>
+    </ul>
+  </div>
+  <div class="card-box">
+    <h3>Не-цели (на этой фазе)</h3>
+    <ul class="tight">
+      <li>Multi-tenant SaaS / биллинг / изоляция организаций.</li>
+      <li>Облачная LLM как основной бэкенд (основной — локальный Ollama).</li>
+      <li>Совместное редактирование статей в реальном времени (CRDT).</li>
+      <li>Нативные мобильные клиенты.</li>
+      <li>Горизонтальное автомасштабирование воркеров (предполагается один инстанс).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<h2>2 · Доменные понятия</h2>
+<table class="rpt-table">
+  <thead><tr><th>Понятие</th><th>Смысл</th><th>Где хранится</th></tr></thead>
+  <tbody>
+    <tr><td><b>Домен</b></td><td>Область знаний: пара <code>префикс источников → префикс вики</code> + конфиг домена (ключевая единица плагина).</td><td>строка PG + ссылки на хранилище</td></tr>
+    <tr><td><b>Источник</b></td><td>Загруженный сырой артефакт (md / txt / pdf / docx / html / epub / скачанный URL), ждущий или участвующий в ingest.</td><td>Postgres (Large Object) + метаданные PG</td></tr>
+    <tr><td><b>Статья</b></td><td>Сформированная/поддерживаемая страница вики (Markdown) об одной теме.</td><td>Postgres (text/bytea) + метаданные PG</td></tr>
+    <tr><td><b>Сущность</b></td><td>Извлечённая тема: человек / инструмент / процесс / термин.</td><td>строка PG</td></tr>
+    <tr><td><b>Связь (ребро)</b></td><td>Направленное отношение между двумя статьями (кросс-ссылка) — граф вики.</td><td>строка-ребро PG</td></tr>
+    <tr><td><b>Чанк</b></td><td>Фрагмент статьи с эмбеддингом для семантического поиска.</td><td>строка PG + <code>pgvector</code></td></tr>
+    <tr><td><b>Задача (Job)</b></td><td>Асинхронный прогон харнесса (ingest / lint / format) со статусом, прогрессом и логом шагов.</td><td>строка PG + очередь Redis</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================= -->
+<h2>3 · Рассмотренные варианты архитектуры</h2>
+<table class="rpt-table">
+  <thead><tr><th>Вариант</th><th>Форма</th><th>Компромисс</th><th>Вердикт</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>A · Модульный монолит + воркер</b> <span class="badge rec">выбран</span></td>
+      <td>Один кодбейс FastAPI с чёткими модулями; воркер <code>arq</code> — второй процесс на том же коде; MCP смонтирован как под-приложение.</td>
+      <td>Минимум ops для одного инстанса; модули всё равно тестируются изолированно; один артефакт деплоя.</td>
+      <td><b>Выбран</b></td>
+    </tr>
+    <tr>
+      <td>B · Раздельные сервисы</td>
+      <td>Отдельные деплои: API, воркер, MCP.</td>
+      <td>Масштабируются независимо; больше движущихся частей, больше ops, сетевые хопы.</td>
+      <td>Отложен — вернуться при росте нагрузки</td>
+    </tr>
+    <tr>
+      <td>C · Микросервисы по аспектам</td>
+      <td>storage / harness / graph / vector — каждый свой сервис.</td>
+      <td>Максимум гибкости; большой операционный оверхед и латентность.</td>
+      <td>Отклонён — оверкилл для команды</td>
+    </tr>
+  </tbody>
+</table>
+<div class="note">Выбран <b>A</b>. Границы внутренних модулей (<code>storage</code>, <code>harness</code>, <code>graph</code>,
+<code>vector</code>, <code>ingest</code>, <code>mcp</code>, <code>api</code>) держим чистыми — так переход к B становится
+изменением деплоя, а не переписыванием.</div>
+
+<!-- ============================================================= -->
+<h2>4 · Container / context-вид</h2>
+<p>C4 container-вид: один инстанс, его внутренние контейнеры и внешние системы, с которыми он общается.</p>
+<figure class="rpt-c4">
+  <div class="boundary" data-label="Personal AI Wiki · один инстанс (Docker Compose)">
+    <div class="comp"><b>Web UI</b><br><span class="sub">Jinja2 + HTMX + Cytoscape.js</span></div>
+    <div class="comp"><b>API / app</b><br><span class="sub">FastAPI · REST + SSE · auth/RBAC</span></div>
+    <div class="comp"><b>MCP-сервер</b><br><span class="sub">Streamable HTTP · auth по API-ключу</span></div>
+    <div class="comp"><b>Харнесс</b><br><span class="sub">цикл агента · абстракция провайдера</span></div>
+    <div class="comp"><b>Воркер</b><br><span class="sub">arq · задачи ingest/lint/format</span></div>
+    <div class="boundary" data-label="Stateful-сервисы">
+      <div class="comp store"><b>PostgreSQL + pgvector</b><br><span class="sub">метаданные · граф · векторы · тела файлов</span></div>
+      <div class="comp store"><b>Redis</b><br><span class="sub">очередь задач · pub/sub прогресса</span></div>
+    </div>
+    <div class="boundary" data-label="Внешние">
+      <div class="comp ext"><b>Ollama</b><br><span class="sub">OpenAI-совместимый · chat + embeddings</span></div>
+      <div class="comp ext"><b>MCP-клиенты</b><br><span class="sub">IDE / desktop-агенты</span></div>
+      <div class="comp ext"><b>Веб (fetch)</b><br><span class="sub">URL-источники</span></div>
+      <div class="comp ext"><b>S3 / MinIO</b><br><span class="sub">опционально · через StorageBackend</span></div>
+    </div>
+  </div>
+</figure>
+<div class="note"><b>API/UI</b> и <b>MCP</b> переиспользуют одни и те же модули поиска (<code>vector</code> + <code>graph</code>).
+Полный харнесс-синтез ответа живёт на стороне API/UI; MCP отдаёт сырой контекст (<code>search_wiki</code>) и оставляет
+рассуждение клиенту-агенту — это тонкий транспорт над общими модулями, а не параллельная реализация.</div>
+
+<!-- ============================================================= -->
+<h2>5 · Логические компоненты</h2>
+<table class="rpt-table">
+  <thead><tr><th>Модуль</th><th>Ответственность</th><th>Зависит от</th></tr></thead>
+  <tbody>
+    <tr><td><code>api</code></td><td>REST-эндпоинты, SSE-потоки, валидация запросов, auth/RBAC, HTMX-обработчики страниц.</td><td>все сервисы</td></tr>
+    <tr><td><code>auth</code></td><td>Логин email/пароль, session-cookie, API-ключи, проверка ролей (admin/editor/viewer).</td><td><code>db</code></td></tr>
+    <tr><td><code>settings</code></td><td>Глобальный + по-доменный конфиг (модели, глубина BFS, hub threshold, чанкинг, таймауты).</td><td><code>db</code></td></tr>
+    <tr><td><code>storage</code></td><td>Абстракция <code>StorageBackend</code>: put/get/list/delete тел источников и markdown вики. Реализация — Postgres (Large Objects / bytea); S3/MinIO — опционально.</td><td>PostgreSQL</td></tr>
+    <tr><td><code>ingest</code></td><td>Загрузчики/экстракторы источников (md, pdf, docx, html, epub, URL) → нормализованный текст; разбиение крупных источников под контекст (chunked / map-reduce).</td><td><code>storage</code></td></tr>
+    <tr><td><code>harness</code></td><td>Цикл агента для Ingest/Query/Lint+Fix/Init/Format/Chat; вызовы инструментов; write-scope ограничен доменом; лимит шагов; абстракция <code>AgentProvider</code>.</td><td><code>vector</code>,<code>graph</code>,<code>storage</code>,LLM</td></tr>
+    <tr><td><code>vector</code></td><td>Чанкинг, эмбеддинги (OpenAI-совместимые), FTS (<code>tsvector</code>); гибридный поиск (вектор + FTS) с объединением; reindex при смене embedding-модели.</td><td>LLM, <code>db</code></td></tr>
+    <tr><td><code>graph</code></td><td>CRUD связей статей, обход BFS (recursive CTE), backlinks (входящие), детекция хабов и сирот, экспорт графа для визуализации.</td><td><code>db</code></td></tr>
+    <tr><td><code>jobs</code></td><td>Постановка/трекинг асинхронных прогонов; задачи arq; события прогресса в Redis → SSE.</td><td>Redis, <code>harness</code></td></tr>
+    <tr><td><code>mcp</code></td><td>MCP-инструменты по Streamable HTTP (только retrieval): <code>search_wiki</code>, <code>get_article</code>, <code>list_links</code>.</td><td><code>vector</code>,<code>graph</code>,<code>storage</code></td></tr>
+    <tr><td><code>db</code></td><td>Модели SQLAlchemy, миграции (Alembic), типы pgvector.</td><td>PostgreSQL</td></tr>
+  </tbody>
+</table>
+
+<h3>Абстракция провайдера харнесса</h3>
+<p>Харнесс зависит от интерфейса <code>AgentProvider</code>, а не от конкретного клиента. Фаза 1 поставляет
+единственный <code>OpenAICompatProvider</code> (Ollama / любой OpenAI-совместимый endpoint). Этот шов оставляет
+будущий провайдер (Claude и др.) аддитивным изменением.</p>
+
+<!-- ============================================================= -->
+<h2>6 · Поток данных — конвейер Ingest</h2>
+<figure class="diagram">
+<svg viewBox="0 0 900 300" role="img" aria-label="Конвейер ingest от загрузки до сохранённых статей, связей и векторов">
+  <!-- loop boundary around harness -->
+  <rect class="boundary-rect" x="660" y="20" width="206" height="92" rx="12"/>
+  <rect class="lbl-bg" x="668" y="12" width="200" height="16"/>
+  <text class="lbl" x="672" y="24" font-weight="600">цикл агента · read·search·write</text>
+
+  <!-- top nodes -->
+  <g class="node"><rect class="card" x="20"  y="40" width="160" height="60" rx="12"/><rect class="bar-accent" x="28"  y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="100" y="66" text-anchor="middle">Загрузка</text><text class="t-sub" x="100" y="84" text-anchor="middle">API · файл/URL</text></g>
+  <g class="node"><rect class="card" x="240" y="40" width="160" height="60" rx="12"/><rect class="bar-ok"     x="248" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="320" y="66" text-anchor="middle">Сырьё</text><text class="t-sub" x="320" y="84" text-anchor="middle">Postgres (LO)</text></g>
+  <g class="node"><rect class="card" x="460" y="40" width="160" height="60" rx="12"/><rect class="bar-warn"   x="468" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="540" y="66" text-anchor="middle">Извлечение</text><text class="t-sub" x="540" y="84" text-anchor="middle">нормализация</text></g>
+  <g class="node"><rect class="card" x="680" y="40" width="160" height="60" rx="12"/><rect class="bar-accent" x="688" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="760" y="66" text-anchor="middle">Ingest-харнесс</text><text class="t-sub" x="760" y="84" text-anchor="middle">LLM · темы</text></g>
+
+  <!-- forward edges -->
+  <path class="flow" marker-end="url(#arrA)" d="M180,70 H240"/>
+  <path class="flow" marker-end="url(#arrA)" d="M400,70 H460"/>
+  <path class="flow" marker-end="url(#arrA)" d="M620,70 H680"/>
+
+  <!-- terminals -->
+  <g class="node"><rect class="card" x="20"  y="200" width="250" height="58" rx="12"/><rect class="bar-ok" x="28"  y="212" width="5" height="34" rx="2.5"/><text class="t-title" x="145" y="226" text-anchor="middle">Статьи → Postgres</text><text class="t-sub" x="145" y="244" text-anchor="middle">text/bytea + метаданные</text></g>
+  <g class="node"><rect class="card" x="325" y="200" width="250" height="58" rx="12"/><rect class="bar-ok" x="333" y="212" width="5" height="34" rx="2.5"/><text class="t-title" x="450" y="226" text-anchor="middle">Сущности+связи → PG</text><text class="t-sub" x="450" y="244" text-anchor="middle">граф вики</text></g>
+  <g class="node"><rect class="card" x="630" y="200" width="250" height="58" rx="12"/><rect class="bar-ok" x="638" y="212" width="5" height="34" rx="2.5"/><text class="t-title" x="755" y="226" text-anchor="middle">Чанки → эмбеддинг</text><text class="t-sub" x="755" y="244" text-anchor="middle">pgvector</text></g>
+
+  <!-- fan-out from harness -->
+  <path class="flow-ok" marker-end="url(#arrOk)" d="M760,100 C760,150 145,150 145,200"/>
+  <path class="flow-ok" marker-end="url(#arrOk)" d="M760,100 C760,150 450,150 450,200"/>
+  <path class="flow-ok" marker-end="url(#arrOk)" d="M760,100 C760,150 755,150 755,200"/>
+</svg>
+<figcaption>Ingest выполняется как асинхронная задача; каждый шаг отдаёт прогресс по SSE. Харнесс пишет обратно через те же модули storage/graph/vector, которые читает путь запроса.</figcaption>
+</figure>
+
+<!-- ============================================================= -->
+<h2>7 · Поток данных — Query (RAG) и MCP</h2>
+<figure class="diagram">
+<svg viewBox="0 0 900 250" role="img" aria-label="Поток запроса: эмбеддинг, поиск по векторам и графу, ответ харнесса с кросс-ссылками">
+  <!-- top nodes -->
+  <g class="node"><rect class="card" x="20"  y="40" width="150" height="60" rx="12"/><rect class="bar-accent" x="28"  y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="95"  y="66" text-anchor="middle">Вопрос</text><text class="t-sub" x="95"  y="84" text-anchor="middle">UI / MCP / API</text></g>
+  <g class="node"><rect class="card" x="200" y="40" width="140" height="60" rx="12"/><rect class="bar-warn"   x="208" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="270" y="66" text-anchor="middle">Эмбеддинг</text><text class="t-sub" x="270" y="84" text-anchor="middle">вектор запроса</text></g>
+  <g class="node"><rect class="card" x="370" y="40" width="180" height="60" rx="12"/><rect class="bar-accent" x="378" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="460" y="66" text-anchor="middle">Поиск</text><text class="t-sub" x="460" y="84" text-anchor="middle">вектор + FTS + BFS</text></g>
+  <g class="node"><rect class="card" x="580" y="40" width="140" height="60" rx="12"/><rect class="bar-accent" x="588" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="650" y="66" text-anchor="middle">Query-харнесс</text><text class="t-sub" x="650" y="84" text-anchor="middle">LLM · синтез</text></g>
+  <g class="node"><rect class="card" x="750" y="40" width="140" height="60" rx="12"/><rect class="bar-ok"     x="758" y="52" width="5" height="36" rx="2.5"/><text class="t-title" x="820" y="66" text-anchor="middle">Ответ</text><text class="t-sub" x="820" y="84" text-anchor="middle">+ кросс-ссылки</text></g>
+
+  <!-- forward edges -->
+  <path class="flow" marker-end="url(#arrA)" d="M170,70 H200"/>
+  <path class="flow" marker-end="url(#arrA)" d="M340,70 H370"/>
+  <path class="flow" marker-end="url(#arrA)" d="M550,70 H580"/>
+  <path class="flow" marker-end="url(#arrA)" d="M720,70 H750"/>
+
+  <!-- sources feeding retrieve -->
+  <g class="node"><rect class="card" x="300" y="170" width="150" height="56" rx="12"/><rect class="bar-ok" x="308" y="182" width="5" height="32" rx="2.5"/><text class="t-title" x="375" y="196" text-anchor="middle">pgvector + FTS</text><text class="t-sub" x="375" y="214" text-anchor="middle">вектор + tsvector</text></g>
+  <g class="node"><rect class="card" x="470" y="170" width="150" height="56" rx="12"/><rect class="bar-ok" x="478" y="182" width="5" height="32" rx="2.5"/><text class="t-title" x="545" y="196" text-anchor="middle">граф · PG</text><text class="t-sub" x="545" y="214" text-anchor="middle">BFS глубина N</text></g>
+  <path class="conn-a" marker-end="url(#arrA)" d="M375,170 C375,135 460,135 460,100"/>
+  <path class="conn-a" marker-end="url(#arrA)" d="M545,170 C545,135 460,135 460,100"/>
+</svg>
+<figcaption>Полный путь поиск + харнесс обслуживает веб-UI и REST <code>/query</code>; MCP переиспользует только retrieval-часть (<code>search_wiki</code>), синтез делает клиент-агент. Глубина BFS и hub threshold — из по-доменных настроек (паритет с плагином).</figcaption>
+</figure>
+
+<!-- ============================================================= -->
+<h2>8 · Модель данных (верхний уровень)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Таблица</th><th>Ключевые поля</th><th>Примечания</th></tr></thead>
+  <tbody>
+    <tr><td><code>users</code></td><td>id, email, pw_hash, role</td><td>role ∈ admin/editor/viewer</td></tr>
+    <tr><td><code>api_keys</code></td><td>id, user_id, hash, scopes, created_at</td><td>для API + MCP</td></tr>
+    <tr><td><code>domains</code></td><td>id, name, source_prefix, wiki_prefix, config (jsonb)</td><td>настройки домена внутри</td></tr>
+    <tr><td><code>sources</code></td><td>id, domain_id, storage_ref, type, checksum, status</td><td>checksum → детекция изменений (re-ingest)</td></tr>
+    <tr><td><code>articles</code></td><td>id, domain_id, slug, title, storage_ref, summary, current_rev, updated_at</td><td>тело в Postgres; current_rev/updated_at = optimistic lock</td></tr>
+    <tr><td><code>article_revisions</code></td><td>id, article_id, rev_no, storage_ref, author, origin (ai/user), created_at</td><td>история правок, откат; авто-публикация</td></tr>
+    <tr><td><code>entities</code></td><td>id, domain_id, name, type</td><td>человек/инструмент/процесс/термин</td></tr>
+    <tr><td><code>links</code></td><td>src_article_id, dst_article_id, type</td><td>направленное ребро (исходящие + backlinks)</td></tr>
+    <tr><td><code>citations</code></td><td>id, article_id, source_id, span</td><td>provenance: чем подкреплена статья</td></tr>
+    <tr><td><code>chunks</code></td><td>id, article_id, ord, text, tsv <code>tsvector</code>, embedding <code>vector</code>, embedding_version</td><td>pgvector (HNSW/IVFFlat) + FTS-индекс; reindex при смене модели</td></tr>
+    <tr><td><code>chat_sessions</code> · <code>chat_messages</code></td><td>session: id, user_id, domain_id · message: session_id, role, content, created_at</td><td>follow-up диалог поверх Query</td></tr>
+    <tr><td><code>jobs</code></td><td>id, type, domain_id, status, progress, log (jsonb), created_at</td><td>прогоны ingest/lint/format/reindex; отмена/таймаут</td></tr>
+    <tr><td><code>audit_log</code></td><td>id, user_id, action, target, created_at</td><td>кто запустил/правил</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>Тела</b> статей/источников лежат в PostgreSQL (Large Objects / bytea) через шов <code>StorageBackend</code>;
+PostgreSQL также держит <b>метаданные, граф и векторы</b>. S3/MinIO остаётся подключаемым позже без смены модели.
+Граф — это обычные реляционные рёбра, обходимые recursive CTE — без отдельного графового движка.</div>
+
+<h3>Жизненный цикл контента и происхождение</h3>
+<ul class="tight">
+  <li><b>Детекция изменений:</b> re-ingest сверяет <code>checksum</code> источника — неизменённое пропускается.</li>
+  <li><b>Каскад:</b> удаление источника → чистка/пересборка осиротевших чанков, статей и битых рёбер графа.</li>
+  <li><b>Версия эмбеддингов:</b> <code>embedding_version</code> на чанке; смена модели запускает фоновый <code>reindex</code>; поиск использует только текущую версию.</li>
+  <li><b>Provenance:</b> статьи ссылаются на источники (<code>citations</code>) — основа доверия и работы Lint.</li>
+  <li><b>Версионирование:</b> AI-правки публикуются сразу, полная история ревизий + откат; конкурентные правки — optimistic lock по <code>current_rev</code>.</li>
+</ul>
+
+<!-- ============================================================= -->
+<h2>9 · Внешние интерфейсы</h2>
+<h3>REST-API управления (репрезентативно)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Метод · Путь</th><th>Назначение</th></tr></thead>
+  <tbody>
+    <tr><td><code>POST /api/domains</code></td><td>Создать/Init домен (структура папок + индекс).</td></tr>
+    <tr><td><code>GET /api/domains</code></td><td>Список доменов.</td></tr>
+    <tr><td><code>POST /api/domains/{id}/sources</code></td><td>Загрузить источник (multipart) или зарегистрировать URL.</td></tr>
+    <tr><td><code>POST /api/domains/{id}/ingest</code></td><td>Запустить задачу ingest → возвращает <code>job_id</code>.</td></tr>
+    <tr><td><code>POST /api/domains/{id}/lint</code></td><td>Запустить задачу lint (пробелы / устаревшее / битые ссылки).</td></tr>
+    <tr><td><code>POST /api/domains/{id}/query</code></td><td>RAG-запрос (синхронно или стримом).</td></tr>
+    <tr><td><code>GET · PUT /api/articles/{id}</code></td><td>Чтение / сохранение статьи вики (Format при сохранении — опционально; optimistic lock).</td></tr>
+    <tr><td><code>GET /api/articles/{id}/revisions</code> · <code>POST …/rollback</code></td><td>История правок и откат к ревизии.</td></tr>
+    <tr><td><code>GET /api/domains/{id}/articles</code></td><td>Листинг + full-text поиск статей (пагинация/фильтр/сорт).</td></tr>
+    <tr><td><code>POST /api/chat</code></td><td>Follow-up диалог (<code>session_id</code>) поверх результата Query.</td></tr>
+    <tr><td><code>GET /api/jobs/{id}/events</code></td><td>SSE-поток прогресса харнесса.</td></tr>
+    <tr><td><code>POST /api/jobs/{id}/cancel</code></td><td>Отмена запущенной задачи.</td></tr>
+    <tr><td><code>GET /api/graph?domain={id}</code></td><td>Узлы+рёбра графа для просмотрщика Cytoscape.</td></tr>
+  </tbody>
+</table>
+<div class="note">Все эндпоинты под префиксом <code>/api/v1</code>; списки — с пагинацией/фильтром/сортировкой;
+схема OpenAPI/Swagger генерируется FastAPI автоматически.</div>
+<h3>MCP-инструменты (Streamable HTTP, <code>/mcp</code>)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Инструмент</th><th>Назначение</th></tr></thead>
+  <tbody>
+    <tr><td><code>search_wiki(query, domain)</code></td><td>Семантический + граф-расширенный поиск, возвращает пассажи + ссылки на статьи. Синтез — на стороне клиента-агента.</td></tr>
+    <tr><td><code>get_article(id|slug)</code></td><td>Вернуть markdown статьи + метаданные.</td></tr>
+    <tr><td><code>list_links(article)</code></td><td>Исходящие/входящие связи для навигации по графу.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================= -->
+<h2>10 · Технологический стек</h2>
+<table class="rpt-table">
+  <thead><tr><th>Слой</th><th>Выбор</th><th>Примечания</th></tr></thead>
+  <tbody>
+    <tr><td>Web UI</td><td>Jinja2 + HTMX + Cytoscape.js</td><td>server-rendered, минимум JS; граф-виджет на одной странице</td></tr>
+    <tr><td>API / app</td><td>FastAPI (Python 3.12, async)</td><td>REST <code>/api/v1</code> + SSE + OpenAPI/Swagger; MCP смонтирован как под-приложение</td></tr>
+    <tr><td>AI-харнесс</td><td>OpenAI-совместимый клиент → Ollama <span class="badge llm">LLM</span></td><td>шов <code>AgentProvider</code> для будущих бэкендов</td></tr>
+    <tr><td>Поиск / эмбеддинги</td><td>OpenAI-совместимые embeddings → <code>pgvector</code> + Postgres FTS (<code>tsvector</code>)</td><td>гибридный retrieval; модель настраивается; локально, офлайн</td></tr>
+    <tr><td>Фоновые задачи</td><td>Redis + воркер <code>arq</code></td><td>задачи + pub/sub прогресса <span class="badge det">async</span></td></tr>
+    <tr><td>База данных</td><td>PostgreSQL 16 + <code>pgvector</code></td><td>метаданные · рёбра графа · векторы · тела файлов (LO/bytea); S3/MinIO опционально через <code>StorageBackend</code></td></tr>
+    <tr><td>MCP</td><td>MCP Python SDK · Streamable HTTP</td><td>удалённо, auth по API-ключу</td></tr>
+    <tr><td>Auth</td><td>session-cookie + API-ключи, RBAC</td><td>admin / editor / viewer</td></tr>
+    <tr><td>Упаковка</td><td>Docker Compose</td><td>api · worker · postgres · redis · ollama</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================= -->
+<h2>11 · Конфигурация (параметры вики, паритет с плагином)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Группа</th><th>Параметры</th></tr></thead>
+  <tbody>
+    <tr><td>Модель</td><td>chat-модель, embedding-модель (настраивается; мультиязычная/RU при необходимости), base URL, API-ключ, temperature, переопределения модели по операциям</td></tr>
+    <tr><td>Граф</td><td>глубина BFS (по умолчанию 1), hub threshold (по умолчанию 20)</td></tr>
+    <tr><td>Поиск</td><td>размер чанка, перекрытие чанков, top-K, веса гибрида вектор/FTS</td></tr>
+    <tr><td>Рантайм</td><td>таймауты операций, лимит истории, ретраи structured-output</td></tr>
+    <tr><td>Домен</td><td>префикс источников → префикс вики, пользовательский промпт, включённые операции</td></tr>
+  </tbody>
+</table>
+<div class="note">Глобальные дефолты живут в настройках приложения; каждый домен переопределяет их через свой
+<code>config</code> jsonb — зеркалит разделение конфига machine-vs-domain из плагина.</div>
+
+<!-- ============================================================= -->
+<h2>12 · Сквозные аспекты</h2>
+<div class="cols">
+  <div class="card-box"><h3>Безопасность</h3><ul class="tight">
+    <li>Хешированные пароли; подписанные session-cookie; хешированные API-ключи.</li>
+    <li>RBAC на каждом вызове API/MCP; viewer = только чтение.</li>
+    <li>Тела файлов в Postgres под общими транзакциями и RBAC; по-доменные ключи хранилища.</li>
+    <li>Скачивание URL за allowlist / SSRF-защитой.</li>
+    <li>Prompt injection: контент источников = данные, не инструкции; write-scope харнесса ограничен своим доменом; деструктивных tools нет; лимит шагов.</li>
+    <li>Санитайзинг markdown→HTML (allowlist) при рендере — защита от XSS.</li>
+    <li>CSRF-токены для всех мутирующих HTMX-форм (сессии).</li>
+    <li>Валидация загрузок: content-type sniffing, лимит размера, защита от zip-бомб (docx/epub).</li>
+    <li>Секреты (session-secret, креды БД, ключ LLM) — через env/secrets, не в коде/образе.</li>
+  </ul></div>
+  <div class="card-box"><h3>Наблюдаемость</h3><ul class="tight">
+    <li>Структурные логи; пошаговый лог задачи (JSONL) как agent-лог плагина.</li>
+    <li>SSE выводит живые шаги харнесса в UI.</li>
+    <li>Health-эндпоинты для api / worker / зависимостей.</li>
+    <li>Audit log: кто запустил ingest/lint/reindex, кто правил статью.</li>
+  </ul></div>
+  <div class="card-box"><h3>Надёжность</h3><ul class="tight">
+    <li>Задачи идемпотентны по checksum источника; безопасный повторный ingest.</li>
+    <li>Ретраи arq с backoff; упавшие задачи сохраняют свой лог.</li>
+    <li>Миграции через Alembic.</li>
+    <li>Бэкап/восстановление: pg_dump (метаданные + граф + векторы + тела LO); DR-план с учётом размера.</li>
+    <li>Отмена и таймаут зависших задач; graceful shutdown воркера на середине job.</li>
+  </ul></div>
+  <div class="card-box"><h3>Производительность</h3><ul class="tight">
+    <li>Векторный индекс (HNSW/IVFFlat), настроенный под размер корпуса.</li>
+    <li>BFS ограничен глубиной + hub threshold.</li>
+    <li>Эмбеддинги батчатся во время ingest.</li>
+    <li>Ollama держит одну модель за раз → LLM-задачи сериализуются (очередь по модели).</li>
+  </ul></div>
+</div>
+
+<!-- ============================================================= -->
+<h2>13 · Риски и открытые вопросы (для LLD)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Тема</th><th>Вопрос для решения в LLD</th></tr></thead>
+  <tbody>
+    <tr><td>Качество локальной модели</td><td>Какие модели Ollama для chat и для embeddings? Фоллбэк, если извлечение слабое на сложных доменах?</td></tr>
+    <tr><td>Structured output</td><td>Насколько строго локальные модели держат JSON/tool-call? Стратегия retry/repair?</td></tr>
+    <tr><td>Чанкинг и подготовка векторов</td><td>Гранулярность (статья / заголовок / сущность); структура индекса по статьям домена + по сущностям; дефолты размера/перекрытия; map-reduce для крупных источников.</td></tr>
+    <tr><td>Построение графа</td><td>Связи выводит LLM, со-встречаемость сущностей, или оба способа?</td></tr>
+    <tr><td>Гибридное слияние</td><td>Стратегия объединения вектор+FTS (RRF / веса); нужен ли reranking.</td></tr>
+    <tr><td>Embedding-модель (RU)</td><td>Какая мультиязычная/RU-модель по умолчанию? Настраивается; влияет на качество retrieval.</td></tr>
+    <tr><td>Provenance-гранулярность</td><td>Цитаты на уровне статьи или утверждения/спана?</td></tr>
+    <tr><td>Каскадное удаление</td><td>Сирота-статья при удалении источника: удалять, помечать или пересобирать? (+ soft-delete)</td></tr>
+    <tr><td>Конкурентность</td><td>Гранулярность сериализации задач: по домену или по модели (Ollama single-model).</td></tr>
+    <tr><td>Rate limiting / idempotency</td><td>Квоты на загрузки/LLM, idempotency-ключи на POST, bulk-upload.</td></tr>
+    <tr><td>MCP auth</td><td>Точный маппинг API-ключ → роль и скоупинг по инструментам.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================= -->
+<h2>14 · Следующий шаг</h2>
+<p>После одобрения этого HLD переходим к <b>LLD</b>: интерфейсы и сигнатуры модулей, схема БД + миграции,
+определения промптов/инструментов для каждой операции харнесса, контракт <code>AgentProvider</code>, схемы
+запросов/ответов API, схемы MCP-инструментов и топология Docker Compose.</p>
+<p>Отдельные пункты повестки LLD: <b>принцип чанкования и подготовки векторов</b> (гранулярность статья/заголовок/сущность,
+структура индекса по статьям домена + по сущностям); стратегия гибридного слияния (RRF/веса) и reranking;
+каскадное удаление и soft-delete; rate limiting, idempotency-ключи, bulk-upload; first-admin bootstrap;
+resumable ingest. <span class="sub">Вне области первой версии: per-domain ACL, hot-reload конфига, webhooks, eval-харнесс качества.</span></p>
+
+</main>
+</body>
+</html>
