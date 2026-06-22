@@ -1,10 +1,12 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.deps import db, require_csrf, require_role
 from paw.db.models import User
+from paw.services.provider_settings import ProviderSettingsService
 from paw.services.settings import SettingsService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -23,3 +25,24 @@ async def put_settings_endpoint(
     body: dict[str, Any], session: AsyncSession = Depends(db)
 ) -> dict[str, Any]:
     return await SettingsService(session).update(body)
+
+
+class ProviderConnRequest(BaseModel):
+    base_url: str
+    api_key: str
+    chat_model: str
+    embedding_model: str
+    embedding_dim: int
+    vision_model: str | None = None
+
+
+@router.post(
+    "/provider",
+    status_code=204,
+    dependencies=[Depends(require_csrf), Depends(require_role("admin"))],
+)
+async def set_provider_connection(
+    body: ProviderConnRequest, session: AsyncSession = Depends(db)
+) -> Response:
+    await ProviderSettingsService(session).update_provider(**body.model_dump())
+    return Response(status_code=204)

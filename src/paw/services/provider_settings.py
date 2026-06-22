@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.config import get_settings
+from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
 from paw.db.repos.settings import SettingsRepo
 from paw.providers.config import PROVIDER_KEY, WIKI_KEY, ProviderConfig, WikiConfig
 from paw.security.secrets import SecretBox
@@ -43,6 +44,34 @@ class ProviderSettingsService:
         settings = await self._all()
         settings[PROVIDER_KEY] = pc.model_dump()
         await self._repo.upsert(settings)
+        await self._s.commit()
+        return pc
+
+    async def update_provider(
+        self,
+        *,
+        base_url: str,
+        chat_model: str,
+        embedding_model: str,
+        embedding_dim: int,
+        api_key: str,
+        vision_model: str | None = None,
+    ) -> ProviderConfig:
+        from paw.db.managed import embedding_dim as current_embedding_dim
+
+        current = await current_embedding_dim(self._s)
+        pc = await self.set_provider(
+            base_url=base_url,
+            chat_model=chat_model,
+            embedding_model=embedding_model,
+            embedding_dim=embedding_dim,
+            api_key=api_key,
+            vision_model=vision_model,
+        )
+        if current is not None and current != embedding_dim:
+            await rebuild_embedding_column(self._s, embedding_dim)
+        else:
+            await ensure_embedding_column(self._s, embedding_dim)
         await self._s.commit()
         return pc
 
