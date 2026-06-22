@@ -62,6 +62,32 @@ def redis_container() -> Iterator[RedisContainer]:
 
 
 @pytest.fixture
+def wired_settings(pg_async_url: str, redis_container: RedisContainer,
+                   monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Point the app's cached settings/redis at the live test containers."""
+    redis_url = (
+        f"redis://{redis_container.get_container_host_ip()}:"
+        f"{redis_container.get_exposed_port(6379)}/0"
+    )
+    monkeypatch.setenv("DATABASE_URL", pg_async_url)
+    monkeypatch.setenv("REDIS_URL", redis_url)
+    monkeypatch.setenv("SESSION_SECRET", "s" * 32)
+    monkeypatch.setenv("FERNET_KEY", "k" * 44)
+    import paw.api.deps as deps
+    import paw.db.session as db_session_mod
+    from paw.config import get_settings
+    get_settings.cache_clear()
+    deps._redis = None
+    db_session_mod._engine = None
+    db_session_mod._sessionmaker = None
+    yield
+    get_settings.cache_clear()
+    deps._redis = None
+    db_session_mod._engine = None
+    db_session_mod._sessionmaker = None
+
+
+@pytest.fixture
 async def redis_client(redis_container: RedisContainer) -> AsyncIterator["aioredis.Redis"]:
     host = redis_container.get_container_host_ip()
     port = redis_container.get_exposed_port(6379)
