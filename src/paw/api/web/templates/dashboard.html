@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Domains · Personal AI Wiki{% endblock %}
+{% block sidebar %}<h3>Domains</h3>{% endblock %}
+{% block content %}
+<h1>Domains</h1>
+<form hx-post="/api/v1/domains" hx-ext="json-enc" hx-headers='{"x-csrf-token": "{{ csrf }}"}'>
+  <label>New domain <input name="name" required></label>
+  <button type="submit">Create</button>
+</form>
+<ul>
+  {% for d in domains %}<li><a href="/domains/{{ d.id }}">{{ d.name }}</a></li>{% endfor %}
+</ul>
+{% endblock %}

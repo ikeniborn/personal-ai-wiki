@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }} · Personal AI Wiki{% endblock %}
+{% block content %}
+<div id="conflict-banner" class="banner" style="display:none">
+  This article changed on the server (409 conflict). Reload the page before saving again.
+</div>
+<div data-tabs>
+  <div class="tabs">
+    <button type="button" data-tab="read">Read</button>
+    <button type="button" data-tab="edit">Edit</button>
+  </div>
+  <article data-panel="read" style="display:block">{{ html | safe }}</article>
+  <form data-panel="edit" style="display:none"
+        hx-put="/api/v1/articles/{{ article.id }}" hx-ext="json-enc"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}'>
+    <input type="hidden" name="expected_rev" value="{{ article.current_rev }}">
+    <label>Title <input name="title" value="{{ article.title }}"></label>
+    <label>Markdown <textarea name="markdown" rows="16">{{ markdown }}</textarea></label>
+    <button type="submit">Save</button>
+  </form>
+</div>
+<section>
+  <h3>Revisions</h3>
+  <ul>{% for r in revisions %}<li>v{{ r.rev_no }} · {{ r.origin }}</li>{% endfor %}</ul>
+</section>
+{% endblock %}
