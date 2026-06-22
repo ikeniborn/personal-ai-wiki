@@ -53,7 +53,7 @@ class StubEmbeddingProvider:
         while len(out) < self.dim:
             digest = hashlib.sha256(f"{text}:{counter}".encode()).digest()
             for b in digest:
-                out.append(b / 255.0)
+                out.append(b / 256.0)
                 if len(out) == self.dim:
                     break
             counter += 1

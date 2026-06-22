@@ -25,7 +25,7 @@ class _FakeClient:
 def _chat_response(content: str | None, tool_calls: list[object] | None = None) -> object:
     msg = SimpleNamespace(content=content, tool_calls=tool_calls)
     choice = SimpleNamespace(message=msg, finish_reason="stop")
-    usage = SimpleNamespace(model_dump=lambda: {"total_tokens": 10})
+    usage = SimpleNamespace(model_dump=lambda: {"total_tokens": 10, "cost": None})
     return SimpleNamespace(choices=[choice], usage=usage)
 
 
@@ -37,6 +37,7 @@ async def test_chat_maps_plain_content():
     res = await p.chat([Message(role="user", content="hi")])
     assert res.content == "hello"
     assert res.usage == {"total_tokens": 10}
+    assert res.finish_reason == "stop"
 
 
 async def test_chat_maps_tool_calls():
