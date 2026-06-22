@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="{{ ui_lang | default('en') }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Personal AI Wiki{% endblock %}</title>
+  <link rel="stylesheet" href="/static/theme.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <nav class="rail">
+      <a href="/" title="Domains">🏠</a>
+      <a href="/" title="Articles">📚</a>
+      <a href="#" title="Chat (later)">💬</a>
+      <a href="#" title="Graph (later)">🕸</a>
+      <a href="/settings" title="Settings">⚙</a>
+    </nav>
+    <aside class="sidebar">{% block sidebar %}{% endblock %}</aside>
+    <main class="content">{% block content %}{% endblock %}</main>
+  </div>
+</body>
+</html>
