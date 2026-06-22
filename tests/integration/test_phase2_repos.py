@@ -9,9 +9,7 @@ from paw.db.repos.entities import EntityRepo
 
 
 async def _seed_article(db_session, slug="a"):
-    dom = await DomainRepo(db_session).create(
-        name=f"d-{slug}", source_prefix="s", wiki_prefix="w"
-    )
+    dom = await DomainRepo(db_session).create(name=f"d-{slug}", source_prefix="s", wiki_prefix="w")
     art = await ArticleRepo(db_session).create(
         domain_id=dom.id, slug=slug, title=slug.upper(), storage_ref="blob:x"
     )
@@ -58,8 +56,12 @@ async def test_chunk_create_sets_tsv_and_embedding(db_session):
     await db_session.commit()
     repo = ChunkRepo(db_session)
     cid = await repo.create(
-        article_id=art.id, domain_id=dom.id, kind="summary", ord=0,
-        heading_path=None, text_body="QUIC is a transport protocol",
+        article_id=art.id,
+        domain_id=dom.id,
+        kind="summary",
+        ord=0,
+        heading_path=None,
+        text_body="QUIC is a transport protocol",
     )
     await repo.set_embedding(chunk_id=cid, vector=[0.1, 0.2, 0.3, 0.4])
     await db_session.commit()
@@ -72,8 +74,12 @@ async def test_set_embedding_rejects_non_finite(db_session):
     await db_session.commit()
     repo = ChunkRepo(db_session)
     cid = await repo.create(
-        article_id=art.id, domain_id=dom.id, kind="summary", ord=0,
-        heading_path=None, text_body="test non-finite embedding",
+        article_id=art.id,
+        domain_id=dom.id,
+        kind="summary",
+        ord=0,
+        heading_path=None,
+        text_body="test non-finite embedding",
     )
     await db_session.commit()
     with pytest.raises(ValueError):
