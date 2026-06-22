@@ -20,6 +20,10 @@ dependencies = [
     "cryptography>=43.0",
     "openai>=1.55",
     "email-validator>=2.2",
+    "pymupdf>=1.24",
+    "mammoth>=1.8",
+    "trafilatura>=1.12",
+    "markdownify>=0.13",
 ]
 
 [dependency-groups]
