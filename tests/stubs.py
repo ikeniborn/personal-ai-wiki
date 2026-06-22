@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 
+from pydantic import BaseModel
+
 from paw.providers.base import ChatResult, Message, ToolCall, ToolSpec
 
 
@@ -41,6 +43,18 @@ class StubChatProvider:
         if self._responder is not None:
             return self._responder(messages, tools)
         return self._script.pop(0)
+
+    async def structured[M: BaseModel](
+        self,
+        messages: list[Message],
+        schema: type[M],
+        *,
+        model: str | None = None,
+        retries: int = 2,
+    ) -> M:
+        from paw.providers.structured import coerce_structured
+
+        return await coerce_structured(self, messages, schema, model=model, retries=retries)
 
 
 class StubEmbeddingProvider:
