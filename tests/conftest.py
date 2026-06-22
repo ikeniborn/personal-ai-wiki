@@ -1,8 +1,10 @@
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
+import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
+from testcontainers.redis import RedisContainer
 
 
 @pytest.fixture(scope="session")
@@ -51,3 +53,19 @@ async def db_session(pg_async_url: str) -> AsyncIterator[AsyncSession]:
         yield session
         await session.rollback()
     await engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def redis_container() -> Iterator[RedisContainer]:
+    with RedisContainer("redis:7-alpine") as rc:
+        yield rc
+
+
+@pytest.fixture
+async def redis_client(redis_container: RedisContainer) -> AsyncIterator["aioredis.Redis"]:
+    host = redis_container.get_container_host_ip()
+    port = redis_container.get_exposed_port(6379)
+    client = aioredis.Redis(host=host, port=int(port), decode_responses=True)
+    await client.flushdb()
+    yield client
+    await client.aclose()
