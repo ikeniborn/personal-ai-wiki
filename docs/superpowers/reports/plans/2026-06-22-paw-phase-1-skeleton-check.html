@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — PAW Phase 1 (Walking Skeleton)</title>
+<style>
+  :root {
+    --bg:#f6f7fb; --surface:#ffffff; --surface-2:#eef0f7; --fg:#22232e; --muted:#5b5d6e;
+    --border:#d6d8e6; --accent:#5c6bc0; --accent-fg:#fff;
+    --ok:#2e7d32; --ok-bg:#e6f4e6; --warn:#b26a00; --warn-bg:#fdf0dd;
+    --crit:#c62828; --crit-bg:#fce8e8; --info:#1565c0; --info-bg:#e6f0fb;
+    --node:#ffffff; --node-stroke:#5c6bc0; --edge:#8b8fb5;
+  }
+  html[data-theme="dark"] {
+    --bg:#181825; --surface:#21222f; --surface-2:#2a2b3c; --fg:#cdd6f4; --muted:#9aa0b8;
+    --border:#3a3b52; --accent:#89b4fa; --accent-fg:#181825;
+    --ok:#a6e3a1; --ok-bg:#27331f; --warn:#f9d28a; --warn-bg:#3a2f1c;
+    --crit:#f38ba8; --crit-bg:#3a1f27; --info:#89b4fa; --info-bg:#1d2740;
+    --node:#262637; --node-stroke:#89b4fa; --edge:#6b6f95;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+         background:var(--bg); color:var(--fg); }
+  .wrap { max-width:1100px; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem;
+           border-bottom:1px solid var(--border); padding-bottom:1rem; margin-bottom:1.5rem; }
+  h1 { font-size:1.5rem; margin:0 0 .25rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .8rem; border-left:4px solid var(--accent); padding-left:.6rem; }
+  h3 { font-size:1rem; margin:1.4rem 0 .5rem; color:var(--muted); }
+  .sub { color:var(--muted); font-size:.9rem; }
+  code { background:var(--surface-2); padding:.05rem .35rem; border-radius:4px; font-size:.86em; }
+  table { width:100%; border-collapse:collapse; margin:.5rem 0 1rem; background:var(--surface);
+          border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  th,td { text-align:left; padding:.5rem .65rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--surface-2); font-weight:600; font-size:.85rem; }
+  tr:last-child td { border-bottom:0; }
+  td.num,th.num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .badge { display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.76rem;
+           font-weight:600; line-height:1.5; white-space:nowrap; }
+  .b-ok { background:var(--ok-bg); color:var(--ok); }
+  .b-warn { background:var(--warn-bg); color:var(--warn); }
+  .b-crit { background:var(--crit-bg); color:var(--crit); }
+  .b-info { background:var(--info-bg); color:var(--info); }
+  .verdict-fixed { background:var(--ok-bg); color:var(--ok); }
+  .verdict-accepted { background:var(--info-bg); color:var(--info); }
+  .verdict-open { background:var(--crit-bg); color:var(--crit); }
+  .toggle { background:var(--surface); color:var(--fg); border:1px solid var(--border);
+            border-radius:999px; padding:.4rem .9rem; cursor:pointer; font:inherit; font-size:.85rem; }
+  .toggle:hover { border-color:var(--accent); }
+  .note { background:var(--surface-2); border:1px solid var(--border); border-left:4px solid var(--accent);
+          border-radius:6px; padding:.7rem .9rem; margin:1rem 0; font-size:.9rem; }
+  .verdict-final { display:inline-block; padding:.5rem 1.1rem; border-radius:8px; font-weight:700;
+                   font-size:1.05rem; background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok); }
+  .chain { font-size:.9rem; color:var(--muted); }
+  .chain code { color:var(--fg); }
+  .hashrow { display:flex; flex-wrap:wrap; gap:.4rem 1.4rem; font-size:.85rem; color:var(--muted); }
+  .hashrow b { color:var(--fg); }
+  .legend { display:flex; flex-wrap:wrap; gap:1rem; font-size:.82rem; color:var(--muted); margin:.4rem 0 .8rem; }
+  .legend span::before { content:""; display:inline-block; width:.8rem; height:.8rem; border-radius:3px;
+                          margin-right:.35rem; vertical-align:-1px; }
+  .lg-edge::before { background:var(--edge); height:.25rem!important; border-radius:2px; }
+  .lg-node::before { background:var(--node); border:2px solid var(--node-stroke); }
+  figure { margin:0 0 1.2rem; }
+  .graph-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+  svg { display:block; }
+  svg text { fill:var(--fg); font:11px system-ui,sans-serif; }
+  svg .nlabel { font-weight:600; }
+  svg .nrole { fill:var(--muted); font-size:9.5px; }
+  .matrix td.hit { background:var(--info-bg); color:var(--info); font-weight:600; text-align:center; }
+  .matrix td.self { background:var(--surface-2); }
+  .matrix th, .matrix td { text-align:center; font-size:.8rem; padding:.35rem; }
+  .matrix th:first-child, .matrix td:first-child { text-align:left; white-space:nowrap; }
+  details summary { cursor:pointer; font-weight:600; padding:.3rem 0; }
+  .phase-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.6rem; margin:.6rem 0 1rem; }
+  .phase-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.7rem .8rem; }
+  .phase-card .pn { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .phase-card .ps { margin-top:.3rem; }
+  .small { font-size:.8rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Проверка плана — Personal AI Wiki, Фаза 1 (Walking Skeleton)</h1>
+    <div class="sub">Гейт <code>/check-plan</code> · повторный прогон (сходимость после правок) · дата 2026-06-22</div>
+  </div>
+  <button class="toggle" id="themeToggle" type="button" aria-label="Переключить тему">🌙 Тёмная / Светлая</button>
+</header>
+
+<section>
+  <h2>Файлы и хеши</h2>
+  <div class="hashrow">
+    <div><b>План:</b> <code>docs/superpowers/plans/2026-06-22-paw-phase-1-skeleton.md</code></div>
+  </div>
+  <div class="hashrow" style="margin-top:.3rem">
+    <div><b>plan_hash:</b> <code>eb16ad7239420048</code> <span class="small">(прежний: 951526edc7e22ebc — устарел после правок тела)</span></div>
+    <div><b>spec_hash:</b> <code>f634c88ea5571423</code> <span class="small">(без изменений)</span></div>
+  </div>
+  <div class="hashrow" style="margin-top:.3rem">
+    <div><b>Спека:</b> <code>docs/superpowers/specs/2026-06-22-paw-phase-1-skeleton-design.md</code></div>
+  </div>
+  <p class="chain" style="margin-top:.6rem"><b>Цепочка IDD→SDD:</b>
+     intent <code>null</code> → spec <code>…paw-phase-1-skeleton-design.md</code> → plan <code>…paw-phase-1-skeleton.md</code></p>
+  <div class="note">Повторный прогон: тело плана было отредактировано для закрытия четырёх прошлых findings
+    (F-001, F-002, F-004 — исправлены; F-003 — принято). Хеши пересчитаны каноническим алгоритмом
+    (тело без frontmatter), вердикты обновлены, секционные хеши обновлены. Новых genuine-issues не найдено.</div>
+</section>
+
+<section>
+  <h2>1. Резюме плана — задачи и критерии готовности (DoD)</h2>
+  <p class="small">22 задачи, TDD-цикл (написать падающий тест → проверить FAIL → минимальная реализация → проверить PASS → commit).
+     DoD каждой задачи — зелёный <code>pytest</code> по её тесту (если не указано иное).</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>Задача</th><th>Ключевой артефакт</th><th>DoD (критерий готовности)</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Скелет проекта + FastAPI-фабрика + health + <b>CI</b></td><td><code>pyproject.toml</code>, <code>main.py</code>, <code>.github/workflows/ci.yml</code></td><td><code>test_health</code> PASS; локальный гейт <code>ruff &amp;&amp; mypy &amp;&amp; pytest</code> зелёный</td></tr>
+      <tr><td class="num">2</td><td>Конфиг (pydantic-settings, env)</td><td><code>config.py</code>, <code>.env.example</code></td><td><code>test_config</code> PASS (load + missing-required)</td></tr>
+      <tr><td class="num">3</td><td>DB base + async session</td><td><code>db/base.py</code>, <code>db/session.py</code></td><td><code>test_db_base</code> PASS (naming convention)</td></tr>
+      <tr><td class="num">4</td><td>Core DB модели (LLD §2 subset)</td><td><code>db/models.py</code></td><td><code>test_models</code> PASS (9 таблиц, нет chunks/entities)</td></tr>
+      <tr><td class="num">5</td><td>Alembic baseline + <b>shared PG фикстуры (Step 3b)</b></td><td><code>alembic/…0001_baseline.py</code>, <code>conftest.py</code></td><td><code>test_migration</code> PASS (таблицы + расширения)</td></tr>
+      <tr><td class="num">6</td><td>Storage (Protocol + PostgresStorage)</td><td><code>storage/postgres.py</code></td><td><code>test_storage</code> PASS (bytea + Large Object roundtrip)</td></tr>
+      <tr><td class="num">7</td><td>Хеширование паролей (argon2)</td><td><code>security/passwords.py</code></td><td><code>test_passwords</code> PASS</td></tr>
+      <tr><td class="num">8</td><td>Secrets helper (Fernet)</td><td><code>security/secrets.py</code></td><td><code>test_secrets</code> PASS</td></tr>
+      <tr><td class="num">9</td><td>Sanitize + markdown render</td><td><code>security/sanitize.py</code></td><td><code>test_sanitize</code> PASS (strip script/handlers)</td></tr>
+      <tr><td class="num">10</td><td>CSRF double-submit</td><td><code>security/csrf.py</code></td><td><code>test_csrf</code> PASS</td></tr>
+      <tr><td class="num">11</td><td>Redis session store + Redis фикстура</td><td><code>security/sessions.py</code>, <code>conftest.py</code></td><td><code>test_sessions</code> PASS</td></tr>
+      <tr><td class="num">12</td><td>RFC 9457 errors + cursor pagination</td><td><code>api/errors.py</code>, <code>api/pagination.py</code></td><td><code>test_errors</code>, <code>test_pagination</code> PASS</td></tr>
+      <tr><td class="num">13</td><td>Репозитории + audit log</td><td><code>db/repos/*</code>, <code>audit/log.py</code></td><td><code>test_repos</code> PASS</td></tr>
+      <tr><td class="num">14</td><td>Auth deps + login/logout API</td><td><code>api/deps.py</code>, <code>api/routers/auth.py</code></td><td><code>test_auth</code> PASS (cookie / 401 / 204)</td></tr>
+      <tr><td class="num">15</td><td>Domains service + API (RBAC, CSRF)</td><td><code>services/domains.py</code>, <code>routers/domains.py</code></td><td><code>test_domains</code> PASS (201/403/403/пагинация)</td></tr>
+      <tr><td class="num">16</td><td>Upload guard + sources API (md/txt)</td><td><code>security/uploads.py</code>, <code>routers/sources.py</code></td><td><code>test_uploads</code>, <code>test_sources</code> PASS</td></tr>
+      <tr><td class="num">17</td><td>Articles API (optimistic lock 409, revisions, rollback)</td><td><code>services/articles.py</code>, <code>routers/articles.py</code></td><td><code>test_articles</code> PASS (create+render, 409, rollback)</td></tr>
+      <tr><td class="num">18</td><td>Setup wizard + settings + users (admin)</td><td><code>routers/setup.py</code>, <code>settings.py</code>, <code>users.py</code></td><td><code>test_setup</code> PASS (needs_setup → admin → 409)</td></tr>
+      <tr><td class="num">19</td><td>Web база (frame C, vendored htmx, <b>app.js</b>, CSP)</td><td><code>web/templates/base.html</code>, <code>static/app.js</code></td><td><code>test_web_shell</code> PASS (CSP header, static)</td></tr>
+      <tr><td class="num">20</td><td>Web страницы (setup/dashboard/domain/<b>article+409 banner</b>/settings)</td><td><code>web/templates/article.html</code>, <code>routes.py</code></td><td><code>test_web_pages</code> PASS (redirect → dashboard)</td></tr>
+      <tr><td class="num">21</td><td>arq worker + heartbeat + Dockerfile</td><td><code>worker.py</code>, <code>Dockerfile</code></td><td><code>test_worker_heartbeat</code> PASS</td></tr>
+      <tr><td class="num">22</td><td>Docker Compose + E2E (capstone)</td><td><code>docker-compose.yml</code>, <code>test_walking_skeleton.py</code></td><td>E2E PASS (setup→login→domain→upload→article→render + 409 banner/hx-put в HTML); <code>docker compose config</code> valid</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей шагов (узлы — задачи, рёбра — «результат M используется в N», M&lt;N)</h3>
+  <div class="legend">
+    <span class="lg-node">Задача (узел)</span>
+    <span class="lg-edge">Зависимость (направление M→N)</span>
+    <span>Циклов и нарушений порядка не обнаружено (фаза dependencies — passed)</span>
+  </div>
+  <div class="graph-scroll">
+  <svg viewBox="0 0 1180 470" width="1180" height="470" role="img" aria-label="Граф зависимостей задач">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-opacity="0.25"/>
+      </filter>
+    </defs>
+    <!-- edges (drawn first, under nodes) -->
+    <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <line x1="120" y1="72" x2="120" y2="154"/>     <!-- 1->2 conftest/app fixture -->
+      <line x1="120" y1="188" x2="120" y2="274"/>    <!-- 2->3 config->session -->
+      <line x1="120" y1="308" x2="120" y2="392"/>    <!-- 3->4 base->models -->
+      <line x1="162" y1="410" x2="296" y2="410"/>    <!-- 4->5 models->migration -->
+      <line x1="340" y1="392" x2="340" y2="310"/>    <!-- 5->6 fixtures->storage (M<N OK) -->
+      <line x1="382" y1="410" x2="516" y2="410"/>    <!-- 5->13 fixtures->repos -->
+      <line x1="560" y1="392" x2="560" y2="220"/>    <!-- 13->7-10 cluster region (repos used by sec/auth) -->
+      <line x1="602" y1="202" x2="686" y2="284"/>    <!-- 7-10->14 sec into auth deps -->
+      <line x1="990" y1="218" x2="772" y2="290"/>    <!-- 11->14 redis session into auth -->
+      <line x1="990" y1="88"  x2="772" y2="284"/>    <!-- 12->14 errors into auth -->
+      <line x1="730" y1="276" x2="640" y2="190"/>    <!-- 14->15 -->
+      <line x1="744" y1="276" x2="730" y2="190"/>    <!-- 14->16 -->
+      <line x1="772" y1="278" x2="850" y2="190"/>    <!-- 14->17 -->
+      <line x1="772" y1="280" x2="854" y2="90"/>     <!-- 14->18 -->
+      <line x1="900" y1="172" x2="990" y2="288"/>    <!-- 17->20 article service into pages -->
+      <line x1="640" y1="172" x2="980" y2="290"/>    <!-- 15->20 domains into dashboard/pages -->
+      <line x1="1010" y1="340" x2="1010" y2="310"/>  <!-- 19->20 base->pages -->
+      <line x1="1024" y1="276" x2="1062" y2="406"/>  <!-- 20->22 -->
+      <line x1="1010" y1="414" x2="1058" y2="424"/>  <!-- 21->22 -->
+    </g>
+    <!-- nodes -->
+    <g font-family="system-ui">
+      <g filter="url(#ds)"><rect x="78" y="40" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="55" text-anchor="middle">1 Scaffold</text><text class="nrole" x="120" y="66" text-anchor="middle">+CI</text></g>
+      <g filter="url(#ds)"><rect x="78" y="156" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="171" text-anchor="middle">2 Config</text><text class="nrole" x="120" y="182" text-anchor="middle">env</text></g>
+      <g filter="url(#ds)"><rect x="78" y="276" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="291" text-anchor="middle">3 DB base</text><text class="nrole" x="120" y="302" text-anchor="middle">session</text></g>
+      <g filter="url(#ds)"><rect x="78" y="394" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="409" text-anchor="middle">4 Models</text><text class="nrole" x="120" y="420" text-anchor="middle">§2 subset</text></g>
+      <g filter="url(#ds)"><rect x="298" y="394" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="340" y="409" text-anchor="middle">5 Migration</text><text class="nrole" x="340" y="420" text-anchor="middle">+fixtures</text></g>
+      <g filter="url(#ds)"><rect x="298" y="276" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="340" y="291" text-anchor="middle">6 Storage</text><text class="nrole" x="340" y="302" text-anchor="middle">reuse fx</text></g>
+      <g filter="url(#ds)"><rect x="518" y="394" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="560" y="409" text-anchor="middle">13 Repos</text><text class="nrole" x="560" y="420" text-anchor="middle">+audit</text></g>
+      <g filter="url(#ds)"><rect x="518" y="186" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="560" y="201" text-anchor="middle">7–10 Sec</text><text class="nrole" x="560" y="212" text-anchor="middle">pw/csrf/san</text></g>
+      <g filter="url(#ds)"><rect x="948" y="186" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="990" y="201" text-anchor="middle">11 Sessions</text><text class="nrole" x="990" y="212" text-anchor="middle">+redis fx</text></g>
+      <g filter="url(#ds)"><rect x="948" y="56" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="990" y="71" text-anchor="middle">12 Errors</text><text class="nrole" x="990" y="82" text-anchor="middle">pagination</text></g>
+      <g filter="url(#ds)"><rect x="688" y="276" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="730" y="291" text-anchor="middle">14 Auth API</text><text class="nrole" x="730" y="302" text-anchor="middle">deps</text></g>
+      <g filter="url(#ds)"><rect x="568" y="156" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="610" y="171" text-anchor="middle">15 Domains</text><text class="nrole" x="610" y="182" text-anchor="middle">RBAC/CSRF</text></g>
+      <g filter="url(#ds)"><rect x="688" y="156" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="730" y="171" text-anchor="middle">16 Sources</text><text class="nrole" x="730" y="182" text-anchor="middle">upload</text></g>
+      <g filter="url(#ds)"><rect x="808" y="156" width="92" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="854" y="171" text-anchor="middle">17 Articles</text><text class="nrole" x="854" y="182" text-anchor="middle">409/rollback</text></g>
+      <g filter="url(#ds)"><rect x="808" y="56" width="92" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="854" y="71" text-anchor="middle">18 Setup</text><text class="nrole" x="854" y="82" text-anchor="middle">settings/users</text></g>
+      <g filter="url(#ds)"><rect x="968" y="340" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="1010" y="355" text-anchor="middle">19 Web base</text><text class="nrole" x="1010" y="366" text-anchor="middle">app.js/CSP</text></g>
+      <g filter="url(#ds)"><rect x="968" y="276" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="1010" y="291" text-anchor="middle">20 Pages</text><text class="nrole" x="1010" y="302" text-anchor="middle">409 banner</text></g>
+      <g filter="url(#ds)"><rect x="948" y="414" width="84" height="32" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="990" y="429" text-anchor="middle">21 Worker</text><text class="nrole" x="990" y="440" text-anchor="middle">Dockerfile</text></g>
+      <g filter="url(#ds)"><rect x="1058" y="404" width="84" height="40" rx="7" fill="var(--node)" stroke="var(--accent)" stroke-width="2.2"/><text class="nlabel" x="1100" y="421" text-anchor="middle">22 E2E</text><text class="nrole" x="1100" y="433" text-anchor="middle">compose</text></g>
+    </g>
+  </svg>
+  </div>
+  <p class="small">Граф упрощён до кластеров (7–10 — security-примитивы; рёбра показывают основные потоки артефактов).
+    Ключевая правка F-004: фикстуры PG/миграций создаются в <b>Задаче 5 (Step 3b)</b> и переиспользуются Задачей 6 —
+    ребро 5→6 направлено корректно (M=5 &lt; N=6). Циклов нет; capstone-узел 22 (E2E) — сток всех потоков.</p>
+
+  <h3>Пересечения по артефактам (несколько задач изменяют один файл)</h3>
+  <table class="matrix">
+    <thead><tr><th>Артефакт ↓ \ Задачи →</th><th>1</th><th>5</th><th>11</th><th>14</th><th>15</th><th>16</th><th>17</th><th>18</th><th>19</th><th>20</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/paw/main.py</code></td><td class="hit">✓</td><td></td><td></td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td></td></tr>
+      <tr><td><code>tests/conftest.py</code></td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td><code>web/routes.py</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td class="hit">✓</td></tr>
+    </tbody>
+  </table>
+  <p class="small"><code>main.py</code> наращивается аддитивно (каждая задача добавляет <code>include_router</code>); <code>conftest.py</code> —
+    инкрементально (Задача 1: app-фикстура; Задача 5 Step 3b: PG/миграции; Задача 11: Redis); <code>web/routes.py</code> —
+    Задача 19 заводит, Задача 20 расширяет (replace file). Пересечения упорядочены по возрастанию №, без обратных зависимостей.</p>
+
+  <h3>Покрытие требований (одно требование ↔ несколько задач)</h3>
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td>Scaffold (uv, ruff/mypy/pytest, FastAPI factory, arq skeleton)</td><td>1, 21</td></tr>
+      <tr><td>DB core subset + alembic baseline через init container</td><td>4, 5, 22</td></tr>
+      <tr><td>Auth + security baseline</td><td>7, 8, 9, 10, 11, 12, 14, 16</td></tr>
+      <tr><td>Web UI frame C (включая article view/edit + 409 banner)</td><td>19, 20</td></tr>
+      <tr><td>Deploy (compose, healthchecks, first-run wizard)</td><td>18, 22</td></tr>
+      <tr><td>Tests: unit/api/e2e + <b>CI</b> green</td><td>каждая (TDD) + 1 (CI) + 22 (E2E)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>3. Результаты проверки — фазы</h2>
+  <div class="phase-grid">
+    <div class="phase-card"><div class="pn">Фаза 1 · structure</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">22 задачи, нумерация 1–22 без пропусков/дублей; плейсхолдеров нет.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 2 · coverage</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">F-001 и F-002 закрыты; все требования спеки покрыты.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 3 · dependencies</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">F-004 устранён; порядок M&lt;N держится, циклов нет.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 4 · verifiability</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">У каждой задачи Run-команда + Expected (FAIL→PASS).</div></div>
+    <div class="phase-card"><div class="pn">Фаза 5 · consistency</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">Хеши тела/секций пересчитаны; spec_hash без изменений.</div></div>
+  </div>
+
+  <h3>Findings (итоговые вердикты)</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Описание</th><th>Вердикт</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td><td>Tests (CI)</td>
+        <td>Спека (Tests §CI) требует зелёный <code>ruff</code>+<code>mypy</code>+<code>pytest</code>, но CI-артефакт не был замаплен.<br><span class="small">Исправлено: Задача 1 Step 6 создаёт <code>.github/workflows/ci.yml</code> (ruff+mypy+pytest) и локальный gate; артефакт коммитится.</span></td>
+        <td><span class="badge verdict-fixed">fixed</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td><td>Web UI (409 banner)</td>
+        <td>Frame-C требует «409 reload banner» на странице статьи; ранее был только CSS-класс без элемента/обработки.<br><span class="small">Исправлено: Задача 19 — CSP-safe <code>app.js</code> (htmx:responseError → <code>#conflict-banner</code>) в base.html; Задача 20 — <code>article.html</code> с <code>id=conflict-banner</code> + Edit-форма (hx-put, expected_rev); Задача 22 e2e проверяет наличие баннера и hx-put.</span></td>
+        <td><span class="badge verdict-fixed">fixed</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td><span class="badge b-info">INFO</span></td><td>coverage</td><td>API (settings)</td>
+        <td>GET/PUT <code>/settings</code> реализованы, но round-trip-тест отсутствует.<br><span class="small">Тело не менялось; зеркалит уже принятый finding спеки F-004 (Connection-поля saved-but-unused в этой фазе).</span></td>
+        <td><span class="badge verdict-accepted">accepted</span></td>
+      </tr>
+      <tr>
+        <td>F-004</td><td><span class="badge b-warn">WARNING</span></td><td>dependencies</td><td>Task 5 / Task 6</td>
+        <td>Тест Задачи 5 потреблял фикстуры, заводимые в Задаче 6 (нарушение M&lt;N).<br><span class="small">Исправлено: общие фикстуры PG/миграций перенесены в Задачу 5 (Step 3b); Задача 6 Step 3 их переиспользует. Строгий порядок M&lt;N восстановлен.</span></td>
+        <td><span class="badge verdict-fixed">fixed</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Сводка</h3>
+  <table>
+    <tbody>
+      <tr><td>CRITICAL open</td><td class="num"><b>0</b></td></tr>
+      <tr><td>WARNING open</td><td class="num"><b>0</b></td></tr>
+      <tr><td>Findings всего</td><td class="num">4 (fixed: 3, accepted: 1, open: 0)</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:1rem"><span class="verdict-final">Итоговый вердикт: OK — все findings закрыты</span></p>
+  <p class="chain" style="margin-top:1rem"><b>Chain:</b> <code>null</code> (intent) → <code>docs/superpowers/specs/2026-06-22-paw-phase-1-skeleton-design.md</code> → <code>docs/superpowers/plans/2026-06-22-paw-phase-1-skeleton.md</code></p>
+</section>
+
+<footer class="small" style="margin-top:2.5rem; border-top:1px solid var(--border); padding-top:1rem;">
+  Автогенерируемый артефакт команды <code>/check-plan</code>. Перезаписывается при каждом прогоне.
+</footer>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById("themeToggle");
+  function set(t){ root.setAttribute("data-theme",t); try{localStorage.setItem("paw-check-theme",t);}catch(e){} }
+  var saved; try{saved=localStorage.getItem("paw-check-theme");}catch(e){}
+  if(!saved){ saved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark":"light"; }
+  set(saved);
+  btn.addEventListener("click", function(){
+    set(root.getAttribute("data-theme")==="dark" ? "light":"dark");
+  });
+})();
+</script>
+</body>
+</html>

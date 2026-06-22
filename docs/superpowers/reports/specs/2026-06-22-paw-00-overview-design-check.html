@@ -3,286 +3,290 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Проверка спецификации — paw-00 Overview &amp; Phase Map</title>
+<title>Проверка спецификации — PAW Overview &amp; Phase Map</title>
 <style>
-:root{
-  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
-  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
-  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
-  --shadow:rgba(40,40,80,.18);
-}
-body:has(#theme-toggle:checked){
-  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
-  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
-  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
-  --shadow:rgba(0,0,0,.45);
-}
-body{
-  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
-  font:16px/1.55 system-ui, sans-serif;
-  background:
-    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
-    var(--bg);
-  color:var(--fg);
-  transition:background .3s, color .3s;
-}
-h1,h2,h3{ color:var(--accent); line-height:1.2; }
-h1{ font-size:1.7rem; margin:.2rem 0 .3rem; }
-h2{ font-size:1.3rem; margin:2.2rem 0 .6rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
-h3{ font-size:1.05rem; margin:1.4rem 0 .4rem; color:var(--fg); }
-code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.88em; }
-.theme-btn{
-  position:sticky; top:.5rem; float:right; z-index:5;
-  cursor:pointer; user-select:none;
-  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
-  background:var(--surface);
-}
-.lead{ font-size:1.08rem; }
-.sub{ color:var(--muted); font-size:.95rem; }
-.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
-  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
-  box-shadow:0 1px 8px var(--shadow); }
-.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb,var(--ok) 12%, var(--surface)); }
-.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
-  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
-  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
-.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .7rem; text-align:left; vertical-align:top; }
-.rpt-table tbody tr:last-child td{ border-bottom:none; }
-.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
-.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
-.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
-.rpt-table td code{ white-space:nowrap; }
-.badge{ display:inline-block; font-size:.72rem; padding:.05rem .55rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
-.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
-.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
-.badge.danger{ color:var(--danger-2); border-color:var(--danger); }
-.badge.info{ color:var(--accent-2); border-color:var(--accent); }
-.badge.passed{ color:var(--ok-2); border-color:var(--ok); }
-.rpt-c4 .boundary{
-  border:1.6px dashed var(--accent); border-radius:12px;
-  padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
-  display:flex; flex-wrap:wrap; gap:.6rem;
-  background:color-mix(in srgb, var(--accent) 5%, transparent);
-}
-.rpt-c4 .boundary::before{
-  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
-  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
-}
-.rpt-c4 .comp{
-  background:var(--surface); border:1px solid var(--border); border-radius:8px;
-  padding:.55rem .85rem; min-width:6rem; font-size:.82rem; box-shadow:0 1px 6px var(--shadow);
-  border-left:4px solid var(--accent);
-}
-.rpt-c4 .comp b{ color:var(--accent); }
-.rpt-c4 .comp .sub{ font-size:.74rem; }
-.rpt-graph{ margin:1rem 0; text-align:center; background:var(--surface); border:1px solid var(--border);
-  border-radius:10px; padding:1rem; box-shadow:0 2px 12px var(--shadow); overflow-x:auto; }
-.rpt-graph text{ font:11px system-ui, sans-serif; fill:var(--fg); }
-.rpt-graph .nlabel{ font-weight:600; }
-.rpt-graph .elabel{ fill:var(--muted); font-size:9px; }
-.cov-yes{ color:var(--ok-2); font-weight:700; }
-figcaption{ color:var(--muted); font-size:.85rem; margin-top:.4rem; text-align:center; }
-ul.tight li{ margin:.28rem 0; }
-.metaline{ display:flex; flex-wrap:wrap; gap:.4rem 1.2rem; margin:.6rem 0 0; }
-.metaline span{ color:var(--muted); }
-.metaline b{ color:var(--fg); }
+  :root{
+    --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+    --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+    --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+    --shadow:rgba(40,40,80,.18);
+  }
+  body:has(#theme-toggle:checked){
+    --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+    --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+    --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+    --shadow:rgba(0,0,0,.45);
+  }
+  body{
+    margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+    font:16px/1.55 system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+      var(--bg);
+    color:var(--fg);
+    transition:background .3s, color .3s;
+  }
+  .theme-btn{
+    position:sticky; top:.5rem; float:right;
+    cursor:pointer; user-select:none;
+    padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+    background:var(--surface); z-index:10;
+  }
+  h1{ font-size:1.7rem; margin:.2rem 0 .4rem; }
+  h2{ font-size:1.25rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+  h3{ font-size:1.05rem; margin:1.4rem 0 .5rem; color:var(--accent); }
+  .lead{ font-size:1.08rem; }
+  .sub{ color:var(--muted); font-size:.95rem; }
+  code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.88em; }
+
+  .rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+    margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px;
+    overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+  .rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+  .rpt-table tbody tr:last-child td{ border-bottom:none; }
+  .rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+  .rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+  .rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+  .rpt-table td code{ white-space:nowrap; }
+
+  .note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+    background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+    box-shadow:0 1px 8px var(--shadow); }
+  .note.ok{ border-left-color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, var(--surface)); }
+
+  .badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
+  .badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+  .badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+  .badge.danger{ color:var(--danger-2); border-color:var(--danger); }
+  .badge.info{ color:var(--accent-2); border-color:var(--accent); }
+
+  /* C4 nested boundaries */
+  .rpt-c4 .boundary{
+    border:1.6px dashed var(--accent); border-radius:12px;
+    padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+    display:flex; flex-wrap:wrap; gap:.6rem;
+    background:color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+  .rpt-c4 .boundary::before{
+    content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+    background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
+  }
+  .rpt-c4 .comp{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:.55rem .85rem; min-width:6rem; font-size:.85rem; box-shadow:0 1px 6px var(--shadow);
+    border-left:4px solid var(--accent);
+  }
+  .rpt-c4 .comp b{ color:var(--accent); }
+  .rpt-c4 .comp .sub{ font-size:.78rem; }
+
+  .rpt-graph{ margin:1rem 0; text-align:center; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:1rem; box-shadow:0 2px 12px var(--shadow); overflow-x:auto; }
+  .rpt-graph svg text{ fill:var(--fg); font:11px system-ui, sans-serif; }
+  .rpt-graph svg .nlabel{ font-weight:600; }
+  figcaption{ color:var(--muted); font-size:.85rem; margin-top:.4rem; }
+
+  .phase-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.7rem; margin:1rem 0; }
+  .phase-card{ background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--ok);
+    border-radius:8px; padding:.7rem .9rem; box-shadow:0 1px 8px var(--shadow); }
+  .phase-card b{ color:var(--accent); }
+
+  details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+  details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
 </style>
 </head>
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
-<label for="theme-toggle" class="theme-btn" title="Тёмная / светлая тема">🌙 / ☀️</label>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 
-<h1>Проверка спецификации — Personal AI Wiki: Overview &amp; Phase Map</h1>
-<p class="lead">Мастер-индекс реализации <code>paw</code> (9 вертикальных фаз), производный от LLD/HLD. Проверка по 4 фазам IDD-гейта.</p>
-<div class="metaline">
-  <span>Файл: <b><code>docs/superpowers/specs/2026-06-22-paw-00-overview-design.md</code></b></span>
-</div>
-<div class="metaline">
-  <span>spec_hash: <b><code>9922cdfa83620575</code></b></span>
-  <span>prev_hash: <b>—</b> (первый прогон, frontmatter отсутствовал)</span>
-  <span>last_run: <b>2026-06-22</b></span>
-  <span>chain.intent: <b>null</b></span>
-</div>
-<div class="note ok"><b>Итоговый вердикт: OK.</b> Все 4 фазы — <span class="badge passed">passed</span>. CRITICAL open: 0 · WARNING open: 0 · INFO open: 2.</div>
+<main class="report">
+  <h1>Проверка спецификации — PAW Overview &amp; Phase Map</h1>
+  <p class="lead">Мастер-индекс реализации Personal AI Wiki: краткое описание системы, карта 9 вертикальных фаз и сквозные конвенции.</p>
+  <p class="sub">
+    Файл: <code>docs/superpowers/specs/2026-06-22-paw-00-overview-design.md</code> ·
+    дата проверки 2026-06-22 ·
+    spec_hash <code>41cc5a707a03cd66</code> ·
+    prev_hash <code>9922cdfa83620575</code>
+  </p>
 
-<!-- ============ БЛОК 1: РЕЗЮМЕ СПЕЦИФИКАЦИИ ============ -->
-<h2>1. Резюме спецификации</h2>
-<p class="sub">Каждое требование — отдельной строкой; источник — секция спеки. Это индекс-спека: она не дублирует LLD, а ссылается на <code>§N</code> и делит сборку на фазы.</p>
+  <div class="note ok">
+    <b>Итог:</b> хеш сошёлся (тело документа не менялось — правился только frontmatter).
+    Все 4 фазы — <span class="badge ok">passed</span>. Findings: 2 × INFO, обе
+    <span class="badge ok">accepted</span>. CRITICAL open: 0, WARNING open: 0.
+    Финальный вердикт — <b>OK</b>.
+  </div>
 
-<table class="rpt-table">
-  <thead><tr><th>#</th><th>Секция</th><th>Требование</th></tr></thead>
-  <tbody>
-    <tr><td>R1</td><td>§1 System summary</td><td>Self-hosted team-scale RAG-вики: загрузка источников (md/pdf/docx/html/epub/url/images) → LLM-харнес генерирует статьи с сущностями/ссылками/цитатами; гибридный retrieval (vector + FTS + graph BFS); query (кэш) / chat (треды); редактирование с историей; граф-вид; lint/fix/format/reindex; read-only MCP.</td></tr>
-    <tr><td>R2</td><td>§2 Stack</td><td>Python 3.12 · uv · FastAPI(async) · Jinja2+HTMX+Cytoscape.js(vendored) · PostgreSQL 16+pgvector · Redis+arq · OpenAI-совместимый LLM · MCP Python SDK (Streamable HTTP) · Docker Compose + Traefik.</td></tr>
-    <tr><td>R3</td><td>§3 Module layout (LLD §1)</td><td>Пакет <code>paw</code>, src-layout, один образ / два процесса (api uvicorn, worker arq), MCP вмонтирован. Правила зависимостей без циклов: api/web/mcp→services+retrieval; services→repos/storage/vector/graph/jobs/harness; harness→providers и storage/vector/graph через tools; ingest/vector/graph/storage/providers→db; db,config — листья.</td></tr>
-    <tr><td>R4</td><td>§4 Phasing strategy</td><td>Walking-skeleton + vertical growth: фаза 1 — тонкий end-to-end срез; каждая следующая добавляет одну реальную возможность end-to-end. Обоснование: ранняя интеграция, независимая тестируемость/деплой, минимальный blast radius. Фазы ≠ секции LLD.</td></tr>
-    <tr><td>R5</td><td>§5 Phase map</td><td>Карта 9 фаз: для каждой — vertical value, depends-on, имя spec-файла. Рекомендуемый порядок 1→2→3→(4,5,6 параллельно)→7→8→9.</td></tr>
-    <tr><td>R6</td><td>§6 Global UI</td><td>Двойной сайдбар (frame C); доменный индекс + дерево статей; мета-секции под статьёй + Edit/Preview-табы (409→reload-баннер); Query и Chat — отдельные экраны (кэш только у Query); full-canvas граф + slide-in drawer; одностраничные настройки + TOC; jobs-drawer (SSE); setup-wizard; UI i18n (ui_language RU/EN независимо).</td></tr>
-    <tr><td>R7</td><td>§7 Cross-cutting</td><td>Слоение конфига (LLD §10); секреты (argon2, hashed API-keys, Fernet для LLM-ключа/Langfuse); API-конвенции (LLD §8: сессии в Redis/Bearer, RBAC, CSRF, RFC 9457, cursor-пагинация, SSE); harness safety (LLD §4: allowlist, write-scope, schema-validated, data-not-instructions, лимиты, audit_log); политика embedding dim (managed ALTER+reindex); тестирование (LLD §11); observability (счётчики в точке сборки, экспортёр в фазе 9).</td></tr>
-    <tr><td>R8</td><td>§8 Deferred</td><td>Backlog/out-of-v1 (LLD §13): rate limiting, idempotency, soft-delete, reranking, resumable ingest, graph pagination perf, scheduled jobs; per-domain ACL, config hot-reload, webhooks, quality eval. Ни одна фаза их не реализует — перечислены, чтобы оставить дешёвые seams.</td></tr>
-    <tr><td>R9</td><td>§9 How to consume</td><td>Каждая spec-фаза самодостаточна и готова к <code>writing-plans</code>: Phase 1 spec → writing-plans → implement → verify acceptance → next phase. Спеки ссылаются на LLD за DDL/контрактами, не дублируют их.</td></tr>
-  </tbody>
-</table>
+  <!-- ============ 1. РЕЗЮМЕ СПЕЦИФИКАЦИИ ============ -->
+  <h2>1. Резюме спецификации</h2>
+  <p class="sub">Каждое требование — отдельной строкой; секции спеки соответствуют покрываемым задачам.</p>
 
-<h3>Success Criteria (критерии приёмки самой индекс-спеки)</h3>
-<table class="rpt-table">
-  <thead><tr><th>SC</th><th>Критерий</th><th>Статус</th></tr></thead>
-  <tbody>
-    <tr><td>SC1</td><td>Все 8 задач из контекста покрыты ≥1 требованием спеки.</td><td><span class="badge ok">выполнено</span></td></tr>
-    <tr><td>SC2</td><td>Нет «лишних» требований вне списка задач.</td><td><span class="badge ok">выполнено</span></td></tr>
-    <tr><td>SC3</td><td>9-фазная карта: каждая фаза имеет value, depends-on и имя spec-файла.</td><td><span class="badge ok">выполнено</span></td></tr>
-    <tr><td>SC4</td><td>Нет плейсхолдеров (TODO/TBD/???/FIXME), битых внутренних ссылок, пропусков нумерации.</td><td><span class="badge ok">выполнено</span></td></tr>
-    <tr><td>SC5</td><td>Нет противоречий между требованиями.</td><td><span class="badge ok">выполнено</span></td></tr>
-  </tbody>
-</table>
+  <table class="rpt-table">
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td><b>§1. System summary</b></td><td>Self-hosted RAG-вики командного масштаба: загрузка источников (md/pdf/docx/html/epub/url/images) → LLM-харнесс извлекает темы и генерирует статьи с сущностями, ссылками и цитатами.</td></tr>
+      <tr><td><b>§1. System summary</b></td><td>Гибридный поиск (вектор + FTS + graph BFS); режимы query (одноразовый, кэшируемый) и chat (тредовый) по домену с цитируемыми ответами; редактирование статей с историей ревизий; граф-вью; lint/fix/format/reindex; read-only MCP-эндпоинт.</td></tr>
+      <tr><td><b>§2. Stack</b></td><td>Python 3.12 · <code>uv</code> · FastAPI (async) · Jinja2 + HTMX + Cytoscape.js (vendored) · PostgreSQL 16 + <code>pgvector</code> · Redis + <code>arq</code> · OpenAI-совместимый LLM · MCP Python SDK (Streamable HTTP) · Docker Compose + Traefik.</td></tr>
+      <tr><td><b>§3. Module layout</b></td><td>Пакет <code>paw</code>, src-layout, один образ / два процесса (<code>api</code> uvicorn, <code>worker</code> arq), MCP смонтирован в приложение. Полное целевое дерево — в LLD §1.</td></tr>
+      <tr><td><b>§3. Dependency rules</b></td><td>Правила зависимостей без циклов: <code>api/web/mcp → services + retrieval</code>; <code>services → db.repos, storage, vector, graph, jobs, harness</code>; <code>harness → providers</code> (storage/vector/graph через tools); <code>ingest/vector/graph/storage/providers → db</code>; <code>db, config</code> — листья.</td></tr>
+      <tr><td><b>§4. Phasing strategy</b></td><td>Walking skeleton + вертикальный рост: Фаза 1 — тонкий end-to-end срез; каждая следующая фаза добавляет одну реальную возможность end-to-end. Фазы ≠ секции LLD (LLD §1–§13 — кросс-срезы дизайна, не порядок сборки).</td></tr>
+      <tr><td><b>§5. Phase map</b></td><td>Таблица из 9 фаз: «значимость · зависимости · имя spec-файла». Рекомендуемый порядок 1→2→3→(4,5,6 параллельно)→7→8→9; Фаза 9 — последняя.</td></tr>
+      <tr><td><b>§6. Global UI decisions</b></td><td>Решения, обязательные для каждой фазы с UI: двойной сайдбар (wiki-style frame), domain landing, страница статьи (Edit/Preview, 409-баннер), Query (SSE + stale badge), Chat (история сессий), Graph (full-canvas Cytoscape + drawer), Settings (single page), Jobs drawer (SSE), setup wizard, UI i18n.</td></tr>
+      <tr><td><b>§7. Cross-cutting conventions</b></td><td>Сквозные конвенции: config layering (LLD §10); secrets (argon2, hashed API-keys, Fernet-encryption); API-конвенции (LLD §8: сессии в Redis, RBAC, CSRF, RFC 9457, keyset-пагинация, SSE); harness safety (LLD §4: tool-allowlist, write-scope, schema-validation, лимиты, audit_log); фиксированный embedding dim; тестирование (LLD §11); observability.</td></tr>
+      <tr><td><b>§8. Deferred</b></td><td>Backlog (LLD §13): rate limiting, idempotency keys, soft-delete, reranking, resumable ingest, graph pagination, scheduled jobs. Out of v1: per-domain ACL, config hot-reload, webhooks, eval-харнесс.</td></tr>
+      <tr><td><b>§9. How to consume</b></td><td>Каждый phase-spec самодостаточен и готов к <code>writing-plans</code>: Фаза 1 → writing-plans → реализация → verify acceptance → следующая фаза. Спеки ссылаются на LLD, не дублируя DDL/контракты/пайплайны.</td></tr>
+    </tbody>
+  </table>
 
-<!-- ============ БЛОК 2: СХЕМЫ РЕШЕНИЯ И ЗАВИСИМОСТЕЙ ============ -->
-<h2>2. Схемы решения и зависимостей</h2>
+  <h3>Success Criteria</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Критерий</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>9 фаз покрывают весь функционал HLD/LLD вертикальными срезами; каждая независимо тестируема и развёртываема.</td><td><span class="badge ok">выполнен</span></td></tr>
+      <tr><td>У каждой фазы есть отдельный spec-файл в этом каталоге, имя приведено в карте фаз (§5).</td><td><span class="badge ok">выполнен</span></td></tr>
+      <tr><td>Овервью не дублирует LLD — только ссылается на секции <code>§N</code>.</td><td><span class="badge ok">выполнен</span></td></tr>
+      <tr><td>Каждый spec самодостаточен и готов к передаче в <code>writing-plans</code>.</td><td><span class="badge ok">выполнен</span></td></tr>
+    </tbody>
+  </table>
 
-<h3>2.1 Схема решения — модули и правила зависимостей (C4, LLD §1)</h3>
-<figure class="rpt-c4">
-  <div class="boundary" data-label="paw · один образ / два процесса (api · worker)">
-    <div class="boundary" data-label="Точки входа">
-      <div class="comp"><b>api / web</b><br><span class="sub">FastAPI · Jinja2+HTMX</span></div>
-      <div class="comp"><b>mcp</b><br><span class="sub">Streamable HTTP · read-only</span></div>
+  <!-- ============ 2. СХЕМЫ РЕШЕНИЯ И ЗАВИСИМОСТЕЙ ============ -->
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>2.1. Схема решения — модульная карта (LLD §1)</h3>
+  <p class="sub">Слои и направление зависимостей (без циклов). Связи направлены сверху вниз: верхний слой использует нижний.</p>
+  <figure class="rpt-c4">
+    <div class="boundary" data-label="Edge / точки входа">
+      <div class="comp"><b>api</b><br><span class="sub">FastAPI (uvicorn)</span></div>
+      <div class="comp"><b>web</b><br><span class="sub">Jinja2 + HTMX</span></div>
+      <div class="comp"><b>mcp</b><br><span class="sub">Streamable HTTP</span></div>
     </div>
-    <div class="boundary" data-label="Бизнес-слой">
-      <div class="comp"><b>services</b><br><span class="sub">домены · статьи · jobs</span></div>
-      <div class="comp"><b>retrieval</b><br><span class="sub">vector+FTS+graph BFS · RRF</span></div>
-      <div class="comp"><b>harness</b><br><span class="sub">LLM · tools · safety</span></div>
+    <div class="boundary" data-label="Прикладной слой">
+      <div class="comp"><b>services</b><br><span class="sub">бизнес-логика</span></div>
+      <div class="comp"><b>retrieval</b><br><span class="sub">vector + FTS + BFS</span></div>
     </div>
-    <div class="boundary" data-label="Инфраструктура / адаптеры">
-      <div class="comp"><b>db.repos</b><br><span class="sub">PostgreSQL 16</span></div>
-      <div class="comp"><b>vector</b><br><span class="sub">pgvector / HNSW</span></div>
-      <div class="comp"><b>graph</b><br><span class="sub">link BFS</span></div>
-      <div class="comp"><b>storage</b><br><span class="sub">файлы/blob</span></div>
-      <div class="comp"><b>ingest</b><br><span class="sub">парсеры → чанки</span></div>
-      <div class="comp"><b>providers</b><br><span class="sub">OpenAI-совм. LLM</span></div>
-      <div class="comp"><b>jobs</b><br><span class="sub">Redis + arq</span></div>
+    <div class="boundary" data-label="Возможности / инфраструктура">
+      <div class="comp"><b>harness</b><br><span class="sub">LLM · через tools</span></div>
+      <div class="comp"><b>providers</b><br><span class="sub">OpenAI-совместимый</span></div>
+      <div class="comp"><b>jobs</b><br><span class="sub">arq worker</span></div>
+      <div class="comp"><b>storage · vector · graph · ingest</b><br><span class="sub">пайплайны данных</span></div>
     </div>
     <div class="boundary" data-label="Листья">
-      <div class="comp"><b>db</b><br><span class="sub">схема/миграции</span></div>
-      <div class="comp"><b>config</b><br><span class="sub">env-слой</span></div>
+      <div class="comp"><b>db</b><br><span class="sub">repos · PG + pgvector</span></div>
+      <div class="comp"><b>config</b><br><span class="sub">env (config.py)</span></div>
     </div>
+  </figure>
+
+  <h3>2.2. Граф зависимостей фаз</h3>
+  <p class="sub">Узлы — фазы; рёбра «зависит от». Фазы 4/5/6 параллелятся после Фазы 3; Фаза 9 зависит от всех.</p>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 520 300" width="520" role="img" aria-label="граф зависимостей фаз">
+      <!-- основная цепочка 1->2->3 -->
+      <line x1="63"  y1="150" x2="117" y2="150" stroke="var(--line)" stroke-width="2"/>
+      <line x1="153" y1="150" x2="207" y2="150" stroke="var(--line)" stroke-width="2"/>
+      <!-- 3 -> 4,5,6 -->
+      <line x1="241" y1="140" x2="343" y2="63"  stroke="var(--line)" stroke-width="2"/>
+      <line x1="243" y1="150" x2="342" y2="150" stroke="var(--line)" stroke-width="2"/>
+      <line x1="241" y1="160" x2="343" y2="237" stroke="var(--line)" stroke-width="2"/>
+      <!-- 2 -> 5 (Фаза 5 зависит только от 2) -->
+      <line x1="135" y1="132" x2="350" y2="135" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"/>
+      <!-- 6 -> 7 ; 3 -> 7 -->
+      <line x1="377" y1="234" x2="424" y2="162" stroke="var(--line)" stroke-width="2"/>
+      <line x1="243" y1="150" x2="422" y2="150" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"/>
+      <!-- 3 -> 8 -->
+      <line x1="241" y1="160" x2="443" y2="252" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"/>
+      <!-- к 9 (хардит всё) -->
+      <line x1="455" y1="135" x2="473" y2="120" stroke="var(--line)" stroke-width="2"/>
+
+      <!-- узлы -->
+      <g><circle cx="45"  cy="150" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="45"  y="154" text-anchor="middle">1</text></g>
+      <g><circle cx="135" cy="150" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="135" y="154" text-anchor="middle">2</text></g>
+      <g><circle cx="225" cy="150" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="225" y="154" text-anchor="middle">3</text></g>
+      <g><circle cx="360" cy="55"  r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="360" y="59"  text-anchor="middle">4</text></g>
+      <g><circle cx="360" cy="150" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="360" y="154" text-anchor="middle">5</text></g>
+      <g><circle cx="360" cy="245" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="360" y="249" text-anchor="middle">6</text></g>
+      <g><circle cx="440" cy="150" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="440" y="154" text-anchor="middle">7</text></g>
+      <g><circle cx="460" cy="262" r="18" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text class="nlabel" x="460" y="266" text-anchor="middle">8</text></g>
+      <g><circle cx="485" cy="105" r="18" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="3"/><text class="nlabel" x="485" y="109" text-anchor="middle">9</text></g>
+    </svg>
+    <figcaption>Сплошные рёбра — основная цепочка (1→2→3→4/5/6→7); пунктир — дополнительные зависимости (5←2, 7←3, 8←3). Фаза 9 (жирная обводка) хардит всё.</figcaption>
+  </figure>
+
+  <h3>2.3. Карта покрытия «задача → требование(я) спеки»</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Задача (контекст покрытия)</th><th>Покрывающие требования спеки</th></tr></thead>
+    <tbody>
+      <tr><td>Краткое описание системы + стек</td><td>§1. System summary · §2. Stack</td></tr>
+      <tr><td>Модульная раскладка и правила зависимостей (LLD §1)</td><td>§3. Module layout &amp; dependency rules</td></tr>
+      <tr><td>Обоснование walking-skeleton + вертикального фазирования</td><td>§4. Phasing strategy</td></tr>
+      <tr><td>Карта из 9 фаз с зависимостями и именами spec-файлов</td><td>§5. Phase map</td></tr>
+      <tr><td>Глобальные UI-решения (frame C и т.д.)</td><td>§6. Global UI decisions</td></tr>
+      <tr><td>Сквозные конвенции</td><td>§7. Cross-cutting conventions</td></tr>
+      <tr><td>Отложенный backlog (LLD §13)</td><td>§8. Deferred</td></tr>
+      <tr><td>Индекс спек + handoff в writing-plans</td><td>§9. How to consume · §5 (имена файлов)</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ 3. РЕЗУЛЬТАТЫ ПРОВЕРКИ ============ -->
+  <h2>3. Результаты проверки</h2>
+
+  <h3>3.1. Статус фаз</h3>
+  <div class="phase-grid">
+    <div class="phase-card"><b>Фаза 1 · structure</b><br><span class="badge ok">passed</span><br><span class="sub">Плейсхолдеры/битые ссылки/нумерация/дубли — чисто.</span></div>
+    <div class="phase-card"><b>Фаза 2 · coverage</b><br><span class="badge ok">passed</span><br><span class="sub">8 задач покрытия → секции §1–§9; лишних требований нет.</span></div>
+    <div class="phase-card"><b>Фаза 3 · clarity</b><br><span class="badge ok">passed</span><br><span class="sub">DoD делегируется per-phase спекам (overview-индекс).</span></div>
+    <div class="phase-card"><b>Фаза 4 · consistency</b><br><span class="badge ok">passed</span><br><span class="sub">Хеши секций стабильны; тело не менялось.</span></div>
   </div>
-</figure>
-<figcaption>Поток управления: api/web/mcp → services+retrieval → repos/storage/vector/graph/jobs/harness → db. harness обращается к storage/vector/graph только через tools. db и config — листья (без исходящих зависимостей). Циклов нет.</figcaption>
 
-<h3>2.2 Граф зависимостей фаз (узлы — фазы, рёбра — «зависит от»)</h3>
-<figure class="rpt-graph">
-  <svg viewBox="0 0 760 300" width="760" role="img" aria-label="граф зависимостей фаз">
-    <!-- edges (drawn first, under nodes) -->
-    <!-- 1->2 -->
-    <line x1="78"  y1="150" x2="152" y2="150" stroke="var(--line)" stroke-width="2"/>
-    <!-- 2->3 -->
-    <line x1="208" y1="150" x2="282" y2="150" stroke="var(--line)" stroke-width="2"/>
-    <!-- 3->4 -->
-    <line x1="338" y1="138" x2="500" y2="58"  stroke="var(--line)" stroke-width="2"/>
-    <!-- 2->5 -->
-    <line x1="195" y1="135" x2="505" y2="135" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 3"/>
-    <!-- 3->6, 2->6 -->
-    <line x1="338" y1="160" x2="500" y2="215" stroke="var(--line)" stroke-width="2"/>
-    <line x1="190" y1="168" x2="500" y2="222" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 3"/>
-    <!-- 3->8 -->
-    <line x1="332" y1="150" x2="612" y2="150" stroke="var(--line)" stroke-width="2"/>
-    <!-- 3->7, 6->7 -->
-    <line x1="338" y1="155" x2="612" y2="248" stroke="var(--line)" stroke-width="2"/>
-    <line x1="560" y1="232" x2="612" y2="250" stroke="var(--line)" stroke-width="2"/>
-    <!-- all->9 : representative edges from 7,8 -->
-    <line x1="668" y1="135" x2="700" y2="78"  stroke="var(--line)" stroke-width="2"/>
-    <line x1="668" y1="248" x2="702" y2="92"  stroke="var(--line)" stroke-width="2"/>
+  <h3>3.2. Findings</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>F-001</code></td>
+        <td><span class="badge info">INFO</span></td>
+        <td>5. Phase map</td>
+        <td>Строка «Suggested order» говорит, что фазы 4/5/6 «in any order» зависят от 2/3, тогда как таблица указывает: Фаза 5 зависит только от 2 (не 3), а Фаза 6 — от 2,3. Формулировка «all depend on 2/3» слегка вольная относительно колонки Depends-on; не противоречие, но стоит сверить для точности.</td>
+        <td><span class="badge ok">accepted</span> <span class="sub">2026-06-22</span></td>
+      </tr>
+      <tr>
+        <td><code>F-002</code></td>
+        <td><span class="badge info">INFO</span></td>
+        <td>7. Cross-cutting conventions</td>
+        <td>Конвенции заданы как биндинги без явного per-item DoD; допустимо для overview-спеки, делегирующей DoD на per-phase спеки, но критерии приёмки живут ниже по цепочке (§9), а не здесь.</td>
+        <td><span class="badge ok">accepted</span> <span class="sub">2026-06-22</span></td>
+      </tr>
+    </tbody>
+  </table>
 
-    <!-- nodes -->
-    <g class="nlabel">
-      <circle cx="50"  cy="150" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="50"  y="154" text-anchor="middle">P1</text>
-      <circle cx="180" cy="150" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="180" y="154" text-anchor="middle">P2</text>
-      <circle cx="310" cy="150" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="310" y="154" text-anchor="middle">P3</text>
-      <circle cx="530" cy="46"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="530" y="50"  text-anchor="middle">P4</text>
-      <circle cx="530" cy="135" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="530" y="139" text-anchor="middle">P5</text>
-      <circle cx="530" cy="225" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="530" y="229" text-anchor="middle">P6</text>
-      <circle cx="640" cy="260" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="640" y="264" text-anchor="middle">P7</text>
-      <circle cx="640" cy="150" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="640" y="154" text-anchor="middle">P8</text>
-      <circle cx="720" cy="70"  r="28" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="3"/><text x="720" y="74" text-anchor="middle">P9</text>
-    </g>
-    <!-- edge labels -->
-    <text class="elabel" x="115" y="143" text-anchor="middle">deps</text>
-    <text class="elabel" x="245" y="143" text-anchor="middle">deps</text>
-    <text class="elabel" x="350" y="100" text-anchor="middle">P4←3</text>
-    <text class="elabel" x="400" y="128" text-anchor="middle">P5←2</text>
-    <text class="elabel" x="420" y="205" text-anchor="middle">P6←2,3</text>
-    <text class="elabel" x="600" y="205" text-anchor="middle">P7←3,6</text>
-    <text class="elabel" x="475" y="150" text-anchor="middle">P8←3</text>
-    <text class="elabel" x="700" y="120" text-anchor="middle">P9←all</text>
-  </svg>
-  <figcaption>P1→P2→P3 — критический путь (walking skeleton). P4,P5,P6 параллелизуемы после P3 (P5 зависит только от P2). P7←(3,6), P8←3, P9 зависит от всех (hardening). Пунктир — рёбра к фазе 2.</figcaption>
-</figure>
+  <h3>3.3. Сводка</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>CRITICAL open</td><td><b>0</b></td></tr>
+      <tr><td>WARNING open</td><td><b>0</b></td></tr>
+      <tr><td>INFO (всего, accepted)</td><td>2 / 2</td></tr>
+      <tr><td>spec_hash (тело, канонический)</td><td><code>41cc5a707a03cd66</code></td></tr>
+      <tr><td>prev_hash</td><td><code>9922cdfa83620575</code></td></tr>
+      <tr><td>last_run</td><td>2026-06-22</td></tr>
+      <tr><td>Финальный вердикт</td><td><span class="badge ok">OK</span></td></tr>
+    </tbody>
+  </table>
 
-<h3>2.3 Карта покрытия — задача → требование(я) спеки</h3>
-<table class="rpt-table">
-  <thead><tr><th>#</th><th>Задача из контекста</th><th>Покрывающие требования</th><th>Покрыта</th></tr></thead>
-  <tbody>
-    <tr><td>T1</td><td>System summary + stack</td><td>R1 (§1), R2 (§2)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T2</td><td>Module layout &amp; dependency rules (LLD §1)</td><td>R3 (§3)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T3</td><td>Phasing strategy = walking-skeleton + vertical growth + rationale</td><td>R4 (§4)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T4</td><td>9-фазная карта (value, deps, spec-файлы)</td><td>R5 (§5)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T5</td><td>Глобальные UI-решения (frame C, индекс+дерево, мета+табы, Query/Chat, full-canvas граф, single-page settings, jobs drawer, wizard, i18n)</td><td>R6 (§6)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T6</td><td>Cross-cutting conventions (config, секреты/Fernet, API, harness, embedding dim, тесты, observability timing)</td><td>R7 (§7)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T7</td><td>Deferred / backlog (LLD §13)</td><td>R8 (§8)</td><td class="cov-yes">да</td></tr>
-    <tr><td>T8</td><td>Spec index + как фазы кормят writing-plans</td><td>R9 (§9), R5 (§5)</td><td class="cov-yes">да</td></tr>
-  </tbody>
-</table>
-<div class="note ok"><b>Покрытие 8/8.</b> «Лишних» требований (не привязанных к задаче) не обнаружено. Противоречий между требованиями нет.</div>
+  <div class="note">
+    <b>Chain (intent → spec):</b> <code>intent: null</code> — intent-документ не привязан;
+    проверка спецификации проведена без блокировки по цепочке IDD.
+  </div>
 
-<!-- ============ БЛОК 3: РЕЗУЛЬТАТЫ ПРОВЕРКИ ============ -->
-<h2>3. Результаты проверки</h2>
+  <details>
+    <summary>Заметка о сходимости хеша</summary>
+    <p>Предыдущий прогон вычислил <code>spec_hash</code> как хеш <b>всего файла</b> (frontmatter
+    ещё не существовал) — <code>9922cdfa83620575</code>. После появления <code>review:</code>-блока
+    канонический алгоритм считает хеш <b>тела</b> (всё после второго <code>---</code>), что давало
+    рассогласование («hash stale»). Тело документа проверяемо не изменялось (git: working = HEAD),
+    поэтому хеши секций стабильны, а вердикты findings сохранены как <code>accepted</code>. Записан
+    канонический body-hash <code>41cc5a707a03cd66</code> — гейт сходится в quick-exit.</p>
+  </details>
 
-<table class="rpt-table">
-  <thead><tr><th>Фаза</th><th>Статус</th><th>Что проверялось (закрытый чек-лист)</th><th>Новых findings</th></tr></thead>
-  <tbody>
-    <tr><td><b>1. structure</b></td><td><span class="badge passed">passed</span></td><td>Плейсхолдеры (TODO/TBD/???/FIXME) — нет; битые внутренние ссылки — нет (<code>§N</code> ведут на внешний LLD, не intra-doc); нумерация секций 1–9 без пропусков/дублей; дублей заголовков нет.</td><td>0</td></tr>
-    <tr><td><b>2. coverage</b></td><td><span class="badge passed">passed</span></td><td>Все 8 задач покрыты ≥1 требованием; «лишних» требований нет; противоречий нет.</td><td>1 (INFO)</td></tr>
-    <tr><td><b>3. clarity</b></td><td><span class="badge passed">passed</span></td><td>Вагуе-термины (быстро/удобно/при необходимости/достаточно/надёжно) — не найдены; термины согласованы (paw, фазы, домен, статья).</td><td>1 (INFO)</td></tr>
-    <tr><td><b>4. consistency</b></td><td><span class="badge passed">passed</span></td><td>Первый прогон: зафиксирован baseline хешей 9 секций; prev-сравнения нет; связанных изменившихся findings нет.</td><td>0</td></tr>
-  </tbody>
-</table>
-
-<div class="note"><b>Замечание по хешированию.</b> На момент прогона frontmatter в спеке отсутствовал (один маркер <code>---</code> на стр. 12 — горизонтальная линия, а не разделитель frontmatter). По каноническому правилу при <code>fm&lt;2</code> взят хеш всего файла: <code>9922cdfa83620575</code>. После прогона добавлен блок <code>review:</code>/<code>chain:</code>.</div>
-
-<h3>3.1 Findings</h3>
-<table class="rpt-table">
-  <thead><tr><th>id</th><th>severity</th><th>секция</th><th>text</th><th>verdict</th></tr></thead>
-  <tbody>
-    <tr><td><code>F-001</code></td><td><span class="badge info">INFO</span></td><td>§5 Phase map</td><td>Строка «Suggested order» говорит «4/5/6 in any order, all depend on 2/3», тогда как в таблице Phase 5 зависит только от 2 (не 3). Не противоречие, но формулировку стоит согласовать с колонкой Depends-on для точности.</td><td><span class="badge warn">open</span></td></tr>
-    <tr><td><code>F-002</code></td><td><span class="badge info">INFO</span></td><td>§7 Cross-cutting</td><td>Конвенции заданы как «bindings» без явного per-item DoD. Допустимо для индекс/overview-спеки, делегирующей DoD пофазным спекам; критерии приёмки живут downstream (§9), а не здесь.</td><td><span class="badge warn">open</span></td></tr>
-  </tbody>
-</table>
-<p class="sub">verdict у INFO-находок — опциональный; open INFO не блокирует прохождение фазы и финальный вердикт (блокирует только open CRITICAL).</p>
-
-<h3>3.2 Сводка</h3>
-<table class="rpt-table">
-  <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
-  <tbody>
-    <tr><td>CRITICAL open</td><td><span class="badge ok">0</span></td></tr>
-    <tr><td>WARNING open</td><td><span class="badge ok">0</span></td></tr>
-    <tr><td>INFO open</td><td><span class="badge info">2</span></td></tr>
-    <tr><td>Фазы passed</td><td><span class="badge ok">4 / 4</span></td></tr>
-    <tr><td><b>Финальный вердикт</b></td><td><b><span class="badge ok">OK</span></b></td></tr>
-  </tbody>
-</table>
-
-<h3>3.3 Цепочка IDD (chain)</h3>
-<figure class="rpt-flow" style="display:flex;align-items:center;gap:0;margin:1rem 0;flex-wrap:wrap;">
-  <div style="background:color-mix(in srgb,var(--muted) 14%, var(--surface));border:1px dashed var(--border);border-radius:8px;padding:.6rem 1rem;color:var(--muted);">intent: null<br><span class="sub">(intents/ отсутствует)</span></div>
-  <div style="flex:0 0 2.5rem;height:2px;background:var(--line);"></div>
-  <div style="background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:.6rem 1rem;border-left:4px solid var(--accent);"><b>spec</b><br><span class="sub">paw-00 overview ✔ OK</span></div>
-  <div style="flex:0 0 2.5rem;height:2px;background:var(--line);"></div>
-  <div style="background:var(--surface);border:1px dashed var(--border);border-radius:8px;padding:.6rem 1rem;color:var(--muted);">writing-plans<br><span class="sub">след. шаг (§9)</span></div>
-</figure>
-<figcaption>intent_path = null (каталог <code>docs/superpowers/intents/</code> не найден) — проверка продолжена без блокировки, как требует алгоритм.</figcaption>
-
-<p class="sub" style="margin-top:2.5rem;border-top:1px solid var(--border);padding-top:.8rem;">
-Артефакт сгенерирован командой <code>/check-spec</code> · 2026-06-22 · self-contained, offline, тёмная/светлая тема.
-</p>
-
+  <p class="sub" style="margin-top:2rem">Автогенерируемый артефакт команды <code>/check-spec</code> · Personal AI Wiki.</p>
+</main>
 </body>
 </html>
