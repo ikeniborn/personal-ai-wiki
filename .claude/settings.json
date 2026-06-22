@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Write(src/paw/security/secrets.py)",
+      "Write(tests/unit/test_secrets.py)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exit 0"
+          }
+        ],
+        "if": "Write(*.py)"
+      }
+    ]
+  }
+}
