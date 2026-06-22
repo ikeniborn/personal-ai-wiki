@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Phase 1 Skeleton (paw)</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1,h2,h3{ line-height:1.2; }
+h1{ font-size:1.7rem; }
+h2{ font-size:1.3rem; margin-top:2.4rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.05rem; margin-top:1.6rem; color:var(--accent); }
+code{ background:color-mix(in srgb, var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.85em; }
+a{ color:var(--accent); }
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:10;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, var(--surface)); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+/* Table */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+/* Badges */
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
+.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.danger{ color:var(--danger-2); border-color:var(--danger); }
+.badge.info{ color:var(--muted); border-color:var(--border); }
+.badge.passed{ color:var(--ok-2); border-color:var(--ok); }
+/* C4 */
+.rpt-c4 .boundary{
+  border:1.6px dashed var(--accent); border-radius:12px;
+  padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem;
+  background:color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.rpt-c4 .boundary::before{
+  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
+}
+.rpt-c4 .comp{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.55rem .85rem; min-width:6rem; font-size:.85rem; box-shadow:0 1px 6px var(--shadow);
+  border-left:4px solid var(--accent);
+}
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .sub{ font-size:.78rem; }
+/* Graph */
+.rpt-graph{ margin:1rem 0; text-align:center; overflow-x:auto; }
+.rpt-graph text{ font:11px system-ui, sans-serif; fill:var(--fg); }
+.rpt-graph .nlabel{ font-size:10px; fill:var(--fg); }
+.rpt-graph .elabel{ font-size:9px; fill:var(--muted); }
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+ul.tight li{ margin:.28rem 0; }
+.legend{ font-size:.82rem; color:var(--muted); margin:.3rem 0 1rem; }
+.cover-yes{ color:var(--ok-2); font-weight:600; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+<h1>Проверка спецификации — Phase 1 «Skeleton» (paw)</h1>
+<p class="lead">Walking-skeleton фаза «Personal AI Wiki»: сквозной вертикальный срез <b>без LLM</b> — деплой, схема БД, аутентификация, хранилище, UI-каркас end-to-end.</p>
+<p class="sub">Файл: <code>docs/superpowers/specs/2026-06-22-paw-phase-1-skeleton-design.md</code> · spec_hash: <code>f634c88ea5571423</code> · prev_hash: <code>—</code> (первый прогон) · last_run: 2026-06-22 · команда: <code>/check-spec</code></p>
+
+<div class="note ok"><b>Итоговый вердикт: OK.</b> Все 4 фазы — <span class="badge passed">passed</span>. CRITICAL open: <b>0</b>. WARNING open: <b>2</b>. INFO open: <b>2</b>. Предупреждения носят рекомендательный характер и не блокируют переход к реализации.</div>
+
+<!-- ============ БЛОК 1: РЕЗЮМЕ СПЕЦИФИКАЦИИ ============ -->
+<h2>1. Резюме спецификации</h2>
+<p>Цель фазы: <code>docker compose up</code> поднимает весь стек; админ проходит first-run мастер, логинится, создаёт домен, загружает markdown-источник, вручную пишет статью и видит её отрендеренной. LLM нигде не используется.</p>
+
+<h3>Требования по секциям</h3>
+<table class="rpt-table">
+  <thead><tr><th>#</th><th>Секция</th><th>Требование</th><th>Ссылка LLD</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>In scope</td><td>Scaffold: src-layout пакет <code>paw</code>, <code>uv</code>/<code>pyproject.toml</code>, конфиг <code>ruff</code>+<code>mypy</code>+<code>pytest</code>, <code>main.py</code> FastAPI-фабрика, <code>worker.py</code> arq <code>WorkerSettings</code> (noop heartbeat)</td><td>—</td></tr>
+    <tr><td>R2</td><td>In scope</td><td>Config: <code>config.py</code> pydantic-settings — <code>DATABASE_URL</code>, <code>REDIS_URL</code>, <code>SESSION_SECRET</code>, <code>FERNET_KEY</code>, лимиты body/upload</td><td>§10</td></tr>
+    <tr><td>R3</td><td>In scope</td><td>DB-субсет: <code>db/{models,session}.py</code>, <code>db/repos/</code>; таблицы <code>users, api_keys, app_settings, domains, blobs, sources, articles, article_revisions, audit_log</code></td><td>§2</td></tr>
+    <tr><td>R4</td><td>In scope</td><td>Миграции: alembic baseline — расширения (<code>vector, pgcrypto, citext</code>), enums (<code>user_role, source_status, rev_origin</code>), core-таблицы; запуск init-контейнером; dim-зависимый DDL отложен</td><td>—</td></tr>
+    <tr><td>R5</td><td>In scope</td><td>Storage: <code>storage/{base,postgres}.py</code> — <code>StorageBackend</code> Protocol; <code>PostgresStorage</code> (bytea + Large Object), стримовый <code>open()</code></td><td>§3</td></tr>
+    <tr><td>R6</td><td>In scope</td><td>Auth &amp; security baseline: Redis-сессии (cookie SameSite=Lax), argon2, CSRF (double-submit), sanitize (nh3), Fernet-хелпер, RBAC <code>require_role()</code>, RFC 9457 errors, cursor-пагинация, базовый upload-guard (magic-byte + allowlist md/txt + max-size)</td><td>§8/§11</td></tr>
+    <tr><td>R7</td><td>In scope</td><td>Services: domain CRUD; manual article create/update → <code>article_revisions</code> (origin=user) с optimistic lock на <code>current_rev</code>; md/txt upload + delete</td><td>—</td></tr>
+    <tr><td>R8</td><td>In scope</td><td>API-субсет: auth login/logout; domains GET/POST; sources POST/delete; articles listing+cursor, GET/PUT, /revisions, rollback; settings GET/PUT; users (admin); setup-эндпоинты</td><td>§8</td></tr>
+    <tr><td>R9</td><td>In scope</td><td>Web UI (frame C): vendored htmx + theme CSS, CSP без inline-script, mistune→nh3; экраны: setup wizard, /login, / dashboard, /domains/{id}, /articles/{id} (Edit/Preview, 409-баннер, rollback), /settings</td><td>—</td></tr>
+    <tr><td>R10</td><td>In scope</td><td>Deploy: compose-сервисы traefik/api/worker/postgres(pgvector)/redis(AOF)/init(alembic); healthchecks; тома pgdata/redisdata/letsencrypt; first-run setup wizard</td><td>§11</td></tr>
+    <tr><td>R11</td><td>Out of scope</td><td>Явно отложено: LLM/providers/harness, ingest/chunking/embeddings (Ф2), retrieval (Ф3), chat (Ф4), graph-viz/diff (Ф5), query-cache (Ф7), MCP (Ф8), observability/backups/SSRF-hardening (Ф9)</td><td>—</td></tr>
+    <tr><td>R12</td><td>Data model</td><td>LLD §2 core-субсет; каскады <code>domain→sources,articles</code> и <code>article→revisions</code>; без <code>chunks</code>/<code>entities</code></td><td>§2</td></tr>
+    <tr><td>R13</td><td>Key flows</td><td>First run: init мигрирует → api стартует → wizard создаёт admin + seed <code>app_settings</code>. Manual article: write articles+revisions, bump current_rev, stale PUT → 409</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h3>Success Criteria (раздел «Acceptance criteria (verifiable)»)</h3>
+<table class="rpt-table">
+  <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+  <tbody>
+    <tr><td>AC1</td><td><code>docker compose up</code> поднимает все сервисы healthy; init-контейнер применяет baseline-миграцию; api и worker стартуют</td></tr>
+    <tr><td>AC2</td><td>First-run wizard создаёт admin; повторный запуск пропускает wizard</td></tr>
+    <tr><td>AC3</td><td>Login устанавливает Redis-сессию; logout очищает; защищённые маршруты дают 401/redirect</td></tr>
+    <tr><td>AC4</td><td>RBAC: <code>viewer</code> не может создать домен (403); <code>admin</code> может</td></tr>
+    <tr><td>AC5</td><td>CSRF: form-POST без токена отклоняется</td></tr>
+    <tr><td>AC6</td><td>Create domain → upload .md (через <code>PostgresStorage</code>, roundtrip) → create article → рендер санитизирован (script-теги вырезаны)</td></tr>
+    <tr><td>AC7</td><td>Конкурентный PUT статьи со stale <code>current_rev</code> → 409 + reload-баннер</td></tr>
+    <tr><td>AC8</td><td>Листинги пагинируются по cursor</td></tr>
+  </tbody>
+</table>
+<p class="sub">Тесты: Unit (sanitize, argon2, cursor, PostgresStorage roundtrip incl. Large Object) · API/httpx (login/logout, RBAC, CSRF, CRUD, upload, 409, pagination) · E2E (migrate→domain→md→article→HTML) · CI (ruff+mypy+pytest green).</p>
+
+<!-- ============ БЛОК 2: СХЕМЫ РЕШЕНИЯ И ЗАВИСИМОСТЕЙ ============ -->
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>2.1 Схема решения (компоненты и потоки)</h3>
+<p class="sub">C4-вид: deploy-стек (traefik/api/worker/postgres/redis/init) ⊃ модули пакета <code>paw</code>. Стрелки потоков описаны под диаграммой.</p>
+<figure class="rpt-c4">
+  <div class="boundary" data-label="Docker Compose · стек">
+    <div class="comp"><b>traefik</b><br><span class="sub">TLS/ACME · HTTP→HTTPS · SSE pass-through</span></div>
+    <div class="comp"><b>init</b><br><span class="sub">one-shot · alembic baseline</span></div>
+    <div class="comp"><b>postgres</b><br><span class="sub">pgvector image · bytea + Large Object</span></div>
+    <div class="comp"><b>redis</b><br><span class="sub">AOF · sessions store</span></div>
+    <div class="boundary" data-label="api · пакет paw">
+      <div class="comp"><b>main.py</b><br><span class="sub">FastAPI factory · /api/v1 · / web</span></div>
+      <div class="comp"><b>api/auth,deps,errors,pagination</b><br><span class="sub">RBAC · RFC9457 · cursor</span></div>
+      <div class="comp"><b>security/{csrf,sanitize,secrets}</b><br><span class="sub">double-submit · nh3 · Fernet</span></div>
+      <div class="comp"><b>services/{domains,articles,sources,settings}</b><br><span class="sub">CRUD · revisions · optimistic lock</span></div>
+      <div class="comp"><b>storage/{base,postgres}</b><br><span class="sub">StorageBackend · PostgresStorage</span></div>
+      <div class="comp"><b>db/{models,session,repos}</b><br><span class="sub">core-субсет таблиц</span></div>
+      <div class="comp"><b>api/web</b><br><span class="sub">routes·templates·static · htmx · mistune→nh3</span></div>
+    </div>
+    <div class="boundary" data-label="worker · пакет paw">
+      <div class="comp"><b>worker.py</b><br><span class="sub">arq WorkerSettings · noop heartbeat</span></div>
+    </div>
+  </div>
+</figure>
+<p class="legend"><b>Потоки:</b> браузер → traefik → api (web/UI + /api/v1); api → services → db/repos → postgres; api → storage(PostgresStorage) → postgres (blob bytea / Large Object); api → redis (сессии, CSRF); init → postgres (миграции, до старта api/worker); worker ↔ redis (arq очередь, heartbeat).</p>
+
+<h3>2.2 Граф зависимостей требований</h3>
+<p class="sub">Узлы — требования R1–R10; рёбра — «зависит от» (использует результат).</p>
+<figure class="rpt-graph">
+<svg viewBox="0 0 760 360" width="760" role="img" aria-label="граф зависимостей требований">
+  <!-- edges (зависит от = стрелка к зависимости) -->
+  <g stroke="var(--line)" stroke-width="1.6" fill="none">
+    <line x1="120" y1="60"  x2="120" y2="120"/> <!-- R2->R1 -->
+    <line x1="300" y1="60"  x2="135" y2="115"/> <!-- R3->R1 -->
+    <line x1="300" y1="120" x2="300" y2="180"/> <!-- R4->R3 -->
+    <line x1="480" y1="60"  x2="315" y2="115"/> <!-- R5->R3 -->
+    <line x1="640" y1="120" x2="155" y2="60"/>  <!-- R6->R2 (config secrets) -->
+    <line x1="300" y1="240" x2="300" y2="135"/> <!-- R7->R3 dup guard via R3 box -->
+    <line x1="480" y1="240" x2="480" y2="135"/> <!-- R8->R5? -->
+    <line x1="465" y1="240" x2="320" y2="240"/> <!-- R8->R7 -->
+    <line x1="450" y1="225" x2="640" y2="135"/> <!-- R8->R6 -->
+    <line x1="300" y1="300" x2="300" y2="265"/> <!-- R9->R7 -->
+    <line x1="320" y1="300" x2="465" y2="255"/> <!-- R9->R8 -->
+    <line x1="640" y1="225" x2="640" y2="135"/> <!-- R10->R6? deploy uses security image -->
+    <line x1="625" y1="225" x2="320" y2="195"/> <!-- R10->R4 init runs migrations -->
+  </g>
+  <!-- nodes -->
+  <g>
+    <circle cx="120" cy="120" r="22" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="120" y="124" text-anchor="middle">R1</text>
+    <text class="elabel" x="120" y="100" text-anchor="middle">Scaffold</text>
+
+    <circle cx="120" cy="60" r="20" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="120" y="64" text-anchor="middle">R2</text>
+
+    <circle cx="300" cy="120" r="22" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="300" y="124" text-anchor="middle">R3</text>
+    <text class="elabel" x="300" y="100" text-anchor="middle">DB</text>
+
+    <circle cx="300" cy="60" r="20" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="300" y="64" text-anchor="middle">R4</text>
+
+    <circle cx="480" cy="60" r="20" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="480" y="64" text-anchor="middle">R5</text>
+
+    <circle cx="640" cy="120" r="22" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="640" y="124" text-anchor="middle">R6</text>
+    <text class="elabel" x="640" y="100" text-anchor="middle">Security</text>
+
+    <circle cx="300" cy="240" r="22" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="300" y="244" text-anchor="middle">R7</text>
+    <text class="elabel" x="300" y="276" text-anchor="middle">Services</text>
+
+    <circle cx="480" cy="240" r="22" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="480" y="244" text-anchor="middle">R8</text>
+    <text class="elabel" x="480" y="276" text-anchor="middle">API</text>
+
+    <circle cx="300" cy="320" r="20" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="300" y="324" text-anchor="middle">R9</text>
+    <text class="elabel" x="300" y="350" text-anchor="middle">Web UI</text>
+
+    <circle cx="640" cy="240" r="22" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="nlabel" x="640" y="244" text-anchor="middle">R10</text>
+    <text class="elabel" x="640" y="276" text-anchor="middle">Deploy</text>
+  </g>
+</svg>
+</figure>
+<p class="legend">Рёбра «зависит от»: R2→R1 · R3→R1 · R4→R3 · R5→R3 · R6→R2 · R7→R3 · R8→{R5,R6,R7} · R9→{R7,R8} · R10→{R4,R6}. Низкоуровневые узлы (R1 Scaffold, R3 DB) — корни; R8 API и R9 Web UI — наиболее зависимые.</p>
+
+<h3>2.3 Карта покрытия (задача → требование(я) спеки)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Задача из контекста</th><th>Требование(я) спеки</th><th>Покрыто</th></tr></thead>
+  <tbody>
+    <tr><td>1. Project scaffold (paw, uv, ruff/mypy/pytest, FastAPI factory, arq skeleton)</td><td>R1</td><td class="cover-yes">да</td></tr>
+    <tr><td>2. Config (env: DATABASE_URL, REDIS_URL, SESSION_SECRET, FERNET_KEY, limits)</td><td>R2, R13 (Config)</td><td class="cover-yes">да</td></tr>
+    <tr><td>3. DB core subset + alembic baseline (extensions/enums/core tables) via init; vector/chunk deferred</td><td>R3, R4, R12</td><td class="cover-yes">да</td></tr>
+    <tr><td>4. PostgresStorage (bytea + Large Object)</td><td>R5</td><td class="cover-yes">да</td></tr>
+    <tr><td>5. Auth + security baseline (Redis sessions, argon2, RBAC, CSRF, sanitize, RFC9457, cursor, upload guard)</td><td>R6</td><td class="cover-yes">да</td></tr>
+    <tr><td>6. Services: domain CRUD; article create/update + revisions + optimistic lock; md/txt upload</td><td>R7, R13 (Manual article)</td><td class="cover-yes">да</td></tr>
+    <tr><td>7. API subset (auth, domains, sources, articles+revisions+rollback, settings, users, setup)</td><td>R8</td><td class="cover-yes">да</td></tr>
+    <tr><td>8. Web UI frame C basics (wizard, login, dashboard, domain shell, article tabs + 409 banner, settings)</td><td>R9</td><td class="cover-yes">да</td></tr>
+    <tr><td>9. Deploy: compose (traefik/api/worker/postgres/redis/init), healthchecks, first-run wizard</td><td>R10</td><td class="cover-yes">да</td></tr>
+    <tr><td>10. Acceptance criteria + tests (unit/api/e2e + CI)</td><td>AC1–AC8 + раздел Tests</td><td class="cover-yes">да</td></tr>
+    <tr><td><i>OUT of scope (LLM/ingest/chat/graph/cache/MCP/observability)</i></td><td>R11 (явно отложено)</td><td class="cover-yes">соответствует</td></tr>
+  </tbody>
+</table>
+<div class="note warn"><b>Незамапленные требования спеки (extra):</b> таблица <code>api_keys</code> создаётся в baseline, но её потребитель MCP отложен на Ф8 (F-001); таблица <code>audit_log</code> и traefik <code>SSE pass-through</code> — forward-provisioning для поздних фаз (F-002). Все 10 задач покрыты; противоречий между требованиями не найдено.</div>
+
+<!-- ============ БЛОК 3: РЕЗУЛЬТАТЫ ПРОВЕРКИ ============ -->
+<h2>3. Результаты проверки</h2>
+
+<h3>Статус по фазам</h3>
+<table class="rpt-table">
+  <thead><tr><th>Фаза</th><th>Чек-лист (закрытый)</th><th>Статус</th><th>Findings</th></tr></thead>
+  <tbody>
+    <tr><td>1. structure</td><td>плейсхолдеры · битые внутр. ссылки · нумерация секций · дубли заголовков</td><td><span class="badge passed">passed</span></td><td>0</td></tr>
+    <tr><td>2. coverage</td><td>каждая задача покрыта · нет «лишних» требований · нет противоречий</td><td><span class="badge passed">passed</span></td><td>F-001, F-002</td></tr>
+    <tr><td>3. clarity</td><td>нет неоднозначностей без критерия · есть DoD · согласованы термины</td><td><span class="badge passed">passed</span></td><td>F-003, F-004</td></tr>
+    <tr><td>4. consistency</td><td>хеши секций vs прошлый прогон · сводка изменений</td><td><span class="badge passed">passed</span></td><td>0 (baseline, прошлого прогона нет)</td></tr>
+  </tbody>
+</table>
+
+<h3>Findings</h3>
+<table class="rpt-table">
+  <thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>F-001</td><td><span class="badge warn">WARNING</span></td><td>coverage</td><td>In scope</td><td>Таблица <code>api_keys</code> создаётся в Phase-1 alembic baseline, но её единственный потребитель (MCP) явно вынесен в Out of scope (Ф8). Требование не маппится ни на одну задачу Ф1.</td><td><span class="badge info">open</span></td></tr>
+    <tr><td>F-002</td><td><span class="badge info">INFO</span></td><td>coverage</td><td>In scope</td><td>Таблица <code>audit_log</code> и traefik <code>SSE pass-through</code> — forward-provisioning для поздних фаз (chat=Ф4). Укладываются в «core tables»/deploy-инфру, но прямой задачи Ф1 нет.</td><td><span class="badge info">open</span></td></tr>
+    <tr><td>F-003</td><td><span class="badge warn">WARNING</span></td><td>clarity</td><td>In scope</td><td>arq-worker <code>noop heartbeat task</code> не имеет критерия приёмки/теста. AC1 проверяет лишь, что процесс worker стартует; у самой heartbeat-задачи нет явного DoD.</td><td><span class="badge info">open</span></td></tr>
+    <tr><td>F-004</td><td><span class="badge info">INFO</span></td><td>clarity</td><td>In scope</td><td>Персистентность <code>GET·PUT /settings</code> не имеет критерия приёмки/теста; Connection-поля «saved but unused», roundtrip настроек ни одним тестом не утверждается.</td><td><span class="badge info">open</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Сводка</h3>
+<table class="rpt-table">
+  <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+  <tbody>
+    <tr><td>CRITICAL open</td><td><b>0</b></td></tr>
+    <tr><td>WARNING open</td><td><b>2</b> (F-001, F-003)</td></tr>
+    <tr><td>INFO open</td><td><b>2</b> (F-002, F-004)</td></tr>
+    <tr><td>Все фазы passed</td><td class="cover-yes">да</td></tr>
+    <tr><td><b>Финальный вердикт</b></td><td><b><span class="badge ok">OK</span></b> — нет открытых CRITICAL, все фазы passed</td></tr>
+  </tbody>
+</table>
+
+<h3>Chain (IDD → SDD)</h3>
+<div class="note"><code>intent → spec</code>: intent-документ не найден (поиск <code>docs/superpowers/intents/*skeleton*intent.md</code> пуст; каталога <code>intents/</code> нет). <code>chain.intent = null</code> — проверка продолжена без блокировки. Текущий шаг: <code>2026-06-22-paw-phase-1-skeleton-design.md</code>.</div>
+
+<details>
+  <summary>Методология (как считались хеши)</summary>
+  <ul class="tight">
+    <li>Хеш тела (исключая frontmatter): <code>awk 'BEGIN{fm=0} /^---$/{fm++; next} fm&gt;=2{print}' FILE | sha256sum | cut -c1-16</code> → <code>f634c88ea5571423</code> (стабилен до и после правки frontmatter).</li>
+    <li>Хеши секций (sed-диапазоны заголовок→след. заголовок): In scope <code>b54df4287e24afaa</code>, Out of scope <code>a398063ab00c61ed</code>, Data model <code>4b90ab83dffe0f24</code>, Key flows <code>5d2cfaf5a6796105</code>, Config <code>04fa4e17af3b743b</code>, Acceptance <code>426b17071e6b5bec</code>, Tests <code>432dee436f4d8aef</code>, Risks <code>24714ae4ff6c1bf6</code>.</li>
+    <li>Чек-листы фаз — закрытые, не расширялись. Тело спеки не редактировалось; обновлены только блоки <code>review:</code> и <code>chain:</code> во frontmatter.</li>
+  </ul>
+</details>
+
+<p class="sub" style="margin-top:2rem">Сгенерировано командой <code>/check-spec</code> · 2026-06-22 · навык html-report. Артефакт самодостаточен и открывается офлайн.</p>
+</main>
+</body>
+</html>
