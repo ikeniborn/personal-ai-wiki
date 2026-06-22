@@ -16,5 +16,6 @@ _md = mistune.create_markdown(
 
 def render_markdown(text: str) -> str:
     raw_html = _md(text)
-    assert isinstance(raw_html, str)
+    if not isinstance(raw_html, str):
+        raise TypeError(f"mistune returned {type(raw_html)!r}, expected str")
     return nh3.clean(raw_html, tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRS)
