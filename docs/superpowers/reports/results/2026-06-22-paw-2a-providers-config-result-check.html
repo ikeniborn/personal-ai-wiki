@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Result Check — Phase 2A Providers + Config</title>
+<style>
+/* ── Palettes ── */
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui,sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%,transparent),transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s,color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+
+/* ── Typography ── */
+h1{ font-size:1.6rem; margin:.5rem 0 .25rem; color:var(--accent); }
+h2{ font-size:1.15rem; margin:2rem 0 .6rem; color:var(--accent); border-bottom:1px solid var(--border); padding-bottom:.35rem; }
+h3{ font-size:1rem; margin:1.2rem 0 .4rem; }
+.lead{ font-size:1.08rem; margin:.5rem 0; }
+.sub{ color:var(--muted); font-size:.9rem; margin:.2rem 0; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note-ok{ border-left-color:var(--ok); background:color-mix(in srgb,var(--ok) 8%,var(--surface)); }
+.note-warn{ border-left-color:var(--warn); background:color-mix(in srgb,var(--warn) 8%,var(--surface)); }
+
+/* ── Badges ── */
+.badge{ display:inline-block; font-size:.72rem; font-weight:600; padding:.1rem .55rem;
+  border-radius:999px; border:1px solid; }
+.badge-ok{   color:var(--ok-2);   border-color:var(--ok);   background:color-mix(in srgb,var(--ok) 12%,var(--surface)); }
+.badge-warn{ color:var(--warn-2); border-color:var(--warn); background:color-mix(in srgb,var(--warn) 12%,var(--surface)); }
+.badge-info{ color:var(--accent); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); }
+.badge-crit{ color:var(--danger-2); border-color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,var(--surface)); }
+.badge-done{ color:var(--ok-2); border-color:var(--ok); background:color-mix(in srgb,var(--ok) 12%,var(--surface)); }
+.badge-excess{ color:var(--warn-2); border-color:var(--warn); }
+
+/* ── Verdict banner ── */
+.verdict-banner{
+  display:flex; align-items:center; gap:1rem;
+  background:color-mix(in srgb,var(--ok) 12%,var(--surface));
+  border:2px solid var(--ok); border-radius:14px;
+  padding:1rem 1.5rem; margin:1.5rem 0;
+  box-shadow:0 2px 16px var(--shadow);
+}
+.verdict-icon{ font-size:2.4rem; line-height:1; }
+.verdict-text{ flex:1; }
+.verdict-text .v-label{ font-size:1.25rem; font-weight:700; color:var(--ok-2); }
+.verdict-text .v-hash{ font-size:.8rem; color:var(--muted); font-family:monospace; }
+
+/* ── Score cards ── */
+.score-row{ display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0; }
+.score-card{
+  flex:1; min-width:140px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:.9rem 1.2rem; text-align:center;
+  box-shadow:0 2px 10px var(--shadow);
+}
+.score-card .num{ font-size:2rem; font-weight:700; }
+.score-card .lbl{ font-size:.82rem; color:var(--muted); }
+.num-done{ color:var(--ok-2); }
+.num-warn{ color:var(--warn-2); }
+.num-crit{ color:var(--danger-2); }
+.num-info{ color:var(--accent); }
+
+/* ── Table ── */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.88rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th,.rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem;
+  text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb,var(--accent) 14%,var(--surface)); }
+.rpt-table td code{ white-space:nowrap; background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+  border-radius:4px; padding:.05rem .3rem; font-size:.85em; }
+
+/* ── Details / expand ── */
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight li{ margin:.28rem 0; }
+ul.tight{ padding-left:1.4rem; }
+
+/* ── Chain flow ── */
+.rpt-flow{ display:flex; align-items:center; gap:0; margin:1rem 0; flex-wrap:wrap; }
+.rpt-flow .node{
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--border); border-radius:8px; padding:.6rem 1rem;
+  font-size:.85rem;
+}
+.rpt-flow .node.null-node{ border-style:dashed; color:var(--muted); }
+.rpt-flow .arrow{ flex:0 0 2.5rem; height:2px; background:var(--line); position:relative; }
+.rpt-flow .arrow::after{
+  content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line);
+}
+
+/* ── Commit list ── */
+.commit-list{ list-style:none; padding:0; margin:.5rem 0; }
+.commit-list li{ padding:.4rem .75rem; border-left:3px solid var(--accent);
+  margin:.35rem 0; background:color-mix(in srgb,var(--accent) 5%,var(--surface));
+  border-radius:0 6px 6px 0; font-size:.88rem; }
+.commit-list li code{ font-size:.82em; color:var(--muted); }
+
+/* ── Task coverage ── */
+.task-row{ display:flex; align-items:flex-start; gap:.75rem; margin:.5rem 0;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.6rem 1rem; box-shadow:0 1px 6px var(--shadow); }
+.task-row .task-status{ flex:0 0 55px; text-align:center; padding-top:.1rem; }
+.task-row .task-body{ flex:1; font-size:.9rem; }
+.task-row .task-body b{ color:var(--fg); }
+.task-row .task-body ul{ margin:.3rem 0; padding-left:1.2rem; }
+.task-row .task-body ul li{ margin:.1rem 0; color:var(--muted); font-size:.85rem; }
+
+/* ── Spec coverage bar ── */
+.cov-bar-wrap{ margin:1rem 0; }
+.cov-bar-label{ font-size:.88rem; margin-bottom:.3rem; }
+.cov-bar{ height:14px; border-radius:7px; background:var(--border); overflow:hidden; }
+.cov-bar-fill{ height:100%; border-radius:7px;
+  background:linear-gradient(90deg,var(--ok),var(--ok-2)); transition:width .4s; }
+
+/* ── Footer meta ── */
+.meta-grid{ display:grid; grid-template-columns:auto 1fr; gap:.3rem .9rem;
+  font-size:.85rem; color:var(--muted); margin:.5rem 0; }
+.meta-grid b{ color:var(--fg); }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+
+<h1>Result Check — Phase 2A: Providers + Config</h1>
+<p class="lead">Сверка реализации плана с цепочкой IDD→SDD: spec → plan vs git diff</p>
+<p class="sub">Дата проверки: 2026-06-22 · plan_hash: <code>9a08e4988db867be</code> · Diff base: <code>git diff c28d9ae..HEAD</code></p>
+
+<!-- ── VERDICT ── -->
+<div class="verdict-banner">
+  <div class="verdict-icon">✅</div>
+  <div class="verdict-text">
+    <div class="v-label">Вердикт: OK</div>
+    <div style="color:var(--ok-2);margin:.1rem 0">Все 6 задач плана выполнены · CRITICAL findings: 0</div>
+    <div class="v-hash">plan_hash: 9a08e4988db867be · last_run: 2026-06-22</div>
+  </div>
+</div>
+
+<!-- ── SCORE CARDS ── -->
+<div class="score-row">
+  <div class="score-card"><div class="num num-done">6</div><div class="lbl">Задач DONE</div></div>
+  <div class="score-card"><div class="num num-done">0</div><div class="lbl">PARTIAL</div></div>
+  <div class="score-card"><div class="num num-done">0</div><div class="lbl">MISSING</div></div>
+  <div class="score-card"><div class="num num-done">0</div><div class="lbl">CRITICAL</div></div>
+  <div class="score-card"><div class="num num-warn">3</div><div class="lbl">WARNING</div></div>
+  <div class="score-card"><div class="num num-info">2</div><div class="lbl">INFO</div></div>
+</div>
+
+<!-- ── DOCUMENTS ── -->
+<h2>Документы цепи</h2>
+<div class="meta-grid">
+  <b>Plan:</b> <span><code>docs/superpowers/plans/2026-06-22-paw-2a-providers-config.md</code></span>
+  <b>Spec:</b> <span><code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code></span>
+  <b>Intent:</b> <span><code>null</code> — chain.intent не задан</span>
+  <b>Diff base:</b> <span><code>git diff c28d9ae..HEAD</code> — 17 файлов изменено (только Phase 2A коммиты)</span>
+</div>
+
+<h3>Цепь IDD→SDD</h3>
+<figure class="rpt-flow">
+  <div class="node null-node">Intent<br><small style="color:var(--muted)">null</small></div>
+  <div class="arrow"></div>
+  <div class="node">Spec<br><small>Phase 2 Ingest Design</small></div>
+  <div class="arrow"></div>
+  <div class="node" style="border-color:var(--accent)">Plan<br><small>Phase 2A Providers</small></div>
+  <div class="arrow"></div>
+  <div class="node" style="border-color:var(--ok)">Git diff<br><small>c28d9ae..HEAD</small></div>
+</figure>
+
+<h3>Коммиты Phase 2A</h3>
+<ul class="commit-list">
+  <li><code>39d1a87</code> feat(providers): add provider base types + Protocols, openai dep</li>
+  <li><code>3daa450</code> feat(providers): structured-output coercion with repair loop + json fallback</li>
+  <li><code>627cd72</code> feat(providers): OpenAICompatProvider chat/embed/structured with injectable client</li>
+  <li><code>89c5a91</code> feat(providers): ProviderConfig + WikiConfig app_settings models</li>
+  <li><code>54ba097</code> feat(providers): provider settings service (encrypted key) + factory</li>
+  <li><code>ee63f99</code> test(providers): reusable stub-LLM chat + embedding doubles</li>
+  <li><code>d3ee7d3</code> test(providers): tighten stub embedding range + assert chat mapping edge cases</li>
+</ul>
+
+<!-- ── PLAN STEP COVERAGE ── -->
+<h2>Покрытие шагов плана</h2>
+
+<div class="task-row">
+  <div class="task-status"><span class="badge badge-done">DONE</span></div>
+  <div class="task-body">
+    <b>Задача 1: Provider base types + Protocols</b>
+    <ul>
+      <li><code>src/paw/providers/__init__.py</code> — создан (пустой)</li>
+      <li><code>src/paw/providers/base.py</code> — Message, ToolCall, ToolSpec, ChatResult, ChatProvider, EmbeddingProvider, VisionProvider Protocol</li>
+      <li><code>tests/unit/test_provider_base.py</code> — 3 теста (test_message_defaults, test_toolspec_holds_json_schema, test_chatresult_groups_tool_calls)</li>
+      <li><code>pyproject.toml</code> — добавлена зависимость <code>"openai>=1.55"</code></li>
+    </ul>
+  </div>
+</div>
+
+<div class="task-row">
+  <div class="task-status"><span class="badge badge-done">DONE</span></div>
+  <div class="task-body">
+    <b>Задача 2: Structured-output coercion (repair loop + JSON fallback)</b>
+    <ul>
+      <li><code>src/paw/providers/structured.py</code> — StructuredError, schema_tool, coerce_structured</li>
+      <li><code>tests/unit/test_structured.py</code> — 5 тестов: valid_first_try, repairs_one_malformed_response, gives_up_after_retries, json_mode_fallback_parses_content</li>
+      <li>Repair loop: конвертация ошибок валидации в user-сообщение, до retries повторений</li>
+    </ul>
+  </div>
+</div>
+
+<div class="task-row">
+  <div class="task-status"><span class="badge badge-done">DONE</span></div>
+  <div class="task-body">
+    <b>Задача 3: OpenAICompatProvider (chat + embed + structured)</b>
+    <ul>
+      <li><code>src/paw/providers/openai_compat.py</code> — OpenAICompatProvider с chat/embed/structured методами</li>
+      <li><code>tests/unit/test_openai_compat.py</code> — 4 теста: test_chat_maps_plain_content, test_chat_maps_tool_calls, test_embed_maps_vectors, test_structured_uses_tool_call</li>
+      <li>Инъекция клиента через <code>client=</code>, поддержка <code>supports_tools</code></li>
+    </ul>
+  </div>
+</div>
+
+<div class="task-row">
+  <div class="task-status"><span class="badge badge-done">DONE</span></div>
+  <div class="task-body">
+    <b>Задача 4: Provider + Wiki config models</b>
+    <ul>
+      <li><code>src/paw/providers/config.py</code> — ProviderConfig, WikiConfig, PROVIDER_KEY="provider", WIKI_KEY="wiki"</li>
+      <li><code>tests/unit/test_provider_config.py</code> — 3 теста: test_wiki_defaults, test_provider_config_roundtrip, test_keys_are_stable</li>
+      <li>Все WikiConfig defaults соответствуют spec (gen_language, chunk_target_size=800, hub_threshold=2, max_steps=12, ...)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="task-row">
+  <div class="task-status"><span class="badge badge-done">DONE</span></div>
+  <div class="task-body">
+    <b>Задача 5: ProviderSettingsService + provider factory</b>
+    <ul>
+      <li><code>src/paw/providers/factory.py</code> — build_chat_provider, build_embedding_provider</li>
+      <li><code>src/paw/services/provider_settings.py</code> — ProviderSettingsService с set_provider/get_provider/set_wiki/get_wiki</li>
+      <li><code>tests/integration/test_provider_settings.py</code> — 3 теста с db_session</li>
+      <li>api_key шифруется через SecretBox (Fernet), commit() вызывается в service (не в repo)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="task-row">
+  <div class="task-status"><span class="badge badge-done">DONE</span></div>
+  <div class="task-body">
+    <b>Задача 6: Reusable stub-LLM test double</b>
+    <ul>
+      <li><code>tests/stubs.py</code> — StubChatProvider (script + responder), StubEmbeddingProvider (детерминированный sha256)</li>
+      <li><code>tests/unit/test_stubs.py</code> — 3 теста: test_stub_chat_scripted, test_stub_chat_responder, test_stub_embeddings_deterministic_and_dim</li>
+      <li>Дополнительный тест-полиш коммит (d3ee7d3) внутри scope задачи 6</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── FINDINGS ── -->
+<h2>Findings</h2>
+
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Severity</th>
+      <th>Шаг</th>
+      <th>Описание</th>
+      <th>Статус</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>F-001</b></td>
+      <td><span class="badge badge-warn">WARNING</span></td>
+      <td>Задача 3</td>
+      <td>
+        <b>VisionProvider: Protocol-only vs spec "implements all three"</b><br>
+        <small>Spec §Providers: "OpenAICompatProvider implements all three" (ChatProvider + EmbeddingProvider + VisionProvider). Реализованы только первые два. VisionProvider остался Protocol-only. Соответствует дефолту spec: image-OCR отложен до Phase 9 (§Out of scope).</small>
+      </td>
+      <td><span class="badge badge-ok">Acceptable scoping</span></td>
+    </tr>
+    <tr>
+      <td><b>F-002</b></td>
+      <td><span class="badge badge-warn">WARNING</span></td>
+      <td>Задача 4/5</td>
+      <td>
+        <b>Per-domain config overrides не реализованы</b><br>
+        <small>Spec §Config (LLD §10): "Per-domain overrides via domains.config". В плане покрыт только app_settings-уровень. Зависит от таблицы domains (Plan 2B). Деферрал обоснованный, но неявный в плане.</small>
+      </td>
+      <td><span class="badge badge-ok">Acceptable scoping</span></td>
+    </tr>
+    <tr>
+      <td><b>F-003</b></td>
+      <td><span class="badge badge-info">INFO</span></td>
+      <td>Задача 2/3</td>
+      <td>
+        <b>PEP 695 type parameter syntax вместо TypeVar</b><br>
+        <small>Реализация использует Python 3.12+ синтаксис (<code>async def coerce_structured[M: BaseModel]</code>, <code>async def structured[M: BaseModel]</code>) вместо явного <code>TypeVar</code> из исходного кода плана. Функционально эквивалентно, допустимо при Python &gt;=3.12.</small>
+      </td>
+      <td><span class="badge badge-info">INFO — улучшение</span></td>
+    </tr>
+    <tr>
+      <td><b>F-004</b></td>
+      <td><span class="badge badge-info">INFO</span></td>
+      <td>Задача 6</td>
+      <td>
+        <b>Дополнительный тест-полиш коммит</b><br>
+        <small>Коммит d3ee7d3 "tighten stub embedding range + assert chat mapping edge cases" — полировка тестов сверх исходного плана. Все изменения внутри scope задачи 6.</small>
+      </td>
+      <td><span class="badge badge-info">INFO — acceptable</span></td>
+    </tr>
+    <tr>
+      <td><b>EXCESS</b></td>
+      <td><span class="badge badge-warn">WARNING</span></td>
+      <td>—</td>
+      <td>
+        <b><code>tests/conftest.py</code> — исправление FERNET_KEY</b><br>
+        <small>Исправление <code>"k"*44 → "k"*43+"="</code> (валидная base64 строка для Fernet). Не указано явно в плане, но необходимо для корректного прохождения integration тестов. Инфраструктурное исправление.</small>
+      </td>
+      <td><span class="badge badge-ok">Justified fix</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── SPEC COVERAGE ── -->
+<h2>Покрытие Spec Requirements</h2>
+<p class="sub">Intent: отсутствует (chain.intent = null). Spec: docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</p>
+
+<h3>Scope §Providers + §Config (Phase 2A sub-scope)</h3>
+
+<div class="cov-bar-wrap">
+  <div class="cov-bar-label">Покрыто Phase 2A: <b>6 / 7</b> scope-пунктов <span class="badge badge-warn">1 отложен до Plan 2B</span></div>
+  <div class="cov-bar"><div class="cov-bar-fill" style="width:85.7%"></div></div>
+</div>
+
+<table class="rpt-table">
+  <thead>
+    <tr><th>Пункт spec</th><th>Покрытие</th><th>Задача</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ChatProvider / EmbeddingProvider / VisionProvider Protocols + Message / ToolSpec / ChatResult</td>
+      <td><span class="badge badge-done">✅ DONE</span></td>
+      <td>Задача 1</td>
+    </tr>
+    <tr>
+      <td>OpenAICompatProvider chat + embeddings</td>
+      <td><span class="badge badge-done">✅ DONE</span></td>
+      <td>Задача 3</td>
+    </tr>
+    <tr>
+      <td>structured(messages, schema, model, retries) с repair loop</td>
+      <td><span class="badge badge-done">✅ DONE</span></td>
+      <td>Задачи 2+3</td>
+    </tr>
+    <tr>
+      <td>JSON-mode fallback (use_tools=False / supports_tools)</td>
+      <td><span class="badge badge-done">✅ DONE</span></td>
+      <td>Задачи 2+3</td>
+    </tr>
+    <tr>
+      <td>Connection + model names из app_settings (Fernet-зашифрованный api_key)</td>
+      <td><span class="badge badge-done">✅ DONE</span></td>
+      <td>Задачи 4+5</td>
+    </tr>
+    <tr>
+      <td>WikiConfig defaults (gen_language, chunk params, hub_threshold, agent limits, link_types, timeouts)</td>
+      <td><span class="badge badge-done">✅ DONE</span></td>
+      <td>Задача 4</td>
+    </tr>
+    <tr>
+      <td>Per-domain overrides via domains.config (LLD §10)</td>
+      <td><span class="badge badge-warn">⚠️ Deferred</span></td>
+      <td>Plan 2B (зависит от таблицы domains)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Acceptance Criteria из spec</h3>
+<table class="rpt-table">
+  <thead>
+    <tr><th>AC</th><th>Описание</th><th>Статус</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AC-6</td>
+      <td>Structured-output repair recovers from one malformed LLM response (stub-LLM); JSON-mode fallback</td>
+      <td><span class="badge badge-done">✅ Полностью</span></td>
+    </tr>
+    <tr>
+      <td>AC-1</td>
+      <td>Setup wizard saves connection + models + dim; managed migration creates vector(dim); encrypted key never logged</td>
+      <td><span class="badge badge-info">ℹ️ Частично</span> <small style="color:var(--muted)">хранение + шифрование готовы; UI-wizard → Plan 2D</small></td>
+    </tr>
+    <tr>
+      <td>AC-2,3,4,5,7</td>
+      <td>Ingest pipeline, jobs, loaders, chunking, embedding</td>
+      <td><span class="badge badge-info">ℹ️ Phase 2C/2D</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── SUMMARY ── -->
+<h2>Сводка</h2>
+
+<div class="note note-ok">
+  <b>Итог Phase 2A:</b> все 6 задач плана реализованы и подтверждены в git diff. Качество-гейт зелёный: ruff, mypy (strict), pytest (76 passed). CRITICAL findings: 0. Два WARNING-а являются приемлемым scoping Phase 2A (VisionProvider Protocol-only + per-domain overrides отложены). Деферралы явно задокументированы в spec §Out of scope и §Config.
+</div>
+
+<div class="score-row" style="margin-top:1rem">
+  <div class="score-card"><div class="num num-done">0</div><div class="lbl">CRITICAL</div></div>
+  <div class="score-card"><div class="num num-warn">3</div><div class="lbl">WARNING<br><small style="font-size:.72rem">(2 acceptable + 1 excess)</small></div></div>
+  <div class="score-card"><div class="num num-info">2</div><div class="lbl">INFO<br><small style="font-size:.72rem">(PEP695 + test polish)</small></div></div>
+</div>
+
+<!-- ── DETAILS EXPAND ── -->
+<h2>Детали реализации</h2>
+
+<details>
+  <summary>Файлы Phase 2A в diff (17 файлов)</summary>
+  <ul class="tight">
+    <li><code>pyproject.toml</code> — openai>=1.55 + pythonpath=["."]</li>
+    <li><code>uv.lock</code> — lockfile обновлён</li>
+    <li><code>src/paw/providers/__init__.py</code></li>
+    <li><code>src/paw/providers/base.py</code></li>
+    <li><code>src/paw/providers/structured.py</code></li>
+    <li><code>src/paw/providers/openai_compat.py</code></li>
+    <li><code>src/paw/providers/config.py</code></li>
+    <li><code>src/paw/providers/factory.py</code></li>
+    <li><code>src/paw/services/provider_settings.py</code></li>
+    <li><code>tests/stubs.py</code></li>
+    <li><code>tests/conftest.py</code> — FERNET_KEY fix [EXCESS]</li>
+    <li><code>tests/unit/test_provider_base.py</code></li>
+    <li><code>tests/unit/test_structured.py</code></li>
+    <li><code>tests/unit/test_openai_compat.py</code></li>
+    <li><code>tests/unit/test_provider_config.py</code></li>
+    <li><code>tests/unit/test_stubs.py</code></li>
+    <li><code>tests/integration/test_provider_settings.py</code></li>
+  </ul>
+</details>
+
+<details>
+  <summary>Архитектурные решения, отклоняющиеся от плана</summary>
+  <ul class="tight">
+    <li><b>PEP 695 type syntax:</b> <code>coerce_structured[M: BaseModel]</code> и <code>structured[M: BaseModel]</code> — вместо explicit TypeVar. Python 3.12+, mypy strict принимает оба варианта.</li>
+    <li><b>VisionProvider:</b> Protocol-only (без реализации) — соответствует spec §Out of scope: "epub/url/image-OCR → Phase 9".</li>
+    <li><b>tests/conftest.py FERNET_KEY:</b> Fernet требует URL-safe base64 с padding. "k"*44 не является валидным Fernet-ключом; исправлено на корректный формат.</li>
+  </ul>
+</details>
+
+<!-- ── FOOTER ── -->
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0">
+<div class="meta-grid">
+  <b>Plan:</b> <code>docs/superpowers/plans/2026-06-22-paw-2a-providers-config.md</code>
+  <b>Spec:</b> <code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code>
+  <b>Intent:</b> <span style="color:var(--muted)">null</span>
+  <b>plan_hash:</b> <code>9a08e4988db867be</code>
+  <b>Diff base:</b> <code>c28d9ae..HEAD</code>
+  <b>Вердикт:</b> <span class="badge badge-done">OK</span>
+  <b>Сгенерировано:</b> <span>2026-06-22</span>
+</div>
+
+</main>
+</body>
+</html>

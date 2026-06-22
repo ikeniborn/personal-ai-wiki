@@ -4,6 +4,17 @@ phase: 2
 status: design
 date: 2026-06-22
 depends_on: [1]
+review:
+  spec_hash: 5a6ed65bca4c1452
+  last_run: 2026-06-22
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings: []
+chain:
+  intent: null
 ---
 
 # Phase 2 — Ingest (LLM generation)

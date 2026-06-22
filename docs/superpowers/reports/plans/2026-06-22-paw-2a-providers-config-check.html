@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — PAW Phase 2A (Providers + Config)</title>
+<style>
+  :root {
+    --bg:#f6f7fb; --surface:#ffffff; --surface-2:#eef0f7; --fg:#22232e; --muted:#5b5d6e;
+    --border:#d6d8e6; --accent:#5c6bc0; --accent-fg:#fff;
+    --ok:#2e7d32; --ok-bg:#e6f4e6; --warn:#b26a00; --warn-bg:#fdf0dd;
+    --crit:#c62828; --crit-bg:#fce8e8; --info:#1565c0; --info-bg:#e6f0fb;
+    --node:#ffffff; --node-stroke:#5c6bc0; --edge:#8b8fb5;
+  }
+  html[data-theme="dark"] {
+    --bg:#181825; --surface:#21222f; --surface-2:#2a2b3c; --fg:#cdd6f4; --muted:#9aa0b8;
+    --border:#3a3b52; --accent:#89b4fa; --accent-fg:#181825;
+    --ok:#a6e3a1; --ok-bg:#27331f; --warn:#f9d28a; --warn-bg:#3a2f1c;
+    --crit:#f38ba8; --crit-bg:#3a1f27; --info:#89b4fa; --info-bg:#1d2740;
+    --node:#262637; --node-stroke:#89b4fa; --edge:#6b6f95;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+         background:var(--bg); color:var(--fg); }
+  .wrap { max-width:1100px; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem;
+           border-bottom:1px solid var(--border); padding-bottom:1rem; margin-bottom:1.5rem; }
+  h1 { font-size:1.5rem; margin:0 0 .25rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .8rem; border-left:4px solid var(--accent); padding-left:.6rem; }
+  h3 { font-size:1rem; margin:1.4rem 0 .5rem; color:var(--muted); }
+  .sub { color:var(--muted); font-size:.9rem; }
+  code { background:var(--surface-2); padding:.05rem .35rem; border-radius:4px; font-size:.86em; }
+  table { width:100%; border-collapse:collapse; margin:.5rem 0 1rem; background:var(--surface);
+          border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  th,td { text-align:left; padding:.5rem .65rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--surface-2); font-weight:600; font-size:.85rem; }
+  tr:last-child td { border-bottom:0; }
+  td.num,th.num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .badge { display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.76rem;
+           font-weight:600; line-height:1.5; white-space:nowrap; }
+  .b-ok { background:var(--ok-bg); color:var(--ok); }
+  .b-warn { background:var(--warn-bg); color:var(--warn); }
+  .b-crit { background:var(--crit-bg); color:var(--crit); }
+  .b-info { background:var(--info-bg); color:var(--info); }
+  .verdict-fixed { background:var(--ok-bg); color:var(--ok); }
+  .verdict-accepted { background:var(--info-bg); color:var(--info); }
+  .verdict-open { background:var(--crit-bg); color:var(--crit); }
+  .toggle { background:var(--surface); color:var(--fg); border:1px solid var(--border);
+            border-radius:999px; padding:.4rem .9rem; cursor:pointer; font:inherit; font-size:.85rem; }
+  .toggle:hover { border-color:var(--accent); }
+  .note { background:var(--surface-2); border:1px solid var(--border); border-left:4px solid var(--accent);
+          border-radius:6px; padding:.7rem .9rem; margin:1rem 0; font-size:.9rem; }
+  .verdict-final { display:inline-block; padding:.5rem 1.1rem; border-radius:8px; font-weight:700;
+                   font-size:1.05rem; background:var(--warn-bg); color:var(--warn); border:1px solid var(--warn); }
+  .chain { font-size:.9rem; color:var(--muted); }
+  .chain code { color:var(--fg); }
+  .hashrow { display:flex; flex-wrap:wrap; gap:.4rem 1.4rem; font-size:.85rem; color:var(--muted); }
+  .hashrow b { color:var(--fg); }
+  .legend { display:flex; flex-wrap:wrap; gap:1rem; font-size:.82rem; color:var(--muted); margin:.4rem 0 .8rem; }
+  .legend span::before { content:""; display:inline-block; width:.8rem; height:.8rem; border-radius:3px;
+                          margin-right:.35rem; vertical-align:-1px; }
+  .lg-edge::before { background:var(--edge); height:.25rem!important; border-radius:2px; }
+  .lg-node::before { background:var(--node); border:2px solid var(--node-stroke); }
+  figure { margin:0 0 1.2rem; }
+  .graph-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+  svg { display:block; }
+  svg text { fill:var(--fg); font:11px system-ui,sans-serif; }
+  svg .nlabel { font-weight:600; }
+  svg .nrole { fill:var(--muted); font-size:9.5px; }
+  .matrix td.hit { background:var(--info-bg); color:var(--info); font-weight:600; text-align:center; }
+  .matrix td.self { background:var(--surface-2); }
+  .matrix th, .matrix td { text-align:center; font-size:.8rem; padding:.35rem; }
+  .matrix th:first-child, .matrix td:first-child { text-align:left; white-space:nowrap; }
+  details summary { cursor:pointer; font-weight:600; padding:.3rem 0; }
+  .phase-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.6rem; margin:.6rem 0 1rem; }
+  .phase-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.7rem .8rem; }
+  .phase-card .pn { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .phase-card .ps { margin-top:.3rem; }
+  .small { font-size:.8rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Проверка плана — Personal AI Wiki, Фаза 2A (Providers + Config)</h1>
+    <div class="sub">Гейт <code>/check-plan</code> · первичный прогон (инициализация frontmatter) · дата 2026-06-22 · режим non-interactive</div>
+  </div>
+  <button class="toggle" id="themeToggle" type="button" aria-label="Переключить тему">🌙 Тёмная / Светлая</button>
+</header>
+
+<section>
+  <h2>Файлы и хеши</h2>
+  <div class="hashrow">
+    <div><b>План:</b> <code>docs/superpowers/plans/2026-06-22-paw-2a-providers-config.md</code></div>
+  </div>
+  <div class="hashrow" style="margin-top:.3rem">
+    <div><b>plan_hash:</b> <code>9a08e4988db867be</code> <span class="small">(канонический хеш тела после добавления frontmatter; до правки — файл без frontmatter)</span></div>
+    <div><b>spec_hash:</b> <code>5a6ed65bca4c1452</code> <span class="small">(совпадает с spec.review.spec_hash — согласованность подтверждена)</span></div>
+  </div>
+  <div class="hashrow" style="margin-top:.3rem">
+    <div><b>Спека:</b> <code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code> (Фаза 2 целиком; 2A = подмножество §Providers + §Config)</div>
+  </div>
+  <p class="chain" style="margin-top:.6rem"><b>Цепочка IDD→SDD:</b>
+     intent <code>null</code> → spec <code>…paw-phase-2-ingest-design.md</code> → plan <code>…paw-2a-providers-config.md</code></p>
+  <div class="note">Первичный прогон: у плана отсутствовал блок <code>review:</code> во frontmatter (файл начинался с <code>#</code>, все <code>---</code> —
+    горизонтальные разделители секций, не YAML-делимитеры). Блок <code>review:</code> и <code>chain:</code> инициализированы, хеши посчитаны
+    каноническим алгоритмом (Bash, <code>sha256sum</code>). Зафиксированы 2 finding-а уровня WARNING (оба <code>open</code>) — это покрытие
+    краёв scope относительно широкой спеки Фазы 2; CRITICAL нет.</div>
+</section>
+
+<section>
+  <h2>1. Резюме плана — задачи и критерии готовности (DoD)</h2>
+  <p class="small">6 задач, строгий TDD-цикл (написать падающий тест → проверить FAIL с точной ошибкой → реализация → проверить PASS с точным числом тестов → commit).
+     DoD каждой задачи — зелёный <code>pytest</code> по её тесту; финальный gate в Задаче 6.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>Задача</th><th>Ключевой артефакт</th><th>DoD (критерий готовности)</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Provider base types + Protocols (+ зависимость <code>openai</code>)</td><td><code>providers/base.py</code>, <code>pyproject.toml</code></td><td><code>test_provider_base</code> PASS (3 теста); <code>uv lock</code> обновляет lockfile</td></tr>
+      <tr><td class="num">2</td><td>Structured-output coercion (repair loop + JSON fallback)</td><td><code>providers/structured.py</code></td><td><code>test_structured</code> PASS (5 тестов: valid/repair/give-up/json-fallback)</td></tr>
+      <tr><td class="num">3</td><td>OpenAICompatProvider (chat + embed + structured)</td><td><code>providers/openai_compat.py</code></td><td><code>test_openai_compat</code> PASS (4 теста, инъекция fake-клиента)</td></tr>
+      <tr><td class="num">4</td><td>ProviderConfig + WikiConfig (модели app_settings)</td><td><code>providers/config.py</code></td><td><code>test_provider_config</code> PASS (3 теста: defaults/roundtrip/keys)</td></tr>
+      <tr><td class="num">5</td><td>ProviderSettingsService + provider factory (Fernet-ключ)</td><td><code>services/provider_settings.py</code>, <code>providers/factory.py</code></td><td><code>test_provider_settings</code> PASS (3 теста, testcontainers, encrypt/decrypt)</td></tr>
+      <tr><td class="num">6</td><td>Reusable stub-LLM test double (chat + embedding)</td><td><code>tests/stubs.py</code></td><td><code>test_stubs</code> PASS (3 теста); финальный gate <code>ruff &amp;&amp; ruff format --check &amp;&amp; mypy src &amp;&amp; pytest -q</code> зелёный</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей задач (узлы — задачи, рёбра — «результат M используется в N», M&lt;N)</h3>
+  <div class="legend">
+    <span class="lg-node">Задача (узел)</span>
+    <span class="lg-edge">Зависимость (направление M→N)</span>
+    <span>Циклов и нарушений порядка не обнаружено (фаза dependencies — passed)</span>
+  </div>
+  <div class="graph-scroll">
+  <svg viewBox="0 0 760 360" width="760" height="360" role="img" aria-label="Граф зависимостей задач 2A">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-opacity="0.25"/>
+      </filter>
+    </defs>
+    <!-- edges (drawn first, under nodes) -->
+    <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <line x1="120" y1="92" x2="120" y2="146"/>      <!-- 1->2 base types -->
+      <line x1="162" y1="76" x2="306" y2="76"/>       <!-- 1->3 base types into provider -->
+      <line x1="120" y1="92" x2="120" y2="280"/>      <!-- 1->6 base types into stubs -->
+      <line x1="162" y1="162" x2="306" y2="86"/>      <!-- 2->3 coerce_structured into provider -->
+      <line x1="348" y1="92" x2="348" y2="216"/>      <!-- 3->5 provider into factory/service -->
+      <line x1="540" y1="162" x2="396" y2="232"/>     <!-- 4->5 configs into service -->
+    </g>
+    <!-- nodes -->
+    <g font-family="system-ui">
+      <g filter="url(#ds)"><rect x="78" y="44" width="84" height="48" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="64" text-anchor="middle">1 base</text><text class="nrole" x="120" y="78" text-anchor="middle">Protocols</text></g>
+      <g filter="url(#ds)"><rect x="78" y="148" width="84" height="48" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="168" text-anchor="middle">2 structured</text><text class="nrole" x="120" y="182" text-anchor="middle">repair loop</text></g>
+      <g filter="url(#ds)"><rect x="306" y="44" width="84" height="48" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="348" y="64" text-anchor="middle">3 openai</text><text class="nrole" x="348" y="78" text-anchor="middle">chat/embed</text></g>
+      <g filter="url(#ds)"><rect x="498" y="148" width="84" height="48" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="540" y="168" text-anchor="middle">4 config</text><text class="nrole" x="540" y="182" text-anchor="middle">Provider/Wiki</text></g>
+      <g filter="url(#ds)"><rect x="306" y="218" width="92" height="48" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="352" y="238" text-anchor="middle">5 service</text><text class="nrole" x="352" y="252" text-anchor="middle">+factory(enc)</text></g>
+      <g filter="url(#ds)"><rect x="78" y="282" width="84" height="48" rx="7" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.6"/><text class="nlabel" x="120" y="302" text-anchor="middle">6 stubs</text><text class="nrole" x="120" y="316" text-anchor="middle">chat/embed</text></g>
+    </g>
+  </svg>
+  </div>
+  <p class="small">Топологический порядок: 1 → 2 → 3 → 4 → 5 → 6. Все рёбра направлены назад (M&lt;N), циклов нет.
+    Задача 4 (config-модели) независима от 1–3; Задача 6 (stubs) зависит только от базовых типов Задачи 1.
+    Внешние артефакты, которые потребляет Задача 5 (<code>SettingsRepo</code>, <code>SecretBox</code>, <code>get_settings</code>,
+    модель <code>AppSettings.settings</code> JSONB), проверены в коде — присутствуют, сигнатуры совпадают.</p>
+
+  <h3>Пересечения по артефактам (несколько задач изменяют один файл)</h3>
+  <table class="matrix">
+    <thead><tr><th>Артефакт ↓ \ Задачи →</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead>
+    <tbody>
+      <tr><td><code>pyproject.toml</code></td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td><code>src/paw/providers/*.py</code> (разные файлы)</td><td class="hit">base</td><td class="hit">structured</td><td class="hit">openai_compat</td><td class="hit">config</td><td class="hit">factory</td><td></td></tr>
+      <tr><td><code>app_settings.settings</code> (JSONB, ключи)</td><td></td><td></td><td></td><td class="hit">схема</td><td class="hit">provider/wiki</td><td></td></tr>
+    </tbody>
+  </table>
+  <p class="small">Истинного file-overlap нет: каждая задача создаёт <b>отдельный</b> файл под <code>src/paw/providers/</code>; единственный общий файл —
+    <code>pyproject.toml</code>, его трогает только Задача 1. Строка <code>app_settings.settings</code> пишется только в Задаче 5
+    (методы <code>set_provider</code>/<code>set_wiki</code>), под непересекающимися ключами <code>PROVIDER_KEY</code>/<code>WIKI_KEY</code> (без конфликта).
+    Конвенция транзакций соблюдена: <code>SettingsRepo.upsert</code> делает <code>flush()</code>, сервис — <code>commit()</code>.</p>
+
+  <h3>Покрытие требований (требование спеки ↔ задачи)</h3>
+  <table>
+    <thead><tr><th>Требование спеки (§Providers / §Config)</th><th>Задачи</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>Protocols <code>ChatProvider</code>/<code>EmbeddingProvider</code>/<code>VisionProvider</code> + <code>Message</code>/<code>ToolSpec</code>/<code>ChatResult</code></td><td>1</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td><code>OpenAICompatProvider</code> chat + embeddings</td><td>3</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td><code>structured(...)</code> с repair loop</td><td>2, 3</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td>JSON-mode fallback без tool-calling</td><td>2 (<code>use_tools=False</code>), 3 (<code>supports_tools</code>)</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td>Connection (<code>base_url</code> + расшифр. <code>api_key</code>) + модели из <code>app_settings</code></td><td>4, 5</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td>Embedding <b>dim</b> в конфиге</td><td>4, 5 (<code>ProviderConfig.embedding_dim</code>)</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td>Wiki-defaults (языки, chunk-параметры, <code>hub_threshold</code>, лимиты агента, <code>link_types</code>, таймауты/retries)</td><td>4 (<code>WikiConfig</code>)</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td>Stub-LLM для unit/integration тестов Фазы 2</td><td>6</td><td><span class="badge b-ok">покрыто</span></td></tr>
+      <tr><td><code>OpenAICompatProvider</code> «implements all three» (вкл. <b>Vision</b>)</td><td>1 (только Protocol)</td><td><span class="badge b-warn">F-001</span></td></tr>
+      <tr><td>Per-domain overrides via <code>domains.config</code> (§Config)</td><td>—</td><td><span class="badge b-warn">F-002</span></td></tr>
+    </tbody>
+  </table>
+  <p class="small">Явно отложено в Self-Review плана (последующие планы): managed <code>vector(dim)</code> миграция (2B), harness/loop/tools (2C),
+    setup-wizard endpoint + <code>/settings</code> Connection-форма (2D).</p>
+</section>
+
+<section>
+  <h2>3. Результаты проверки — фазы</h2>
+  <div class="phase-grid">
+    <div class="phase-card"><div class="pn">Фаза 1 · structure</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">6 задач, нумерация 1–6 без пропусков/дублей; шаги внутри задач последовательны; плейсхолдеров (TODO/TBD/???/FIXME) нет.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 2 · coverage</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">Основные требования §Providers/§Config покрыты; 2 WARNING на краях scope (F-001, F-002). CRITICAL нет.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 3 · dependencies</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">Порядок 1→…→6, все рёбра M&lt;N, циклов нет; внешние артефакты (SettingsRepo/SecretBox/get_settings) существуют.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 4 · verifiability</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">У каждой задачи Run-команда + Expected (FAIL→PASS с числом тестов); финальный gate в Задаче 6.</div></div>
+    <div class="phase-card"><div class="pn">Фаза 5 · consistency</div><div class="ps"><span class="badge b-ok">passed</span></div><div class="small">Хеши тела/секций посчитаны канонически; spec_hash совпадает с записанным в спеке (5a6ed65bca4c1452).</div></div>
+  </div>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Описание</th><th>Вердикт</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td><td>Task 3 / Self-Review</td>
+        <td>Спека §In scope/Providers говорит, что <code>OpenAICompatProvider</code> «implements all three» Protocols (вкл. <code>VisionProvider</code>), но план реализует только <code>ChatProvider</code> + <code>EmbeddingProvider</code>; <code>VisionProvider</code> остаётся Protocol-only (Task 1, строка про «no implementation in Phase 2»).<br><span class="small">Согласуется с отсрочкой image-OCR на Фазу 9 в той же спеке, поэтому буквальное «all three» — скорее редакционная неточность спеки, чем дефект плана. Рекомендация: добавить явную пометку об отсрочке Vision в Self-Review.</span></td>
+        <td><span class="badge verdict-open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td><td>Task 4 / Task 5 (Config)</td>
+        <td>Спека §Config (LLD §10) перечисляет «Per-domain overrides via <code>domains.config</code>» как часть scope конфигурации. План покрывает только конфиг уровня <code>app_settings</code> (provider + wiki) и не адресует per-domain overrides; в «Out of scope» Self-Review они тоже не отмечены явно.<br><span class="small">Per-domain хранилище правдоподобно относится к более позднему плану (зависит от таблицы <code>domains</code>), но отсрочка сделана неявно.</span></td>
+        <td><span class="badge verdict-open">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Сводка</h3>
+  <table>
+    <tbody>
+      <tr><td>CRITICAL open</td><td class="num"><b>0</b></td></tr>
+      <tr><td>WARNING open</td><td class="num"><b>2</b></td></tr>
+      <tr><td>Findings всего</td><td class="num">2 (open: 2 — WARNING; non-interactive прогон, вердикты не подтверждены человеком)</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:1rem"><span class="verdict-final">Итоговый вердикт: требует доработки — 0 critical, 2 warning</span></p>
+  <p class="small" style="margin-top:.5rem">Гейт не блокируется (CRITICAL open = 0). Оба WARNING — про границы scope относительно широкой спеки Фазы 2 и, вероятно,
+    будут приняты (<code>accepted</code>) как корректная декомпозиция, но в non-interactive режиме оставлены <code>open</code> до подтверждения.</p>
+  <p class="chain" style="margin-top:1rem"><b>Chain:</b> <code>null</code> (intent) → <code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code> → <code>docs/superpowers/plans/2026-06-22-paw-2a-providers-config.md</code></p>
+</section>
+
+<footer class="small" style="margin-top:2.5rem; border-top:1px solid var(--border); padding-top:1rem;">
+  Автогенерируемый артефакт команды <code>/check-plan</code>. Перезаписывается при каждом прогоне.
+</footer>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById("themeToggle");
+  function set(t){ root.setAttribute("data-theme",t); try{localStorage.setItem("paw-check-theme",t);}catch(e){} }
+  var saved; try{saved=localStorage.getItem("paw-check-theme");}catch(e){}
+  if(!saved){ saved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark":"light"; }
+  set(saved);
+  btn.addEventListener("click", function(){
+    set(root.getAttribute("data-theme")==="dark" ? "light":"dark");
+  });
+})();
+</script>
+</body>
+</html>

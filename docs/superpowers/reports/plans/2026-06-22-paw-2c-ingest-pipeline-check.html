@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 2C (Loaders + Harness + Ingest + Chunking + Vector)</title>
+<style>
+  :root{--bg:#0f1115;--card:#181b22;--mut:#8b93a7;--fg:#e6e9ef;--ok:#3fb950;--warn:#d29922;--crit:#f85149;--line:#2a2f3a;--acc:#58a6ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+  h1{font-size:24px;margin:0 0 4px}
+  h2{font-size:19px;margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  h3{font-size:15px;margin:20px 0 8px;color:var(--acc)}
+  .sub{color:var(--mut);margin:0 0 18px;font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  code{background:#11141a;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12.5px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600}
+  .p-ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .p-warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .p-crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .p-mut{background:rgba(139,147,167,.16);color:var(--mut)}
+  .verdict{font-size:18px;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kpi{background:#11141a;border:1px solid var(--line);border-radius:8px;padding:12px}
+  .kpi b{display:block;font-size:24px}
+  .kpi span{color:var(--mut);font-size:12px}
+  .chain{color:var(--mut);font-size:13px}
+  .chain b{color:var(--fg)}
+  .mx td,.mx th{text-align:center}
+  .mx td:first-child,.mx th:first-child{text-align:left}
+  .hit{background:rgba(88,166,255,.18);color:var(--acc);font-weight:700;border-radius:4px}
+  svg{max-width:100%;height:auto;background:#11141a;border:1px solid var(--line);border-radius:8px}
+  .legend{font-size:12px;color:var(--mut);margin:6px 0 0}
+  .dod{color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Проверка плана — Phase 2C</h1>
+<p class="sub">Loaders + Harness + Ingest Pipeline + Chunking + Vector · дата проверки 2026-06-22 · режим non-interactive (findings = <code>open</code>)</p>
+
+<div class="card">
+  <div class="grid">
+    <div class="kpi"><b class="p-ok" style="background:none;padding:0">OK</b><span>Финальный вердикт</span></div>
+    <div class="kpi"><b>0</b><span>CRITICAL open</span></div>
+    <div class="kpi"><b>2</b><span>WARNING open</span></div>
+    <div class="kpi"><b>8</b><span>задач / 41 шаг</span></div>
+  </div>
+  <p class="chain" style="margin-top:14px">
+    <b>plan_hash</b> <code>0543fa7b93231087</code> · <b>spec_hash</b> <code>5a6ed65bca4c1452</code><br>
+    <b>Цепочка:</b> intent <code>null</code> → spec <code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code> → plan <code>docs/superpowers/plans/2026-06-22-paw-2c-ingest-pipeline.md</code>
+  </p>
+</div>
+
+<h2>1. Резюме плана — задачи, шаги и критерии готовности (DoD)</h2>
+<div class="card">
+<table>
+<thead><tr><th>Задача</th><th>Что создаётся</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td><b>Task 1</b><br>Source loaders</td><td><code>ingest/loaders/{md,pdf,docx,html}.py</code>, <code>load_source</code> dispatch, deps (pymupdf/mammoth/trafilatura/markdownify)</td><td class="dod"><code>pytest tests/unit/test_loaders.py</code> → 7 тестов PASS; пустая выгрузка → <code>ValueError</code>; неизвестный тип → <code>UnsupportedSource</code></td></tr>
+<tr><td><b>Task 2</b><br>Harness limits</td><td><code>harness/limits.py</code>: <code>Budget</code> (steps/tool_calls/writes/tokens), <code>LimitExceeded</code>, <code>seen()</code> loop-detect</td><td class="dod"><code>pytest test_harness_limits.py</code> → 3 PASS; превышение лимита → <code>LimitExceeded.kind</code></td></tr>
+<tr><td><b>Task 3</b><br>Tools + write-scope</td><td><code>harness/tools.py</code>: READ/WRITE/COLLECT, <code>tools_for("ingest")</code>, write-scope <code>domain_id</code>, audit</td><td class="dod"><code>-k "allowlist or add_link"</code> → 3 PASS; cross-domain → <code>PermissionError</code>; bad type → <code>ValueError</code> (upsert-тест green после Task 8)</td></tr>
+<tr><td><b>Task 4</b><br>Harness loop</td><td><code>harness/loop.py</code>: <code>run_loop</code> chat→tools→wrapped results, untrusted-wrapping, loop-guard</td><td class="dod"><code>pytest test_harness_loop.py</code> → 2 PASS; <code>max_steps</code> → <code>final_text is None</code></td></tr>
+<tr><td><b>Task 5</b><br>Versioned prompts</td><td><code>harness/prompts/</code>: <code>PROMPT_VERSION="v1"</code>, <code>get_prompt(extraction/drafting/summary/init)</code></td><td class="dod"><code>pytest test_prompts.py</code> → 2 PASS; preamble "data, not instructions" + язык присутствуют; неизвестный → <code>KeyError</code></td></tr>
+<tr><td><b>Task 6</b><br>Semantic chunking</td><td><code>ingest/chunking.py</code>: <code>split_sections/split_sentences/cosine/build_chunks</code>, summary-chunk ord=0, overlap</td><td class="dod"><code>pytest test_chunking.py</code> → 4 PASS; summary first; ords contiguous; overlap проверен</td></tr>
+<tr><td><b>Task 7</b><br>Vector writer</td><td><code>vector/embed.py</code>: <code>embed_and_write</code> batch embed + <code>ChunkRepo.create/set_embedding</code></td><td class="dod"><code>pytest test_vector_embed.py</code> → PASS; 2 chunk-id, embedding IS NOT NULL == 2</td></tr>
+<tr><td><b>Task 8</b><br>Ingest op A→E</td><td><code>services/ingest_write.py</code> (upsert C), <code>harness/ops/{ingest,init}.py</code>, схемы Extraction/Draft/StructurePlan</td><td class="dod"><code>pytest test_ingest_op.py</code> → PASS; финальный гейт <code>ruff+mypy+pytest</code> green; summary-chunk ord=0; embeddings==chunk_count; <code>articles.summary</code> заполнен</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>2. Зависимости и пересечения шагов</h2>
+
+<h3>Граф зависимостей задач (M→N: результат M используется в N, M&lt;N)</h3>
+<div class="card">
+<svg viewBox="0 0 980 230" role="img" aria-label="Граф зависимостей задач">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/>
+    </marker>
+  </defs>
+  <!-- edges (drawn first) -->
+  <!-- 2->3, 2->4 -->
+  <line x1="210" y1="60" x2="330" y2="60" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="210" y1="70" x2="455" y2="150" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arr)"/>
+  <!-- 3->4 -->
+  <line x1="445" y1="60" x2="455" y2="140" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arr)"/>
+  <!-- 3->8 (upsert<-ingest_write circular note) -->
+  <line x1="445" y1="55" x2="845" y2="55" stroke="#d29922" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <!-- 1->8 -->
+  <line x1="110" y1="90" x2="845" y2="150" stroke="#58a6ff" stroke-width="1.2" marker-end="url(#arr)"/>
+  <!-- 5->8 -->
+  <line x1="690" y1="60" x2="845" y2="150" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arr)"/>
+  <!-- 6->7 -->
+  <line x1="565" y1="180" x2="690" y2="180" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arr)"/>
+  <!-- 6->8, 7->8 -->
+  <line x1="565" y1="175" x2="845" y2="160" stroke="#58a6ff" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="745" y1="180" x2="845" y2="168" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arr)"/>
+  <!-- nodes -->
+  <g font-size="13" font-family="monospace" text-anchor="middle">
+    <g><rect x="55" y="42" width="110" height="34" rx="7" fill="#1f6feb33" stroke="#58a6ff"/><text x="110" y="63" fill="#e6e9ef">T1 loaders</text></g>
+    <g><rect x="100" y="42" width="110" height="34" rx="7" fill="#1f6feb33" stroke="#58a6ff" opacity="0"/></g>
+    <g><rect x="100" y="42" width="0" height="0"/></g>
+    <g><rect x="100" y="42" width="0" height="0"/></g>
+    <g><rect x="155" y="42" width="0" height="0"/></g>
+    <g><rect x="100" y="42" width="0" height="0"/></g>
+    <g><rect x="100" y="42" width="110" height="34" rx="7" fill="#23863633" stroke="#3fb950"/><text x="155" y="63" fill="#e6e9ef">T2 limits</text></g>
+    <g><rect x="335" y="42" width="110" height="34" rx="7" fill="#23863633" stroke="#3fb950"/><text x="390" y="63" fill="#e6e9ef">T3 tools</text></g>
+    <g><rect x="425" y="140" width="110" height="34" rx="7" fill="#23863633" stroke="#3fb950"/><text x="480" y="161" fill="#e6e9ef">T4 loop</text></g>
+    <g><rect x="635" y="42" width="110" height="34" rx="7" fill="#23863633" stroke="#3fb950"/><text x="690" y="63" fill="#e6e9ef">T5 prompts</text></g>
+    <g><rect x="455" y="163" width="110" height="34" rx="7" fill="#1f6feb33" stroke="#58a6ff"/><text x="510" y="184" fill="#e6e9ef">T6 chunking</text></g>
+    <g><rect x="635" y="163" width="110" height="34" rx="7" fill="#1f6feb33" stroke="#58a6ff"/><text x="690" y="184" fill="#e6e9ef">T7 vector</text></g>
+    <g><rect x="845" y="138" width="120" height="40" rx="7" fill="#8957e533" stroke="#a371f7"/><text x="905" y="162" fill="#e6e9ef">T8 ingest A→E</text></g>
+  </g>
+</svg>
+<p class="legend">Сплошные стрелки — линейные зависимости (источник раньше потребителя, порядок соблюдён). Пунктирная жёлтая T3→T8 — задокументированная взаимозависимость: тул <code>upsert_article</code> (Task 3) вызывает <code>services.ingest_write.upsert_article</code> (Task 8). Это <b>не цикл</b>: план явно предписывает реализовать Step 1 Task 8 (<code>ingest_write</code>) до запуска upsert-теста Task 3 (см. «Dependency note», строки 658, 1329). Фаза dependencies — passed.</p>
+</div>
+
+<h3>Пересечения по артефактам (один файл/символ затрагивают несколько задач)</h3>
+<div class="card">
+<table class="mx">
+<thead><tr><th>Артефакт</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>T8</th></tr></thead>
+<tbody>
+<tr><td><code>pyproject.toml</code></td><td class="hit">+</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td><code>harness/limits.py</code> (Budget)</td><td></td><td class="hit">+</td><td>use</td><td>use</td><td></td><td></td><td></td><td></td></tr>
+<tr><td><code>harness/tools.py</code></td><td></td><td></td><td class="hit">+</td><td>use</td><td></td><td></td><td></td><td>use</td></tr>
+<tr><td><code>harness/prompts/</code></td><td></td><td></td><td></td><td></td><td class="hit">+</td><td></td><td></td><td>use</td></tr>
+<tr><td><code>ingest/chunking.py</code> (ChunkSpec)</td><td></td><td></td><td></td><td></td><td></td><td class="hit">+</td><td>use</td><td>use</td></tr>
+<tr><td><code>vector/embed.py</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">+</td><td>use</td></tr>
+<tr><td><code>services/ingest_write.py</code> (upsert)</td><td></td><td></td><td>use</td><td></td><td></td><td></td><td></td><td class="hit">+</td></tr>
+<tr><td><code>tests/integration/test_ingest_op.py</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">+</td></tr>
+</tbody>
+</table>
+<p class="legend"><span class="hit">+</span> — задача создаёт артефакт; «use» — потребляет. Единственный перекрёстно-создаваемый/потребляемый файл — <code>services/ingest_write.py</code> (создаёт T8, потребляет тул из T3). Конфликтов записи в один файл двумя задачами нет.</p>
+</div>
+
+<h3>Покрытие требований спеки (требование ↔ задачи)</h3>
+<div class="card">
+<table>
+<thead><tr><th>Требование спеки (Phase 2C scope)</th><th>Задачи плана</th><th>Статус</th></tr></thead>
+<tbody>
+<tr><td>Loaders md/pdf/docx/html, strip frontmatter</td><td>T1</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Harness loop (chat→tools→until final/max_steps, progress)</td><td>T4</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Tools read/write + report_issue collect-only</td><td>T3</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Guards: allowlist, write-scope, schema-before-write, untrusted-wrap, limits, loop-detect, audit</td><td>T2, T3, T4</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>per-step timeout (LLD §4/§11)</td><td>deferred → Plan 2D</td><td><span class="pill p-warn">F-002</span></td></tr>
+<tr><td>harness/ops/{ingest,init} + versioned prompts</td><td>T5, T8</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>upsert_article idempotent by slug (merge)</td><td>T8 (ingest_write)</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Pipeline A extract → B draft (≤##) → C write → D links → E chunk+embed</td><td>T8</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Chunking: summary ord=0, ## split, semantic split, overlap, heading_path, chunk_entities tagging</td><td>T6, T8 (chunk_entities → Self-Review добавление в T8 Step 3)</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Vector embed.py batch → chunks(embedding, embedding_version)</td><td>T7</td><td><span class="pill p-ok">покрыто</span></td></tr>
+<tr><td>Структурированный repair / JSON-fallback (acceptance 6)</td><td>Plan 2A (coerce_structured), потребляется через chat.structured</td><td><span class="pill p-warn">F-001</span></td></tr>
+<tr><td>Jobs/worker · API · Web UI · providers(2A) · DB schema(2B)</td><td>вне scope 2C → планы 2A/2B/2D</td><td><span class="pill p-mut">граница scope</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>3. Результаты проверки</h2>
+
+<div class="card">
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+<tbody>
+<tr><td>1. structure</td><td><span class="pill p-ok">passed</span></td><td>Tasks 1–8 без пропусков/дублей; шаги пронумерованы последовательно; реальных плейсхолдеров (TODO/TBD/???/FIXME) нет.</td></tr>
+<tr><td>2. coverage</td><td><span class="pill p-ok">passed</span></td><td>Все требования спеки в scope 2C покрыты ≥1 задачей; лишних задач нет. Два пункта (F-001 repair-тест, F-002 timeout) — границы scope, делегированы 2A/2D.</td></tr>
+<tr><td>3. dependencies</td><td><span class="pill p-ok">passed</span></td><td>Порядок M&lt;N соблюдён; единственная T3↔T8 взаимозависимость явно разрешена предписанным порядком (Task 8 Step 1 перед upsert-тестом Task 3). Цикла нет.</td></tr>
+<tr><td>4. verifiability</td><td><span class="pill p-ok">passed</span></td><td>Каждый шаг имеет команду <code>uv run pytest …</code> + ожидаемый результат (FAIL→PASS, счётчики тестов); финальный гейт ruff+mypy+pytest.</td></tr>
+<tr><td>5. consistency</td><td><span class="pill p-ok">passed</span></td><td>Все символы 2A/2B/Phase-1 резолвятся: WikiConfig-поля, StubChatProvider.tool/text/responder, ArticleRepo.create/get/list_by_domain/add_revision, audit.record, EntityRepo/CitationRepo/ChunkRepo/GraphRepo, ensure_embedding_column. Сигнатуры совпадают.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Findings</h3>
+<div class="card">
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr>
+  <td>F-001</td><td><span class="pill p-warn">WARNING</span></td><td>Self-Review / coverage</td>
+  <td>Acceptance criterion 6 спеки (восстановление structured-output + JSON-mode fallback для моделей без tool-calling) обеспечивается Plan 2A (<code>coerce_structured</code> / <code>OpenAICompatProvider.structured</code>) и потребляется здесь через <code>chat.structured(retries=cfg.max_retries)</code>. В 2C нет отдельного теста на сам repair/fallback — это покрытие живёт в Plan 2A (<code>test_structured.py</code>). Граница scope, не пробел 2C.</td>
+  <td><span class="pill p-mut">open</span></td>
+</tr>
+<tr>
+  <td>F-002</td><td><span class="pill p-warn">WARNING</span></td><td>Global Constraints / Self-Review</td>
+  <td>Спека относит per-step timeout к guards харнеса (LLD §4/§11). План реализует Budget-лимиты + loop-detection, но per-op/per-step timeout откладывает на worker call-site Plan 2D (<code>asyncio.wait_for</code>). Явно отмечено в Self-Review; приемлемо для in-process scope 2C.</td>
+  <td><span class="pill p-mut">open</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="card">
+  <p class="verdict"><span class="pill p-ok">OK</span> &nbsp;Финальный вердикт: план соответствует спеке в рамках scope Phase 2C.</p>
+  <p class="chain">CRITICAL open: <b>0</b> · WARNING open: <b>2</b> (обе — задокументированные границы scope, не блокируют). Самопроверочные пункты <code>chunk_entities</code> tagging (добавлен в Task 8 Step 3) и опциональный LLM <code>link_suggestions</code> рассмотрены как resolved-in-plan.</p>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 2D (Jobs/API/SSE/UI)</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5;}
+h1{font-size:1.6rem; margin:.2rem 0 .3rem;}
+h2{font-size:1.2rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem;}
+.sub{color:var(--muted); margin:.1rem 0;}
+table{border-collapse:collapse; width:100%; margin:.6rem 0; background:var(--surface);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden; font-size:.92rem;}
+th,td{padding:.5rem .65rem; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+th{background:color-mix(in srgb,var(--accent) 14%, var(--surface)); font-weight:600;}
+tbody tr:nth-child(even){background:var(--zebra);}
+code{font-family:ui-monospace,Menlo,monospace; font-size:.85em; background:color-mix(in srgb,var(--accent) 10%, var(--surface)); padding:.05rem .3rem; border-radius:4px;}
+.badge{display:inline-block; padding:.05rem .5rem; border-radius:999px; font-size:.78rem; font-weight:600; border:1px solid;}
+.b-ok{color:var(--ok-2); border-color:var(--ok-2); background:color-mix(in srgb,var(--ok) 18%, var(--surface));}
+.b-warn{color:var(--warn-2); border-color:var(--warn-2); background:color-mix(in srgb,var(--warn) 18%, var(--surface));}
+.b-danger{color:var(--danger-2); border-color:var(--danger-2); background:color-mix(in srgb,var(--danger) 18%, var(--surface));}
+.note{background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.6rem .9rem; border-radius:0 8px 8px 0; margin:.8rem 0;}
+.lead{font-size:1.02rem;}
+figure{margin:1rem 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 2px 8px var(--shadow);}
+figcaption{color:var(--muted); font-size:.85rem; margin-top:.5rem; text-align:center;}
+.mx td.hit{background:color-mix(in srgb,var(--accent) 26%, var(--surface)); text-align:center; font-weight:700;}
+.mx td.x{text-align:center; color:var(--muted);}
+.chain{font-family:ui-monospace,monospace; font-size:.85rem; color:var(--muted);}
+.summary-grid{display:flex; gap:1rem; flex-wrap:wrap; margin:.6rem 0;}
+.stat{flex:1 1 150px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.7rem 1rem; box-shadow:0 2px 8px var(--shadow);}
+.stat b{font-size:1.5rem; display:block;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<h1>Проверка плана — Phase 2D: Jobs/Worker + API + SSE + Web UI</h1>
+<p class="sub">Дата прогона: 2026-06-22 · Навык <code>check-plan</code> (неинтерактивный режим)</p>
+<p class="sub">План: <code>docs/superpowers/plans/2026-06-22-paw-2d-jobs-api-ui.md</code> (plan_hash <code>57221f77bd2d2c95</code>, prev: —)</p>
+<p class="sub">Спека: <code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code> (spec_hash <code>5a6ed65bca4c1452</code>)</p>
+
+<div class="summary-grid">
+  <div class="stat"><b>OK</b><span class="badge b-ok">итоговый вердикт</span></div>
+  <div class="stat"><b>0</b>CRITICAL open</div>
+  <div class="stat"><b>2</b>WARNING open</div>
+  <div class="stat"><b>5/5</b>фаз passed</div>
+</div>
+
+<h2>1. Резюме плана — шаги и критерии готовности (DoD)</h2>
+<table>
+<thead><tr><th>Задача</th><th>Суть</th><th>Артефакты</th><th>DoD / проверка</th></tr></thead>
+<tbody>
+<tr><td><b>Task 1</b></td><td>Upload guard для pdf/docx/html (magic-byte + размер)</td>
+  <td><code>security/uploads.py</code>, <code>services/sources.py</code>, <code>api/routers/sources.py</code></td>
+  <td><code>pytest test_uploads.py test_sources.py</code> → PASS (pdf/docx/html/md приняты, неизвестное расширение/битый magic отклонены)</td></tr>
+<tr><td><b>Task 2</b></td><td>Redis domain-lock (non-blocking) + model-lock (blocking)</td>
+  <td><code>jobs/locks.py</code></td>
+  <td><code>pytest test_job_locks.py</code> → PASS (2): второй domain-job отклонён; same-model сериализован, разные модели независимы</td></tr>
+<tr><td><b>Task 3</b></td><td>Прогресс задания: pub/sub <code>job:{id}</code> + replay из <code>jobs.log</code></td>
+  <td><code>jobs/progress.py</code> (<code>channel</code>/<code>publish</code>/<code>sse_events</code>)</td>
+  <td><code>pytest test_job_progress.py</code> → PASS (2): publish доставлен; terminal-job реплеит лог и закрывается</td></tr>
+<tr><td><b>Task 4</b></td><td><code>ingest_domain</code> arq-задача: cancel + heartbeat + reconciler, две сессии</td>
+  <td><code>jobs/tasks.py</code>, <code>worker.py</code></td>
+  <td><code>pytest test_ingest_task.py</code> → PASS (2): success пишет article; cancel оставляет 0 article (rollback data-сессии)</td></tr>
+<tr><td><b>Task 5</b></td><td>API: ingest / init / jobs / cancel + enqueue-seam</td>
+  <td><code>jobs/queue.py</code>, <code>services/jobs.py</code>, <code>api/routers/jobs.py</code>, <code>main.py</code></td>
+  <td><code>pytest test_jobs_api.py</code> → PASS (2): ingest→202 job_id (status queued); cancel→202</td></tr>
+<tr><td><b>Task 6</b></td><td>SSE endpoint + setup-wizard dim + Web ingest drawer + settings + E2E</td>
+  <td><code>api/routers/jobs.py</code> (SSE), <code>services/setup.py</code>, web templates, e2e</td>
+  <td><code>pytest test_jobs_sse.py</code> → PASS; setup фиксирует dim=8 и создаёт vector-колонку; e2e: source→ingest→article+chunks с embeddings; финал-гейт <code>ruff+mypy+pytest</code> зелёный</td></tr>
+</tbody>
+</table>
+
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<figure>
+<svg viewBox="0 0 720 230" width="100%" role="img" aria-label="Граф зависимостей задач">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+    </marker>
+  </defs>
+  <!-- external deps node -->
+  <line x1="120" y1="115" x2="186" y2="60"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="120" y1="115" x2="186" y2="115" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="120" y1="115" x2="186" y2="170" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- T2 -> T4 ; T3 -> T4 -->
+  <line x1="246" y1="60"  x2="316" y2="100" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="246" y1="115" x2="316" y2="108" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- T4 -> T5 -->
+  <line x1="376" y1="105" x2="446" y2="105" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- T3 -> T6 (long) -->
+  <line x1="246" y1="120" x2="576" y2="160" stroke="var(--line)" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+  <!-- T5 -> T6 -->
+  <line x1="506" y1="105" x2="576" y2="120" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- T4 -> T6 (e2e uses task) -->
+  <line x1="346" y1="130" x2="576" y2="150" stroke="var(--line)" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+
+  <g font-size="12" font-family="system-ui" text-anchor="middle">
+    <circle cx="90"  cy="115" r="30" fill="color-mix(in srgb,var(--warn) 22%, var(--surface))" stroke="var(--warn-2)" stroke-width="2"/>
+    <text x="90"  y="111" fill="var(--fg)">2A/2B</text><text x="90" y="125" fill="var(--fg)">/2C</text>
+    <circle cx="216" cy="60"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="216" y="64" fill="var(--fg)">T2</text>
+    <circle cx="216" cy="115" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="216" y="119" fill="var(--fg)">T3</text>
+    <circle cx="216" cy="170" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text x="216" y="174" fill="var(--fg)">T1</text>
+    <circle cx="346" cy="105" r="28" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2.5"/><text x="346" y="109" fill="var(--fg)">T4</text>
+    <circle cx="476" cy="105" r="28" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2.5"/><text x="476" y="109" fill="var(--fg)">T5</text>
+    <circle cx="606" cy="140" r="30" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2.5"/><text x="606" y="144" fill="var(--fg)">T6</text>
+  </g>
+</svg>
+<figcaption>Граф зависимостей задач (M→N = результат M используется в N). Сплошные синие рёбра — прямые producer→consumer; пунктир — использование задачи в e2e/SSE. Циклов и нарушений порядка (M&lt;N) не обнаружено. <code>2A/2B/2C</code> — внешние плановые зависимости (Global Constraints). <code>T1</code> (upload guard) независима, питает только e2e/API через source.</figcaption>
+</figure>
+
+<figure>
+<table class="mx">
+<thead><tr><th>Артефакт / модуль</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr></thead>
+<tbody>
+<tr><td><code>jobs/locks.py</code></td><td class="x">·</td><td class="hit">●</td><td class="x">·</td><td class="hit">使</td><td class="x">·</td><td class="x">·</td></tr>
+<tr><td><code>jobs/progress.py</code></td><td class="x">·</td><td class="x">·</td><td class="hit">●</td><td class="hit">使</td><td class="x">·</td><td class="hit">使</td></tr>
+<tr><td><code>jobs/tasks.py</code> (<code>ingest_domain</code>)</td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="hit">●</td><td class="hit">使</td><td class="hit">使</td></tr>
+<tr><td><code>api/routers/jobs.py</code></td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="hit">●</td><td class="hit">✎</td></tr>
+<tr><td><code>services/jobs.py</code> / <code>queue.py</code></td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="hit">●</td><td class="x">·</td></tr>
+<tr><td><code>services/setup.py</code> + web templates</td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="x">·</td><td class="hit">●</td></tr>
+</tbody>
+</table>
+<figcaption>Матрица пересечений по артефактам. ● — артефакт создан в задаче, 使 — импортируется/используется, ✎ — модуль расширяется (T6 дописывает SSE-роут в <code>jobs.py</code>, созданный T5). Единственное прямое пересечение файла между задачами — <code>api/routers/jobs.py</code> (T5 создаёт → T6 расширяет), порядок корректен (5&lt;6). Конфликтов записи в один файл одновременно нет.</figcaption>
+</figure>
+
+<div class="note">
+<b>Покрытие требований ↔ задачи (фаза coverage).</b> Несколько требований спеки закрываются одной задачей T6 (SSE-endpoint + setup-dim + web-drawer + settings + e2e — AC-1, частично AC-4). Требования AC-3 (co-occurrence / typed links) и AC-6 (structured-repair / JSON-fallback) <i>не</i> реализуются здесь — делегированы Планам 2C и 2A соответственно и проверяются интегрированно через stub-LLM e2e (документировано в Self-Review плана).
+</div>
+
+<h2>3. Результаты проверки — 5 фаз</h2>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Что проверено</th></tr></thead>
+<tbody>
+<tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>Плейсхолдеров <code>TODO/TBD/???/FIXME</code> нет; задачи 1–6 без пропусков/дублей; шаги внутри задач последовательны</td></tr>
+<tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>Все in-scope требования Phase 2D привязаны к задачам; лишних шагов нет. См. F-001 (частичное покрытие arq-очередей)</td></tr>
+<tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>Producer→consumer порядок соблюдён (T2,T3→T4→T5→T6); циклов нет; артефакты создаются до использования</td></tr>
+<tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>Каждая задача завершается командой <code>Run:</code> + <code>Expected:</code>. См. F-002 (тело web-теста — направленный fill-in)</td></tr>
+<tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>spec_hash совпал с записанным в спеке (<code>5a6ed65bca4c1452</code>); section-хеши вычислены (первый прогон, прежних findings нет)</td></tr>
+</tbody>
+</table>
+
+<h2>4. Findings</h2>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>Global Constraints / Task 4 (worker)</td>
+  <td>Спека (LLD §7) перечисляет arq-очереди (LLM vs light), retries/backoff и poison→dead-letter. План реализует одну LLM-очередь (<code>WorkerSettings.functions=[heartbeat, ingest_domain]</code>) + стартовый reconciler stuck→failed, но без явного per-task retries/backoff и dead-letter. Частичное покрытие, не блокирующее.</td>
+  <td><span class="badge b-warn">open</span></td></tr>
+<tr><td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>Task 6 / Step 6 (Web UI)</td>
+  <td>Работа над web-шаблонами и тело ассерта в <code>tests/api/test_web_pages.py</code> — нелитеральные fill-in (направлены следовать существующим Jinja/login-паттернам). DoD измерим (точные строки названы: <code>hx-post=".../ingest"</code>, <code>id="job-drawer"</code>, текст dim-warning), но код теста не дан дословно. Намеренно и ограниченно по дизайну; зафиксировано для прозрачности.</td>
+  <td><span class="badge b-warn">open</span></td></tr>
+</tbody>
+</table>
+
+<div class="note lead">
+<b>Сводка:</b> CRITICAL open: <b>0</b> · WARNING open: <b>2</b>. Фазовый гейт пройден (нет открытых CRITICAL). <b>Итоговый вердикт: OK.</b> Два WARNING (F-001, F-002) — несрочные, открыты для решения автора плана.
+</div>
+
+<p class="chain">Chain: (intent: null) → docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md → docs/superpowers/plans/2026-06-22-paw-2d-jobs-api-ui.md</p>
+</body>
+</html>

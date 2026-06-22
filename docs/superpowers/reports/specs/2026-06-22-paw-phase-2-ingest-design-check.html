@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Phase 2 · Ingest</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1{ font-size:1.6rem; margin:.2rem 0 .2rem; }
+h2{ font-size:1.25rem; margin:2.2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.05rem; margin:1.4rem 0 .4rem; color:var(--accent); }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:5px; font-size:.88em; }
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb,var(--ok) 12%, var(--surface)); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb,var(--warn) 12%, var(--surface)); }
+
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td.cov{ text-align:center; color:var(--ok-2); font-weight:700; }
+
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); }
+.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.danger{ color:var(--danger-2); border-color:var(--danger); }
+.badge.info{ color:var(--muted); }
+.badge.phase{ color:var(--accent-2); border-color:var(--accent); }
+
+.rpt-flow{ display:flex; align-items:center; gap:0; margin:1rem 0; flex-wrap:wrap; }
+.rpt-flow .node{
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--border); border-radius:8px; padding:.5rem .8rem; font-size:.85rem;
+  border-left:4px solid var(--accent); box-shadow:0 1px 6px var(--shadow);
+}
+.rpt-flow .node b{ color:var(--accent); }
+.rpt-flow .arrow{ flex:0 0 1.8rem; height:2px; background:var(--line); position:relative; }
+.rpt-flow .arrow::after{
+  content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line);
+}
+
+.rpt-c4 .boundary{
+  border:1.6px dashed var(--accent); border-radius:12px;
+  padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem;
+  background:color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.rpt-c4 .boundary::before{
+  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
+}
+.rpt-c4 .comp{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.55rem .85rem; min-width:6rem; font-size:.82rem; box-shadow:0 1px 6px var(--shadow);
+  border-left:4px solid var(--accent);
+}
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .sub{ font-size:.74rem; }
+
+figure.rpt-graph{ margin:1rem 0; text-align:center; background:var(--surface);
+  border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 2px 12px var(--shadow); }
+.rpt-graph svg text{ font:11px system-ui, sans-serif; fill:var(--fg); }
+.rpt-graph .nlabel{ font-weight:600; }
+.verdict{ font-size:1.3rem; font-weight:800; }
+.verdict.ok{ color:var(--ok-2); }
+ul.tight li{ margin:.3rem 0; }
+hr{ border:none; border-top:1px solid var(--border); margin:2rem 0; }
+.chain{ font-family:ui-monospace,monospace; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:.5rem .8rem; display:inline-block; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тема: тёмная / светлая">🌙 / ☀️</label>
+
+<h1>Проверка спецификации — Phase 2 · Ingest (LLM generation)</h1>
+<p class="sub">Файл: <code>docs/superpowers/specs/2026-06-22-paw-phase-2-ingest-design.md</code> ·
+дата прогона 2026-06-22 · spec_hash <code>5a6ed65bca4c1452</code> · prev_hash <code>—</code> (первый прогон)</p>
+<p class="lead">Вердикт: <span class="verdict ok">OK</span> — все 4 фазы пройдены, 0 CRITICAL open, 0 WARNING open.
+Блоки <code>review:</code> и <code>chain:</code> инициализированы во frontmatter.</p>
+
+<div class="note ok"><b>Контекст:</b> «модель задач» для фазы взята из
+<code>2026-06-22-paw-00-overview-design.md</code> (§5 Phase map): Phase 2 = <b>Ingest</b>,
+vertical value «Source → AI article + chunks/embeddings», <code>depends_on: [1]</code>.
+Acceptance criteria живут в самой фазовой спеке (overview §9).</div>
+
+<!-- ===================== БЛОК 1: РЕЗЮМЕ ===================== -->
+<h2>1. Резюме спецификации</h2>
+
+<h3>1.1 Требования (по секциям)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="13">In scope</td><td><b>Providers</b> — <code>ChatProvider/EmbeddingProvider/VisionProvider</code> Protocols; <code>OpenAICompatProvider</code>; <code>structured()</code> с repair-loop; JSON-mode fallback при отсутствии tool-calling; connection/модели из <code>app_settings</code>.</td></tr>
+    <tr><td><b>Harness</b> — <code>loop.py</code> (chat→tool_calls→results до final/<code>max_steps</code>), <code>tools.py</code> (read+write), <code>ops/{ingest,init}</code>, versioned <code>prompts/</code>.</td></tr>
+    <tr><td><b>Guards</b> — tool-allowlist на op, write-scope <code>target.domain_id == ctx.domain_id</code>, schema-validation до записи, sources/tool-results «data, not instructions», лимиты <code>max_steps/max_tool_calls/max_writes</code>/token-budget/timeout/loop-detection, каждый tool-call → <code>audit_log</code>.</td></tr>
+    <tr><td><b>upsert_article</b> идемпотентен по <code>slug</code> (merge); <code>report_issue</code> collect-only, не используется до Phase 6.</td></tr>
+    <tr><td><b>Loaders</b> — md/txt passthrough, pdf <code>pymupdf</code>, docx <code>mammoth</code>, html <code>trafilatura → markdownify</code>. (epub/url/image-OCR → Phase 9.)</td></tr>
+    <tr><td><b>Ingest pipeline</b> A topic extraction (windowed map-reduce, merge/dedup) → B drafting (create|merge, headings до <code>##</code>) → C deterministic write → D links → E chunking + embedding.</td></tr>
+    <tr><td><b>Write C</b> — <code>articles</code> + <code>article_revisions</code> origin=<code>ai</code>, <code>entities</code>, <code>article_entities</code>, <code>citations</code>.</td></tr>
+    <tr><td><b>Links D</b> — typed <code>link_suggestions</code> + co-occurrence по общим <code>article_entities</code> ≥ <code>hub_threshold</code> → <code>related</code>.</td></tr>
+    <tr><td><b>Chunking</b> — <code>summary</code> chunk (<code>ord=0</code>, копия в <code>articles.summary</code>); split по <code>##</code>; semantic split (sentence-embedding breakpoint, bounded <code>target_size</code>); overlap 1–2 sentences; <code>heading_path</code>; <code>chunk_entities</code>.</td></tr>
+    <tr><td><b>Vector</b> — <code>vector/embed.py</code>: batch embed → <code>chunks(kind, ord, heading_path, text, tsv, embedding, embedding_version)</code>.</td></tr>
+    <tr><td><b>Graph writes</b> — <code>graph/repo.py</code>: entity/link upserts (traversal → Phase 3).</td></tr>
+    <tr><td><b>Jobs / worker</b> — <code>ingest_domain</code> task; lifecycle queued→running→terminal; progress через Redis pub/sub <code>job:{id}</code> + replay из <code>jobs.log</code>; <code>cancel_requested</code>; heartbeat + reconciler; <b>job-lock</b> per domain; <b>model-lock</b> <code>lock:model:{name}</code>; arq queues (LLM vs light), retries/backoff, poison→dead-letter.</td></tr>
+    <tr><td><b>DB additions</b> — <code>entities, article_entities, links, citations, chunks</code> (+HNSW <code>vector_cosine_ops</code>, GIN на <code>tsv</code>, индекс на <code>embedding_version</code>), <code>chunk_entities, jobs</code>; managed embedding-dim migration (<code>vector(dim)</code> + HNSW); смена dim = ALTER + rebuild + reindex (reindex job → Phase 6).</td></tr>
+    <tr><td>API</td><td><code>POST /domains/{id}/ingest</code> → <code>job_id</code>; <code>POST /domains/{id}/init</code> (sync: план → topics → per-topic jobs); <code>POST /domains/{id}/sources</code> расширен на pdf/docx/html; <code>GET /jobs/{id}</code> · <code>/events</code> (SSE) · <code>POST /jobs/{id}/cancel</code>.</td></tr>
+    <tr><td>Web UI</td><td>Domain Ingest action → job drawer (progress bar + live log SSE + cancel); статья на <code>/articles/{id}</code>; <code>/settings</code> Connection + models + dim (предупреждение ALTER+reindex при смене dim).</td></tr>
+    <tr><td>Config</td><td>Connection+models+dim в <code>app_settings</code> (key — Fernet); wiki-defaults: языки, chunk-params, <code>hub_threshold</code>, agent-лимиты, <code>link_types</code>, timeouts/retries; per-domain overrides в <code>domains.config</code>.</td></tr>
+    <tr><td>Security</td><td>Prompt-injection defenses (delimiters, write-scope, <code>max_steps</code>, schema-validation); key расшифровывается только в call-site, не в agent context; per-call audit; upload guard на pdf/docx/html (magic-byte + size); zip/anti-zip-bomb → Phase 9.</td></tr>
+    <tr><td>Out of scope</td><td>Retrieval/query (3) · chat (4) · graph viz (5) · lint/fix/format/reindex (6) · query-cache (7) · MCP (8) · epub/url/image-OCR, bulk zip, observability (9); <code>search_wiki</code> → Phase 3.</td></tr>
+  </tbody>
+</table>
+
+<h3>1.2 Success Criteria (verifiable)</h3>
+<table class="rpt-table">
+  <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+  <tbody>
+    <tr><td>AC-1</td><td>Wizard сохраняет connection+models+dim; managed migration создаёт <code>vector(dim)</code>+HNSW; api/worker подхватывают зашифрованный key (не логируется).</td></tr>
+    <tr><td>AC-2</td><td>Upload фикстуры pdf/docx/html/md → ingest → ровно одна статья: <code>article_revisions</code> origin=<code>ai</code>, ≥1 entity, ≥1 citation, chunks вкл. <code>ord=0</code> summary, embeddings; <code>articles.summary</code> заполнен.</td></tr>
+    <tr><td>AC-3</td><td>Co-occurrence linker создаёт <code>related</code> выше порога; LLM <code>link_suggestions</code> — typed links только внутри домена (cross-domain отклонён).</td></tr>
+    <tr><td>AC-4</td><td>Прогресс job стримится по SSE и реплеится из <code>jobs.log</code> на reconnect; cancel mid-run — без partial-статьи (cleanup).</td></tr>
+    <tr><td>AC-5</td><td>Domain job-lock блокирует второй пишущий job на домен; model-lock сериализует one-model LLM-вызовы.</td></tr>
+    <tr><td>AC-6</td><td>Structured-output repair восстанавливается из одного malformed-ответа (stub-LLM); модель без tool-calling — JSON-mode fallback.</td></tr>
+    <tr><td>AC-7</td><td>Empty/garbage source → job падает чисто с ошибкой в <code>jobs.error</code>, без статьи.</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== БЛОК 2: СХЕМЫ ===================== -->
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>2.1 Схема решения — компоненты (C4)</h3>
+<figure class="rpt-c4">
+  <div class="boundary" data-label="paw · процесс api + worker">
+    <div class="comp"><b>api / web</b><br><span class="sub">ingest · init · jobs · SSE · settings</span></div>
+    <div class="boundary" data-label="services + jobs">
+      <div class="comp"><b>jobs/{tasks,progress}</b><br><span class="sub">ingest_domain · pub/sub · locks</span></div>
+      <div class="boundary" data-label="harness (LLD §4)">
+        <div class="comp"><b>loop.py</b><br><span class="sub">chat→tools→repeat</span></div>
+        <div class="comp"><b>tools.py</b><br><span class="sub">read + write · audit</span></div>
+        <div class="comp"><b>ops/{ingest,init}</b><br><span class="sub">+ prompts/</span></div>
+      </div>
+      <div class="boundary" data-label="ingest pipeline (LLD §5)">
+        <div class="comp"><b>loaders/</b><br><span class="sub">md·pdf·docx·html</span></div>
+        <div class="comp"><b>chunking</b><br><span class="sub">summary · semantic · overlap</span></div>
+        <div class="comp"><b>vector/embed</b><br><span class="sub">batch embeddings</span></div>
+        <div class="comp"><b>graph/repo</b><br><span class="sub">entity/link upserts</span></div>
+      </div>
+    </div>
+    <div class="boundary" data-label="providers (LLD §3)">
+      <div class="comp"><b>OpenAICompatProvider</b><br><span class="sub">structured() · repair · JSON-fallback</span></div>
+    </div>
+    <div class="boundary" data-label="db (LLD §2) · leaf">
+      <div class="comp"><b>PG + pgvector</b><br><span class="sub">articles·entities·citations·chunks(HNSW)·jobs</span></div>
+    </div>
+  </div>
+</figure>
+
+<h3>2.2 Поток ingest (data flow, один job = одна статья)</h3>
+<figure class="rpt-flow">
+  <div class="node"><b>Loader</b><br>extract</div>
+  <div class="arrow"></div>
+  <div class="node"><b>A</b> topic<br>extraction</div>
+  <div class="arrow"></div>
+  <div class="node"><b>B</b> drafting<br>(structured)</div>
+  <div class="arrow"></div>
+  <div class="node"><b>C</b> determ.<br>write</div>
+  <div class="arrow"></div>
+  <div class="node"><b>D</b> links<br>(typed+co-occ)</div>
+  <div class="arrow"></div>
+  <div class="node"><b>E</b> chunking +<br>embedding</div>
+</figure>
+<p class="sub">Init (sync): create domain → LLM structure plan (topic list) → каждый topic = отдельный ingest job (fan-out, не один мега-job).</p>
+
+<h3>2.3 Граф зависимостей модулей (depends-on / uses)</h3>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 820 470" width="100%" role="img" aria-label="граф зависимостей модулей">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"></path>
+      </marker>
+    </defs>
+    <!-- edges (drawn first, hidden under node rects) -->
+    <g stroke="var(--line)" stroke-width="2" fill="none" marker-end="url(#arr)">
+      <line x1="100" y1="60" x2="180" y2="130"></line> <!-- web→services -->
+      <line x1="260" y1="60" x2="200" y2="130"></line> <!-- api→services -->
+      <line x1="180" y1="150" x2="360" y2="150"></line> <!-- services→jobs -->
+      <line x1="190" y1="170" x2="350" y2="210"></line> <!-- services→harness -->
+      <line x1="380" y1="170" x2="370" y2="210"></line> <!-- jobs→harness -->
+      <line x1="420" y1="230" x2="540" y2="230"></line> <!-- harness→ingest(loaders) -->
+      <line x1="390" y1="250" x2="370" y2="310"></line> <!-- harness→providers -->
+      <line x1="600" y1="250" x2="660" y2="310"></line> <!-- ingest→vector -->
+      <line x1="690" y1="330" x2="430" y2="330"></line> <!-- vector→providers (embeddings) -->
+      <line x1="560" y1="250" x2="460" y2="380"></line> <!-- ingest→db -->
+      <line x1="720" y1="350" x2="470" y2="385"></line> <!-- vector→db -->
+      <line x1="360" y1="350" x2="430" y2="380"></line> <!-- providers→db -->
+      <line x1="430" y1="400" x2="600" y2="400"></line> <!-- db←config (config leaf feeds) -->
+    </g>
+    <!-- nodes -->
+    <g>
+      <g><rect x="40"  y="40"  width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="100" y="64" text-anchor="middle">web</text></g>
+      <g><rect x="200" y="40"  width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="260" y="64" text-anchor="middle">api</text></g>
+      <g><rect x="120" y="130" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="185" y="154" text-anchor="middle">services</text></g>
+      <g><rect x="330" y="130" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="390" y="154" text-anchor="middle">jobs / worker</text></g>
+      <g><rect x="300" y="210" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="360" y="234" text-anchor="middle">harness</text></g>
+      <g><rect x="480" y="210" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="545" y="234" text-anchor="middle">ingest/loaders</text></g>
+      <g><rect x="650" y="210" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="710" y="234" text-anchor="middle">vector</text></g>
+      <g><rect x="300" y="310" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect><text class="nlabel" x="360" y="334" text-anchor="middle">providers</text></g>
+      <g><rect x="360" y="380" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2.5"></rect><text class="nlabel" x="420" y="404" text-anchor="middle">db (leaf)</text></g>
+      <g><rect x="600" y="380" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2.5"></rect><text class="nlabel" x="660" y="404" text-anchor="middle">config (leaf)</text></g>
+    </g>
+  </svg>
+</figure>
+<p class="sub">Рёбра — «зависит от / использует» (overview §3). Стрелка к узлу = направление зависимости. <code>db</code> и <code>config</code> — листья (без исходящих). Граф ацикличен — backward-зависимостей на Phase 3+ нет (graph traversal отложен в Phase 3, здесь только writes).</p>
+
+<h3>2.4 Карта покрытия — задача → требования спеки</h3>
+<table class="rpt-table">
+  <thead><tr><th>Задача (фазовая модель / goal)</th><th>Покрывающие требования</th><th>≥1</th></tr></thead>
+  <tbody>
+    <tr><td>T1 — Source upload + extraction (md/pdf/docx/html)</td><td>In scope · Loaders; API <code>/sources</code>; Security upload-guard; AC-2</td><td class="cov">✓</td></tr>
+    <tr><td>T2 — LLM-генерация статьи (entities/links/citations)</td><td>In scope · Harness; Pipeline A,B,C; Key flows · Ingest; AC-2</td><td class="cov">✓</td></tr>
+    <tr><td>T3 — Chunking + embeddings (первые векторы)</td><td>In scope · Chunking, Vector; DB · chunks+HNSW; AC-2</td><td class="cov">✓</td></tr>
+    <tr><td>T4 — Typed links + co-occurrence</td><td>In scope · Pipeline D, Graph writes; AC-3</td><td class="cov">✓</td></tr>
+    <tr><td>T5 — Первый background job + live progress</td><td>In scope · Jobs/worker; API jobs/SSE/cancel; Web drawer; AC-4, AC-5</td><td class="cov">✓</td></tr>
+    <tr><td>T6 — Provider abstraction + structured repair / JSON-fallback</td><td>In scope · Providers; AC-6</td><td class="cov">✓</td></tr>
+    <tr><td>T7 — Managed embedding-dim migration</td><td>In scope · DB additions; API; Web settings; AC-1</td><td class="cov">✓</td></tr>
+    <tr><td>T8 — Init fan-out (topic plan → per-topic jobs)</td><td>In scope · API init; Key flows · Init; Risks (one job = one article)</td><td class="cov">✓</td></tr>
+    <tr><td>T9 — Prompt-injection / harness safety</td><td>Security; In scope · Harness guards; AC-3 (write-scope)</td><td class="cov">✓</td></tr>
+    <tr><td>T10 — Failure handling (empty/garbage source)</td><td>AC-7</td><td class="cov">✓</td></tr>
+  </tbody>
+</table>
+<div class="note ok"><b>Покрытие полное:</b> каждая задача фазовой модели покрыта ≥1 требованием; «лишних» требований нет — все In-scope-пункты привязаны к задаче. Forward-stubs (<code>report_issue</code>→6, <code>VisionProvider</code>→9, <code>search_wiki</code>→3) явно обоснованы (overview §8 санкционирует дешёвые seams).</div>
+
+<!-- ===================== БЛОК 3: РЕЗУЛЬТАТЫ ===================== -->
+<h2>3. Результаты проверки</h2>
+
+<h3>3.1 Статус фаз</h3>
+<table class="rpt-table">
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Новые findings</th><th>Что проверено (закрытый чек-лист)</th></tr></thead>
+  <tbody>
+    <tr><td>1 · structure</td><td><span class="badge ok">passed</span></td><td>0</td><td>Плейсхолдеры (TODO/TBD/???/FIXME) — нет; внутренних anchor-ссылок нет; все <code>§N</code> — внешние ссылки на LLD; дублей заголовков нет; нумерации секций нет.</td></tr>
+    <tr><td>2 · coverage</td><td><span class="badge ok">passed</span></td><td>0</td><td>Каждая задача покрыта ≥1 требованием; orphan-требований нет; противоречий нет (reindex job→6 vs managed dim-migration сейчас — согласованы).</td></tr>
+    <tr><td>3 · clarity</td><td><span class="badge ok">passed</span></td><td>0</td><td>Размытых формулировок нет; DoD силён (7 verifiable AC + Tests); термины согласованы (<code>harness</code>/<code>agent context</code> — конвенция overview).</td></tr>
+    <tr><td>4 · consistency</td><td><span class="badge ok">passed</span></td><td>0</td><td>Прежнего прогона нет → baseline; зафиксировано 8 хешей секций.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.2 Findings</h3>
+<div class="note ok"><b>Findings отсутствуют.</b> Ни в одной фазе — закрытые чек-листы не дали срабатываний. Спека выведена из утверждённого LLD/overview, плотная и verifiable.</div>
+
+<h3>3.3 Наблюдения (вне закрытых чек-листов — не findings)</h3>
+<p class="sub">Полезный сигнал, но формально вне 4 закрытых чек-листов; правилами команды запрещено оформлять как finding.</p>
+<ul class="tight">
+  <li>Секции <b>Security</b> и <b>Tests</b> обе помечены <code>(LLD §11)</code>, тогда как Harness — <code>§4</code>. Возможна неточность внешней ссылки (prompt-injection defenses концептуально — harness safety §4). Проверка номеров внешних LLD-ссылок не входит в structure-чек-лист и требует чтения LLD.</li>
+  <li>В прозе «≥ threshold» / «above threshold», именованный конфиг — <code>hub_threshold</code>. Однозначно в контексте; конкретное значение — tunable (global default), намеренно не зафиксировано.</li>
+</ul>
+
+<h3>3.4 Сводка</h3>
+<table class="rpt-table">
+  <tbody>
+    <tr><td>CRITICAL open</td><td><b>0</b></td></tr>
+    <tr><td>WARNING open</td><td><b>0</b></td></tr>
+    <tr><td>INFO open</td><td><b>0</b></td></tr>
+    <tr><td>Вердикт</td><td><span class="verdict ok">OK</span></td></tr>
+  </tbody>
+</table>
+
+<h3>3.5 Chain</h3>
+<p class="chain">intent: <b>null</b> &nbsp;→&nbsp; spec: <b>2026-06-22-paw-phase-2-ingest-design.md</b></p>
+<p class="sub">Каталог <code>docs/superpowers/intents/</code> отсутствует → intent-документ не найден; <code>chain.intent = null</code> записан во frontmatter. Upstream-контекст обеспечивает overview-spec (§5 Phase map).</p>
+
+<hr>
+<p class="sub">Автогенерируемый артефакт команды <code>/check-spec</code>. Frontmatter спеки обновлён: <code>review:</code> (4 фазы passed, findings: []) + <code>chain:</code>. body-hash <code>5a6ed65bca4c1452</code> стабилен (frontmatter исключён) → следующий прогон даст <code>OK (cached, hash match)</code>.</p>
+
+</body>
+</html>

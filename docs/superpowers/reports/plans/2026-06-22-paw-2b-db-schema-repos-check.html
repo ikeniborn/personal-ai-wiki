@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 2B (DB Schema + Repos)</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --fg: #e6e9ef; --muted: #9aa3b2;
+    --border: #2a2f3a; --accent: #6ea8fe; --ok: #3ecf8e; --warn: #f5b955; --crit: #ff6b6b;
+    --node: #1e2530; --nodeb: #3a4660; --edge: #6ea8fe;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7f9; --panel: #ffffff; --panel2: #eef1f5; --fg: #1c2027; --muted: #5a6473;
+    --border: #d6dbe3; --accent: #2563eb; --ok: #138a5e; --warn: #b9760a; --crit: #d12f2f;
+    --node: #eef2f8; --nodeb: #b9c6dd; --edge: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 34px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: var(--muted); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .verdict { font-weight: 700; padding: 6px 14px; border-radius: 999px; display: inline-block; }
+  .verdict.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border: 1px solid var(--ok); }
+  .verdict.nw { background: color-mix(in srgb, var(--crit) 18%, transparent); color: var(--crit); border: 1px solid var(--crit); }
+  .toggle { cursor: pointer; background: var(--panel2); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; margin: 8px 0 4px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel2); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .b-pass { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+  .b-warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  .b-crit { background: color-mix(in srgb, var(--crit) 20%, transparent); color: var(--crit); }
+  .b-open { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  .note { background: var(--panel2); border-left: 3px solid var(--accent); border-radius: 6px;
+    padding: 10px 14px; margin: 12px 0; font-size: 13.5px; }
+  figure { margin: 12px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  figcaption { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+  .chain { font-size: 13px; color: var(--muted); }
+  .chain code { color: var(--fg); }
+  .ok-dot { color: var(--ok); } .x-dot { color: var(--crit); } .dim { color: var(--muted); }
+  text { font-family: inherit; }
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Проверка плана — Phase 2B</h1>
+    <div class="sub">DB Schema + Migration + Repos · дата прогона: 2026-06-22</div>
+    <div class="sub">plan_hash: <code>bc409844890b1a52</code> · spec_hash: <code>5a6ed65bca4c1452</code></div>
+  </div>
+  <div style="text-align:right">
+    <div class="verdict nw" id="verdict">требует доработки: 0 critical, 4 warning</div>
+    <div style="margin-top:10px"><button class="toggle" id="themeBtn">Тема: тёмная</button></div>
+  </div>
+</header>
+
+<div class="chain" style="margin-top:14px">
+  Цепочка: <code>intent: null</code> → <code>specs/2026-06-22-paw-phase-2-ingest-design.md</code> → <code>plans/2026-06-22-paw-2b-db-schema-repos.md</code>
+</div>
+
+<h2>1. Резюме плана — задачи и критерии готовности (DoD)</h2>
+<table>
+  <thead><tr><th>№</th><th>Задача</th><th>Артефакты (создаёт)</th><th>Критерий готовности (DoD)</th></tr></thead>
+  <tbody>
+    <tr><td>T1</td><td>ORM-модели Phase 2</td>
+      <td><code>db/models.py</code>: Entity, ArticleEntity, Link, Citation, Chunk, ChunkEntity, Job, JOB_STATUS</td>
+      <td><code>pytest -k phase2</code> зелёный (2 теста); chunks без ORM-колонок <code>embedding</code>/<code>tsv</code>; коммит</td></tr>
+    <tr><td>T2</td><td>Alembic 0002</td>
+      <td><code>alembic/versions/0002_phase2_ingest.py</code></td>
+      <td>integration <code>-k phase2</code> зелёный + baseline без регресса; GIN на <code>tsv</code>, индекс на <code>embedding_version</code>, нет колонки <code>embedding</code>; коммит</td></tr>
+    <tr><td>T3</td><td>Managed embedding-dim миграция</td>
+      <td><code>db/managed.py</code>: <code>ensure_embedding_column</code>, <code>embedding_dim</code></td>
+      <td><code>test_managed_migration</code> зелёный (2 теста): идемпотентный create <code>vector(dim)</code>+HNSW, reject dim≤0; коммит</td></tr>
+    <tr><td>T4</td><td>Entity / Citation / Chunk репозитории</td>
+      <td><code>db/repos/{entities,citations,chunks}.py</code></td>
+      <td><code>test_phase2_repos</code> зелёный (4 теста): idempotent upsert, shared_with, citation, chunk tsv+embedding; коммит</td></tr>
+    <tr><td>T5</td><td>Jobs репозиторий</td>
+      <td><code>db/repos/jobs.py</code></td>
+      <td><code>test_jobs_repo</code> зелёный (3 теста): lifecycle+log, cancel-флаг, reconcile stale; коммит</td></tr>
+    <tr><td>T6</td><td>Graph репозиторий</td>
+      <td><code>graph/__init__.py</code>, <code>graph/repo.py</code>: link upsert + cooccurrence</td>
+      <td><code>test_graph_repo</code> зелёный (2 теста); финальный гейт <code>ruff/mypy/pytest</code> зелёный; коммит</td></tr>
+  </tbody>
+</table>
+
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<h3>2.1 Граф зависимостей задач (M → N: результат M используется в N)</h3>
+<figure>
+<svg viewBox="0 0 760 240" width="100%" role="img" aria-label="Граф зависимостей задач">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+    </marker>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- nodes -->
+  <g font-size="13" text-anchor="middle">
+    <g filter="url(#ds)"><rect x="40"  y="100" width="86" height="40" rx="8" fill="var(--node)" stroke="var(--nodeb)"/><text x="83"  y="125" fill="var(--fg)">T1 models</text></g>
+    <g filter="url(#ds)"><rect x="210" y="30"  width="96" height="40" rx="8" fill="var(--node)" stroke="var(--nodeb)"/><text x="258" y="55"  fill="var(--fg)">T2 alembic</text></g>
+    <g filter="url(#ds)"><rect x="210" y="170" width="96" height="40" rx="8" fill="var(--node)" stroke="var(--nodeb)"/><text x="258" y="195" fill="var(--fg)">T3 managed</text></g>
+    <g filter="url(#ds)"><rect x="390" y="100" width="96" height="40" rx="8" fill="var(--node)" stroke="var(--nodeb)"/><text x="438" y="125" fill="var(--fg)">T4 repos</text></g>
+    <g filter="url(#ds)"><rect x="390" y="30"  width="96" height="40" rx="8" fill="var(--node)" stroke="var(--nodeb)"/><text x="438" y="55"  fill="var(--fg)">T5 jobs</text></g>
+    <g filter="url(#ds)"><rect x="570" y="100" width="110" height="40" rx="8" fill="var(--node)" stroke="var(--nodeb)"/><text x="625" y="125" fill="var(--fg)">T6 graph</text></g>
+  </g>
+  <!-- edges -->
+  <g stroke="var(--edge)" stroke-width="2" fill="none">
+    <path d="M126,116 L206,52"  marker-end="url(#arrow)"/>
+    <path d="M126,124 L206,186" marker-end="url(#arrow)"/>
+    <path d="M126,118 C300,118 300,118 386,116" marker-end="url(#arrow)"/>
+    <path d="M126,110 L386,52"  marker-end="url(#arrow)"/>
+    <path d="M306,190 L386,128" marker-end="url(#arrow)"/>
+    <path d="M486,116 L566,118" marker-end="url(#arrow)"/>
+    <path d="M126,104 C300,-4 560,-4 624,96" marker-end="url(#arrow)"/>
+  </g>
+</svg>
+<figcaption>Рёбра: T1→T2, T1→T3, T1→T4, T1→T5, T1→T6, T3→T4 (managed-колонка для <code>set_embedding</code>), T4→T6 (GraphRepo обёртывает EntityRepo). Циклов нет; порядок M&lt;N соблюдён для всех рёбер. Нарушений не найдено.</figcaption>
+</figure>
+
+<h3>2.2 Пересечения по артефактам и покрытию требований</h3>
+<table>
+  <thead><tr><th>Требование спеки (§In scope · DB additions / Graph writes)</th><th>Покрывающие задачи</th><th>Тип пересечения</th></tr></thead>
+  <tbody>
+    <tr><td>Таблицы entities/article_entities/links/citations/chunks/chunk_entities/jobs</td><td>T1 (ORM) + T2 (DDL)</td><td>1 требование → 2 задачи (модель + миграция, by design)</td></tr>
+    <tr><td>GIN на <code>chunks.tsv</code> + индекс на <code>embedding_version</code></td><td>T2</td><td>1→1</td></tr>
+    <tr><td>HNSW <code>vector_cosine_ops</code> через managed-миграцию</td><td>T3</td><td>1→1</td></tr>
+    <tr><td>graph/repo.py entity/link upserts</td><td>T4 (entity upsert) + T6 (link upsert)</td><td>1 требование → 2 задачи</td></tr>
+    <tr><td>Co-occurrence по shared article_entities ≥ threshold</td><td>T4 (<code>shared_with</code>) + T6 (<code>cooccurrence_targets</code>)</td><td>1 требование → 2 задачи</td></tr>
+    <tr><td>Jobs lifecycle (status enum, log, cancel, heartbeat, reconcile)</td><td>T1 (модель) + T5 (репо)</td><td>1 требование → 2 задачи</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Артефакт-файл</th><th>Задачи, изменяющие его</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/paw/db/models.py</code></td><td>T1 (единственная) — нет конкурентных правок</td></tr>
+    <tr><td><code>tests/integration/test_phase2_repos.py</code></td><td>T4 — также читает managed-колонку из T3 (зависимость, не перекрытие)</td></tr>
+  </tbody>
+</table>
+<div class="note">Перекрытий по записи одного файла из разных задач нет. Все «1 требование → 2 задачи» — намеренное разделение ORM/DDL/репо (см. Self-Review плана).</div>
+
+<h2>3. Результаты проверки</h2>
+<table>
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+  <tbody>
+    <tr><td>structure</td><td><span class="badge b-pass">passed</span></td><td>Нет TODO/TBD/FIXME; нумерация задач 1–6 и шагов внутри без пропусков/дублей; заголовки уникальны</td></tr>
+    <tr><td>coverage</td><td><span class="badge b-pass">passed</span></td><td>Все требования §DB additions / §Graph writes покрыты; лишних шагов нет; <code>upsert_article</code> явно отнесён к 2C</td></tr>
+    <tr><td>dependencies</td><td><span class="badge b-pass">passed</span></td><td>Артефакты создаются до использования; FK 0002 опираются на baseline 0001 (domains/articles/sources подтверждены); циклов нет</td></tr>
+    <tr><td>verifiability</td><td><span class="badge b-pass">passed</span></td><td>Каждая задача — команда запуска + ожидаемый PASS/FAIL + DoD-коммит; финальный гейт ruff/mypy/pytest в T6</td></tr>
+    <tr><td>consistency</td><td><span class="badge b-pass">passed</span></td><td>Первый прогон; spec_hash совпал с записанным в спеке; сигнатуры DomainRepo/ArticleRepo и импорты models.py сверены с кодом</td></tr>
+  </tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+  <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>T4 / ChunkRepo.set_embedding</td>
+      <td>Литерал вектора строится через <code>repr(float(x))</code>; repr может дать научную нотацию (<code>1e-05</code>) или <code>inf/nan</code>, которые текстовый парсер pgvector способен отвергнуть/исказить. Нужна защита формата или отбраковка не-конечных значений.</td>
+      <td><span class="badge b-open">open</span></td></tr>
+    <tr><td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>T5 / append_log</td>
+      <td>В блоке кода показан inline-шим <code>__import__("json")</code>, а затем прозой — инструкция заменить его на верхнеуровневый <code>import json</code>. Дословное копирование блока worker'ом протащит шим; каноничным должен быть только финальный вид кода.</td>
+      <td><span class="badge b-open">open</span></td></tr>
+    <tr><td>F-003</td><td><span class="badge b-warn">WARNING</span></td><td>T5 / reconcile_stuck</td>
+      <td><code>reconcile_stuck(older_than_seconds=0)</code> ловит свежезапущенный job через <code>heartbeat_at IS NULL</code>. Но при <code>now() - 0 == now()</code> совпадёт и job, успевший сделать heartbeat; граничная семантика (≥ vs &gt;) не покрыта тестом и может зареконсайлить живой job.</td>
+      <td><span class="badge b-open">open</span></td></tr>
+    <tr><td>F-004</td><td><span class="badge b-warn">WARNING</span></td><td>Global Constraints / именование индексов</td>
+      <td>Сказано, что явные имена <code>CREATE INDEX</code> «должны соответствовать стилю <code>ix_%(column_0_label)s</code> где практично», но ручные имена (<code>ix_chunks_tsv</code> и т.п.) — простой <code>ix_&lt;table&gt;_&lt;col&gt;</code>, не label-форма. Безвредно (raw SQL обходит convention), но заявленное «must-match» фактически не проверяется.</td>
+      <td><span class="badge b-open">open</span></td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>Сводка:</strong> CRITICAL open: <strong>0</strong> · WARNING open: <strong>4</strong>.
+  Финальный вердикт: <strong>требует доработки</strong> (4 warning, открыты для решения; критичных блокеров нет — план структурно исполним).
+</div>
+
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById("themeBtn");
+    root.setAttribute("data-theme", "dark");
+    btn.addEventListener("click", function () {
+      var d = root.getAttribute("data-theme") === "dark";
+      root.setAttribute("data-theme", d ? "light" : "dark");
+      btn.textContent = d ? "Тема: светлая" : "Тема: тёмная";
+    });
+  })();
+</script>
+</body>
+</html>
