@@ -101,6 +101,9 @@ async def _clean_db(pg_async_url: str) -> AsyncIterator[None]:
                 "sources, articles, article_revisions, audit_log RESTART IDENTITY CASCADE"
             )
         )
+        # Drop the managed embedding column/index so each test starts with a clean DDL state.
+        await conn.execute(text("DROP INDEX IF EXISTS ix_chunks_embedding_hnsw"))
+        await conn.execute(text("ALTER TABLE chunks DROP COLUMN IF EXISTS embedding"))
     await engine.dispose()
 
 
