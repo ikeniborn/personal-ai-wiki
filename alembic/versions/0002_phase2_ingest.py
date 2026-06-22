@@ -8,8 +8,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        "CREATE TYPE job_status AS ENUM"
-        " ('queued','running','succeeded','failed','cancelled')"
+        "CREATE TYPE job_status AS ENUM ('queued','running','succeeded','failed','cancelled')"
     )
 
     op.execute("""
@@ -91,7 +90,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for t in ("jobs", "chunk_entities", "chunks", "citations", "links",
-              "article_entities", "entities"):
+    for t in (
+        "jobs",
+        "chunk_entities",
+        "chunks",
+        "citations",
+        "links",
+        "article_entities",
+        "entities",
+    ):
         op.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
     op.execute("DROP TYPE IF EXISTS job_status")

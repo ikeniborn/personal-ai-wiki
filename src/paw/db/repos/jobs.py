@@ -56,9 +56,7 @@ class JobRepo:
         await self._s.flush()
 
     async def request_cancel(self, job_id: uuid.UUID) -> None:
-        await self._s.execute(
-            update(Job).where(Job.id == job_id).values(cancel_requested=True)
-        )
+        await self._s.execute(update(Job).where(Job.id == job_id).values(cancel_requested=True))
         await self._s.flush()
 
     async def is_cancel_requested(self, job_id: uuid.UUID) -> bool:
@@ -66,9 +64,7 @@ class JobRepo:
         return bool(res.scalar_one_or_none())
 
     async def heartbeat(self, job_id: uuid.UUID) -> None:
-        await self._s.execute(
-            update(Job).where(Job.id == job_id).values(heartbeat_at=func.now())
-        )
+        await self._s.execute(update(Job).where(Job.id == job_id).values(heartbeat_at=func.now()))
         await self._s.flush()
 
     async def reconcile_stuck(self, *, older_than_seconds: int) -> int:

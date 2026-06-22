@@ -12,9 +12,7 @@ class EntityRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._s = session
 
-    async def upsert(
-        self, *, domain_id: uuid.UUID, name: str, kind: str | None = None
-    ) -> Entity:
+    async def upsert(self, *, domain_id: uuid.UUID, name: str, kind: str | None = None) -> Entity:
         res = await self._s.execute(
             select(Entity).where(Entity.domain_id == domain_id, Entity.name == name)
         )
