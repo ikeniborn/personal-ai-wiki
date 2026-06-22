@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAW Phase 1 — Скелет: Результат проверки плана</title>
+<style>
+/* ── Theme custom properties ── */
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); font-size:.95rem;
+}
+
+/* ── Tables ── */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.45rem .7rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; font-weight:600; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; background:color-mix(in srgb,var(--accent) 8%,var(--surface)); padding:.1rem .35rem; border-radius:4px; font-size:.85em; }
+
+/* ── Typography / components ── */
+h1{ font-size:1.7rem; margin:0 0 .3rem; color:var(--accent); }
+h2{ font-size:1.18rem; margin:2rem 0 .6rem; color:var(--fg); border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1rem; margin:1.2rem 0 .4rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.lead{ font-size:1.05rem; color:var(--muted); margin:.2rem 0 1.4rem; }
+.sub{ color:var(--muted); font-size:.92rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); font-size:.93rem; }
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+
+/* ── Badges ── */
+.badge{ display:inline-block; font-size:.75rem; font-weight:600; padding:.08rem .55rem; border-radius:999px; border:1.5px solid; white-space:nowrap; }
+.badge-done{ color:var(--ok-2); border-color:var(--ok); background:color-mix(in srgb,var(--ok) 10%,transparent); }
+.badge-missing{ color:var(--danger-2); border-color:var(--danger); background:color-mix(in srgb,var(--danger) 10%,transparent); }
+.badge-partial{ color:var(--warn-2); border-color:var(--warn); background:color-mix(in srgb,var(--warn) 10%,transparent); }
+.badge-info{ color:var(--muted); border-color:var(--border); }
+.badge-warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge-critical{ color:var(--danger-2); border-color:var(--danger); }
+.badge-ok{ color:var(--ok-2); border-color:var(--ok); background:color-mix(in srgb,var(--ok) 12%,transparent); font-size:.9rem; padding:.2rem .8rem; }
+.badge-needs-work{ color:var(--danger-2); border-color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent); font-size:.9rem; padding:.2rem .8rem; }
+
+/* ── Stats cards ── */
+.stats-row{ display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0; }
+.stat-card{
+  flex:1 1 160px; min-width:140px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:1rem 1.2rem; text-align:center; box-shadow:0 2px 10px var(--shadow);
+}
+.stat-card .num{ font-size:2.2rem; font-weight:700; line-height:1.1; }
+.stat-card .lbl{ font-size:.82rem; color:var(--muted); margin-top:.2rem; }
+.stat-done .num{ color:var(--ok-2); }
+.stat-partial .num{ color:var(--warn-2); }
+.stat-missing .num{ color:var(--danger-2); }
+.stat-ac .num{ color:var(--accent); }
+
+/* ── Verdict banner ── */
+.verdict-banner{
+  display:flex; align-items:center; gap:1rem; padding:1rem 1.5rem;
+  border-radius:12px; margin:1.5rem 0;
+  background:color-mix(in srgb,var(--ok) 10%,var(--surface));
+  border:2px solid var(--ok); box-shadow:0 2px 12px var(--shadow);
+}
+.verdict-banner .v-icon{ font-size:2rem; }
+.verdict-banner .v-text b{ display:block; font-size:1.15rem; color:var(--ok-2); }
+.verdict-banner .v-text span{ color:var(--muted); font-size:.92rem; }
+
+/* ── Section separator ── */
+.sep{ border:none; border-top:1px solid var(--border); margin:2rem 0; }
+
+/* ── Compact file list ── */
+.file-list{ font-size:.8rem; color:var(--muted); word-break:break-all; }
+.file-list code{ background:color-mix(in srgb,var(--accent) 8%,var(--surface)); padding:.05rem .28rem; border-radius:3px; font-size:.85em; margin:.1rem .05rem; display:inline-block; }
+</style>
+</head>
+<body>
+
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn">🌙 / ☀️</label>
+
+<main class="report">
+
+  <h1>PAW Phase 1 — Скелет: Результат проверки плана</h1>
+  <p class="lead">Проверка соответствия реализации плану и спецификации. Walking Skeleton (Phase 1).</p>
+  <p class="sub">Дата проверки: 2026-06-22 &nbsp;·&nbsp; Хэш тела плана: <code>eb16ad7239420048</code> &nbsp;·&nbsp; Режим diff: <code>git diff 1734195</code></p>
+
+  <!-- ── VERDICT ── -->
+  <div class="verdict-banner">
+    <div class="v-icon">✅</div>
+    <div class="v-text">
+      <b>Вердикт: <span class="badge badge-ok">OK</span></b>
+      <span>Все 22 задачи подтверждены в diff. Все 8 критериев приёмки покрыты. Критических проблем нет.</span>
+    </div>
+  </div>
+
+  <!-- ── CHAIN SUMMARY ── -->
+  <h2>Цепочка документов</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Поле</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>Намерение (Intent)</td><td><span class="badge badge-info">не найдено</span> &nbsp;<span class="sub">chain.intent: null — план и спецификация в качестве основы</span></td></tr>
+      <tr><td>Спецификация</td><td><code>docs/superpowers/specs/2026-06-22-paw-phase-1-skeleton-design.md</code></td></tr>
+      <tr><td>План</td><td><code>docs/superpowers/plans/2026-06-22-paw-phase-1-skeleton.md</code></td></tr>
+      <tr><td>База diff</td><td><code>git diff 1734195</code> (коммит до задачи 1)</td></tr>
+      <tr><td>Режим diff</td><td><code>--since=1734195</code> — весь реализованный диапазон</td></tr>
+      <tr><td>Хэш тела плана</td><td><code>eb16ad7239420048</code></td></tr>
+      <tr><td>Файлов изменено</td><td>94 файла, +2794 строк вставлено, 0 удалено</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="sep">
+
+  <!-- ── COVERAGE STATS ── -->
+  <h2>Сводная статистика покрытия</h2>
+  <div class="stats-row">
+    <div class="stat-card stat-done"><div class="num">22</div><div class="lbl">DONE<br>задач выполнено</div></div>
+    <div class="stat-card stat-partial"><div class="num">0</div><div class="lbl">PARTIAL<br>частично</div></div>
+    <div class="stat-card stat-missing"><div class="num">0</div><div class="lbl">MISSING<br>отсутствует</div></div>
+    <div class="stat-card stat-ac"><div class="num">8/8</div><div class="lbl">Критерии приёмки<br>покрыты</div></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="num" style="color:var(--danger-2)">0</div><div class="lbl">CRITICAL</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--warn-2)">0</div><div class="lbl">WARNING</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--muted)">3</div><div class="lbl">INFO</div></div>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ── TASK COVERAGE TABLE ── -->
+  <h2>Покрытие задач плана (22 задачи)</h2>
+  <details open>
+    <summary>Развернуть таблицу задач</summary>
+    <table class="rpt-table">
+      <thead>
+        <tr><th>#</th><th>Задача</th><th>Ключевые файлы (diff)</th><th>Статус</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><b>Project scaffold + FastAPI factory + health endpoint</b></td>
+          <td class="file-list"><code>pyproject.toml</code> <code>src/paw/__init__.py</code> <code>src/paw/main.py</code> <code>.github/workflows/ci.yml</code> <code>tests/unit/test_health.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><b>Config (pydantic-settings, env layer)</b></td>
+          <td class="file-list"><code>src/paw/config.py</code> <code>.env.example</code> <code>tests/unit/test_config.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><b>DB base + async session</b></td>
+          <td class="file-list"><code>src/paw/db/__init__.py</code> <code>src/paw/db/base.py</code> <code>src/paw/db/session.py</code> <code>tests/unit/test_db_base.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><b>Core DB models (LLD §2 subset)</b></td>
+          <td class="file-list"><code>src/paw/db/models.py</code> <code>tests/unit/test_models.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><b>Alembic baseline migration</b></td>
+          <td class="file-list"><code>alembic.ini</code> <code>alembic/env.py</code> <code>alembic/versions/0001_baseline.py</code> <code>tests/conftest.py</code> <code>tests/integration/test_migration.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><b>Storage backend (Protocol + PostgresStorage)</b></td>
+          <td class="file-list"><code>src/paw/storage/__init__.py</code> <code>src/paw/storage/base.py</code> <code>src/paw/storage/postgres.py</code> <code>tests/integration/test_storage.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td><b>Password hashing (argon2)</b></td>
+          <td class="file-list"><code>src/paw/security/passwords.py</code> <code>tests/unit/test_passwords.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td><b>Secrets helper (Fernet)</b></td>
+          <td class="file-list"><code>src/paw/security/secrets.py</code> <code>tests/unit/test_secrets.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td><b>Sanitize + markdown render</b></td>
+          <td class="file-list"><code>src/paw/security/sanitize.py</code> <code>tests/unit/test_sanitize.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td><b>CSRF double-submit token</b></td>
+          <td class="file-list"><code>src/paw/security/csrf.py</code> <code>tests/unit/test_csrf.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td><b>Redis session store</b></td>
+          <td class="file-list"><code>src/paw/security/sessions.py</code> <code>tests/conftest.py</code> <code>tests/integration/test_sessions.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>12</td>
+          <td><b>RFC 9457 errors + cursor pagination</b></td>
+          <td class="file-list"><code>src/paw/api/errors.py</code> <code>src/paw/api/pagination.py</code> <code>tests/unit/test_pagination.py</code> <code>tests/unit/test_errors.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>13</td>
+          <td><b>Repositories + audit log</b></td>
+          <td class="file-list"><code>src/paw/db/repos/*.py</code> <code>src/paw/audit/log.py</code> <code>tests/integration/test_repos.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>14</td>
+          <td><b>Auth dependencies + login/logout API</b></td>
+          <td class="file-list"><code>src/paw/api/deps.py</code> <code>src/paw/api/auth.py</code> <code>src/paw/api/routers/auth.py</code> <code>tests/api/test_auth.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>15</td>
+          <td><b>Domains service + API (CRUD, RBAC, CSRF)</b></td>
+          <td class="file-list"><code>src/paw/services/domains.py</code> <code>src/paw/api/routers/domains.py</code> <code>tests/api/test_domains.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>16</td>
+          <td><b>Upload guard + sources service + API (md/txt)</b></td>
+          <td class="file-list"><code>src/paw/security/uploads.py</code> <code>src/paw/services/sources.py</code> <code>src/paw/api/routers/sources.py</code> <code>tests/unit/test_uploads.py</code> <code>tests/api/test_sources.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>17</td>
+          <td><b>Articles service + API (optimistic lock 409, revisions, rollback)</b></td>
+          <td class="file-list"><code>src/paw/services/articles.py</code> <code>src/paw/api/routers/articles.py</code> <code>tests/api/test_articles.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>18</td>
+          <td><b>Setup wizard + settings + users (admin)</b></td>
+          <td class="file-list"><code>src/paw/services/setup.py</code> <code>src/paw/services/settings.py</code> <code>src/paw/services/users.py</code> <code>src/paw/api/routers/setup.py</code> <code>src/paw/api/routers/settings.py</code> <code>src/paw/api/routers/users.py</code> <code>tests/api/test_setup.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>19</td>
+          <td><b>Web UI base (frame C templates, vendored assets, CSP)</b></td>
+          <td class="file-list"><code>src/paw/api/web/routes.py</code> <code>templates/base.html</code> <code>templates/login.html</code> <code>static/htmx.min.js</code> <code>static/app.js</code> <code>static/theme.css</code> <code>tests/api/test_web_shell.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>20</td>
+          <td><b>Web pages (setup, dashboard, domain, article view/edit, settings)</b></td>
+          <td class="file-list"><code>templates/setup.html</code> <code>templates/dashboard.html</code> <code>templates/domain.html</code> <code>templates/article.html</code> <code>templates/settings.html</code> <code>src/paw/api/web/routes.py</code> <code>tests/api/test_web_pages.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>21</td>
+          <td><b>arq worker skeleton + heartbeat + Dockerfile</b></td>
+          <td class="file-list"><code>src/paw/worker.py</code> <code>Dockerfile</code> <code>.dockerignore</code> <code>tests/integration/test_worker_heartbeat.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>22</td>
+          <td><b>Docker Compose (traefik/api/worker/postgres/redis/init) + E2E walking skeleton</b></td>
+          <td class="file-list"><code>docker-compose.yml</code> <code>tests/e2e/test_walking_skeleton.py</code></td>
+          <td><span class="badge badge-done">DONE</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </details>
+
+  <hr class="sep">
+
+  <!-- ── ACCEPTANCE CRITERIA ── -->
+  <h2>Покрытие критериев приёмки спецификации (8/8)</h2>
+  <table class="rpt-table">
+    <thead>
+      <tr><th>AC#</th><th>Критерий</th><th>Задачи</th><th>Подтверждение в diff</th><th>Статус</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>AC1</td>
+        <td><code>docker compose up</code> поднимает все сервисы; init-контейнер применяет миграцию; api и worker стартуют</td>
+        <td>Task 22</td>
+        <td class="file-list"><code>docker-compose.yml</code> (healthchecks, init service) · <code>tests/e2e/test_walking_skeleton.py</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC2</td>
+        <td>First-run wizard создаёт admin; второй запуск пропускает wizard (409)</td>
+        <td>Task 18</td>
+        <td class="file-list"><code>src/paw/services/setup.py</code> · <code>tests/api/test_setup.py</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC3</td>
+        <td>Login создаёт Redis session; logout очищает; защищённые маршруты → 401/redirect</td>
+        <td>Task 14</td>
+        <td class="file-list"><code>src/paw/api/routers/auth.py</code> · <code>tests/api/test_auth.py</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC4</td>
+        <td>RBAC: viewer не может создать домен (403); admin может (201)</td>
+        <td>Task 15</td>
+        <td class="file-list"><code>tests/api/test_domains.py::test_viewer_cannot_create_domain</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC5</td>
+        <td>CSRF: форм-POST без токена отклонён (403)</td>
+        <td>Task 15</td>
+        <td class="file-list"><code>tests/api/test_domains.py::test_create_without_csrf_rejected</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC6</td>
+        <td>Создать домен → загрузить .md → создать статью → рендер sanitized (script tags stripped)</td>
+        <td>Task 22 E2E</td>
+        <td class="file-list"><code>tests/e2e/test_walking_skeleton.py::test_full_walking_skeleton</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC7</td>
+        <td>Concurrent PUT с устаревшим <code>current_rev</code> → 409 + reload banner</td>
+        <td>Task 17</td>
+        <td class="file-list"><code>tests/api/test_articles.py::test_update_optimistic_lock_conflict</code> · <code>templates/article.html</code> (id=conflict-banner)</td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+      <tr>
+        <td>AC8</td>
+        <td>Листинги пагинируют по cursor</td>
+        <td>Task 15</td>
+        <td class="file-list"><code>tests/api/test_domains.py::test_list_domains_paginates</code></td>
+        <td><span class="badge badge-done">OK</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="sep">
+
+  <!-- ── FINDINGS ── -->
+  <h2>Находки (Findings)</h2>
+  <div class="note">Критических и предупреждающих находок нет. Три информационных — все являются принятыми отклонениями.</div>
+  <table class="rpt-table">
+    <thead>
+      <tr><th>ID</th><th>Уровень</th><th>Описание</th><th>Источник</th><th>Статус</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>R-001</td>
+        <td><span class="badge badge-info">INFO</span></td>
+        <td>GET/PUT <code>/settings</code> реализованы, но тест API round-trip отсутствует. Connection fields "saved-but-unused this phase". Зеркалит принятый spec finding F-004.</td>
+        <td>Plan F-003 (accepted)</td>
+        <td>Accepted — Phase 2+</td>
+      </tr>
+      <tr>
+        <td>R-002</td>
+        <td><span class="badge badge-info">INFO</span></td>
+        <td><code>json-enc.js</code> добавлен post-plan (не отдельная задача). Обоснован: htmx <code>hx-ext="json-enc"</code> требует vendor'd файла в templates. Commit <code>95467c9</code>.</td>
+        <td>Commit 95467c9</td>
+        <td>Justified excess</td>
+      </tr>
+      <tr>
+        <td>R-003</td>
+        <td><span class="badge badge-info">INFO</span></td>
+        <td>IntegrityError handler (409 Conflict) добавлен в <code>errors.py</code> post-plan — корректная обработка дублирующих slug domain/article. Commit <code>0a70c5d</code>.</td>
+        <td>Commit 0a70c5d</td>
+        <td>Justified excess</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="sep">
+
+  <!-- ── POST-PLAN FIXES ── -->
+  <h2>Финальные правки (post-plan commits)</h2>
+  <p class="sub">Изменения внесены после основных 22 задач в рамках финального ревью. Не являются необъяснёнными отклонениями.</p>
+  <table class="rpt-table">
+    <thead>
+      <tr><th>Коммит</th><th>Файл / изменение</th><th>Обоснование</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>95467c9</code></td>
+        <td><code>src/paw/api/web/static/json-enc.js</code></td>
+        <td>Вендоринг htmx json-enc расширения (не CDN) — загружается в base.html для hx-ext="json-enc"</td>
+      </tr>
+      <tr>
+        <td><code>0a70c5d</code></td>
+        <td><code>src/paw/api/errors.py</code>: IntegrityError handler</td>
+        <td>Перехват DB-уровня 409 Conflict как RFC 9457 ответ</td>
+      </tr>
+      <tr>
+        <td><code>f5fc4cc</code></td>
+        <td><code>src/paw/storage/postgres.py</code>: flush вместо commit</td>
+        <td>Atomicity fix — убраны лишние <code>commit()</code> внутри unit-of-work для корректного поведения транзакций</td>
+      </tr>
+      <tr>
+        <td>(conftest)</td>
+        <td><code>tests/conftest.py</code>: <code>wired_settings</code>, <code>_clean_db</code></td>
+        <td>Дополнительные тестовые фикстуры для подключения настроек и очистки БД между тестами</td>
+      </tr>
+      <tr>
+        <td><code>63d8a50</code></td>
+        <td><code>alembic/env.py</code>: порядок импортов</td>
+        <td>ruff isort — стилевое исправление (не функциональное)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="sep">
+
+  <!-- ── EXCESS ── -->
+  <h2>Необъяснённые избыточные изменения (EXCESS)</h2>
+  <div class="note">Необъяснённых избыточных изменений нет. Все 94 файла из diff соответствуют 22 задачам плана или обоснованным финальным правкам.</div>
+
+  <hr class="sep">
+
+  <!-- ── SUMMARY ── -->
+  <h2>Итоговая сводка</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Показатель</th><th>Результат</th></tr></thead>
+    <tbody>
+      <tr><td>Задачи плана</td><td><b>22/22 DONE</b> &nbsp; 0 PARTIAL &nbsp; 0 MISSING</td></tr>
+      <tr><td>Критерии приёмки спецификации</td><td><b>8/8 покрыты</b></td></tr>
+      <tr><td>Находки CRITICAL</td><td><b>0</b></td></tr>
+      <tr><td>Находки WARNING</td><td><b>0</b></td></tr>
+      <tr><td>Находки INFO</td><td><b>3</b> (все accepted / justified)</td></tr>
+      <tr><td>Хэш тела плана</td><td><code>eb16ad7239420048</code></td></tr>
+      <tr><td>Вердикт</td><td><span class="badge badge-ok">OK</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict-banner">
+    <div class="v-icon">✅</div>
+    <div class="v-text">
+      <b>Вердикт: <span class="badge badge-ok">OK</span> — реализация полностью соответствует плану и спецификации Phase 1</b>
+      <span>Все 22 задачи подтверждены в diff (94 файла, +2794 строки). Все 8 критериев приёмки отражены в коде и тестах. Три INFO-находки — принятые отклонения (settings round-trip отложен в Phase 2; post-plan fixes обоснованы). Мерж-гейт открыт.</span>
+    </div>
+  </div>
+
+</main>
+</body>
+</html>
