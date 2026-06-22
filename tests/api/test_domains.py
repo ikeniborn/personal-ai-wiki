@@ -59,3 +59,13 @@ async def test_list_domains_paginates(client):
     body = r.json()
     assert len(body["items"]) == 2
     assert body["next_cursor"] is not None
+
+
+async def test_duplicate_domain_name_returns_409(client):
+    csrf = await _login(client, "admin@example.com", "pw12345")
+    r1 = await client.post("/api/v1/domains", json={"name": "duplicate"},
+                           headers={"x-csrf-token": csrf})
+    assert r1.status_code == 201
+    r2 = await client.post("/api/v1/domains", json={"name": "duplicate"},
+                           headers={"x-csrf-token": csrf})
+    assert r2.status_code == 409

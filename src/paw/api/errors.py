@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 
 class ProblemError(Exception):
@@ -25,3 +26,9 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProblemError)
     async def _handle(_: Request, exc: ProblemError) -> JSONResponse:
         return problem_response(exc)
+
+    @app.exception_handler(IntegrityError)
+    async def _handle_integrity(_: Request, exc: IntegrityError) -> JSONResponse:
+        return problem_response(
+            ProblemError(status=409, title="Conflict", detail="resource already exists")
+        )
