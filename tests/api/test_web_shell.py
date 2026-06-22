@@ -23,3 +23,14 @@ async def test_login_page_renders_frame(client):
 async def test_static_htmx_served(client):
     r = await client.get("/static/htmx.min.js")
     assert r.status_code == 200
+
+
+async def test_static_json_enc_served(client):
+    r = await client.get("/static/json-enc.js")
+    assert r.status_code == 200
+
+
+async def test_login_page_loads_json_enc_extension(client):
+    r = await client.get("/login")
+    assert r.status_code == 200
+    assert "json-enc.js" in r.text
