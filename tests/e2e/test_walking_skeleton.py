@@ -16,7 +16,16 @@ async def test_full_walking_skeleton(client):
     assert (await client.get("/api/v1/setup/status")).json()["needs_setup"] is True
     # 2. create admin
     r = await client.post(
-        "/api/v1/setup", json={"email": "admin@example.com", "password": "pw12345"}
+        "/api/v1/setup",
+        json={
+            "email": "admin@example.com",
+            "password": "pw12345",
+            "base_url": "https://api.example/v1",
+            "api_key": "sk-x",
+            "chat_model": "gpt-x",
+            "embedding_model": "emb-x",
+            "embedding_dim": 8,
+        },
     )
     assert r.status_code == 201
     # 3. login

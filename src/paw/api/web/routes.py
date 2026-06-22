@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paw.api.deps import CSRF_COOKIE, SESSION_COOKIE, db, get_session_store
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.domains import DomainRepo
+from paw.db.repos.sources import SourceRepo
 from paw.security.sanitize import render_markdown
 from paw.security.sessions import SessionStore
 from paw.services.articles import ArticleService
@@ -61,8 +62,18 @@ async def domain_page(
         return RedirectResponse("/login", status_code=307)
     domain = await DomainRepo(session).get(domain_id)
     articles = await ArticleRepo(session).list_by_domain(domain_id)
+    sources = await SourceRepo(session).list_by_domain(domain_id)
+    latest_source_id = str(sources[-1].id) if sources else None
+    csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(
-        request, "domain.html", {"domain": domain, "articles": articles}
+        request,
+        "domain.html",
+        {
+            "domain": domain,
+            "articles": articles,
+            "csrf": csrf,
+            "latest_source_id": latest_source_id,
+        },
     )
 
 
@@ -99,4 +110,5 @@ async def settings_page(
 ) -> Response:
     if not await _current_uid(request, store):
         return RedirectResponse("/login", status_code=307)
-    return templates.TemplateResponse(request, "settings.html")
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(request, "settings.html", {"csrf": csrf})

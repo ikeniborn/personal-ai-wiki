@@ -3,13 +3,15 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paw.api.deps import db, require_csrf, require_role
+from paw.api.deps import db, get_redis, require_csrf, require_role
 from paw.api.errors import ProblemError
 from paw.db.models import User
 from paw.db.repos.jobs import JobRepo
+from paw.jobs.progress import sse_events
 from paw.services.jobs import JobService
 
 router = APIRouter(tags=["jobs"])
@@ -63,6 +65,16 @@ async def get_job(
         "error": job.error,
         "log": job.log,
     }
+
+
+@router.get("/jobs/{job_id}/events")
+async def job_events(
+    job_id: uuid.UUID,
+    session: AsyncSession = Depends(db),
+    _: User = Depends(require_role("admin", "editor", "viewer")),
+) -> StreamingResponse:
+    repo = JobRepo(session)
+    return StreamingResponse(sse_events(get_redis(), repo, job_id), media_type="text/event-stream")
 
 
 @router.post(
