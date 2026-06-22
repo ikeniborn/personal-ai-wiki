@@ -7,7 +7,7 @@ _HNSW_INDEX = "ix_chunks_embedding_hnsw"
 
 
 async def ensure_embedding_column(session: AsyncSession, dim: int) -> None:
-    if not isinstance(dim, int) or dim <= 0:
+    if isinstance(dim, bool) or not isinstance(dim, int) or dim <= 0:
         raise ValueError(f"embedding dim must be a positive int, got {dim!r}")
     # dim is validated above; safe to interpolate (DDL type modifiers cannot bind).
     await session.execute(

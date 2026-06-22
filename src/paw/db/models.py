@@ -285,6 +285,7 @@ class Job(Base):
     status: Mapped[str] = mapped_column(
         Enum(*JOB_STATUS, name="job_status"), nullable=False, server_default="queued"
     )
+    # no FK: a job may precede its article (created during ingest) or outlive it.
     article_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     error: Mapped[str | None] = mapped_column(Text)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
