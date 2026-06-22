@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator, Iterator
 
 import pytest
 import redis.asyncio as aioredis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
@@ -85,6 +86,18 @@ def wired_settings(pg_async_url: str, redis_container: RedisContainer,
     deps._redis = None
     db_session_mod._engine = None
     db_session_mod._sessionmaker = None
+
+
+@pytest.fixture(autouse=True)
+async def _clean_db(pg_async_url: str) -> AsyncIterator[None]:
+    yield
+    engine = create_async_engine(pg_async_url)
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "TRUNCATE users, api_keys, app_settings, domains, blobs, "
+            "sources, articles, article_revisions, audit_log RESTART IDENTITY CASCADE"
+        ))
+    await engine.dispose()
 
 
 @pytest.fixture
