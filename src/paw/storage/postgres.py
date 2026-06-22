@@ -18,14 +18,14 @@ class PostgresStorage:
         if large:
             row = await self._s.execute(text("SELECT lo_from_bytea(0, :d) AS oid"), {"d": data})
             oid = row.scalar_one()
-            await self._s.commit()
+            await self._s.flush()
             return f"lo:{oid}"
         row = await self._s.execute(
             text("INSERT INTO blobs (data, content_type) VALUES (:d, :ct) RETURNING id"),
             {"d": data, "ct": content_type},
         )
         bid = row.scalar_one()
-        await self._s.commit()
+        await self._s.flush()
         return f"blob:{bid}"
 
     async def get(self, ref: str) -> bytes:
@@ -56,7 +56,7 @@ class PostgresStorage:
             await self._s.execute(text("SELECT lo_unlink(:oid)"), {"oid": int(ident)})
         else:
             raise ValueError(f"unknown ref: {ref}")
-        await self._s.commit()
+        await self._s.flush()
 
     async def exists(self, ref: str) -> bool:
         kind, _, ident = ref.partition(":")
