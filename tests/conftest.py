@@ -38,7 +38,7 @@ def _migrate(pg_async_url: str, monkeypatch_session: pytest.MonkeyPatch) -> None
     monkeypatch_session.setenv("DATABASE_URL", pg_async_url)
     monkeypatch_session.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch_session.setenv("SESSION_SECRET", "s" * 32)
-    monkeypatch_session.setenv("FERNET_KEY", "k" * 44)
+    monkeypatch_session.setenv("FERNET_KEY", "k" * 43 + "=")
     from alembic import command
     from alembic.config import Config
 
@@ -63,8 +63,9 @@ def redis_container() -> Iterator[RedisContainer]:
 
 
 @pytest.fixture
-def wired_settings(pg_async_url: str, redis_container: RedisContainer,
-                   monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def wired_settings(
+    pg_async_url: str, redis_container: RedisContainer, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
     """Point the app's cached settings/redis at the live test containers."""
     redis_url = (
         f"redis://{redis_container.get_container_host_ip()}:"
@@ -73,10 +74,11 @@ def wired_settings(pg_async_url: str, redis_container: RedisContainer,
     monkeypatch.setenv("DATABASE_URL", pg_async_url)
     monkeypatch.setenv("REDIS_URL", redis_url)
     monkeypatch.setenv("SESSION_SECRET", "s" * 32)
-    monkeypatch.setenv("FERNET_KEY", "k" * 44)
+    monkeypatch.setenv("FERNET_KEY", "k" * 43 + "=")
     import paw.api.deps as deps
     import paw.db.session as db_session_mod
     from paw.config import get_settings
+
     get_settings.cache_clear()
     deps._redis = None
     db_session_mod._engine = None
@@ -93,10 +95,12 @@ async def _clean_db(pg_async_url: str) -> AsyncIterator[None]:
     yield
     engine = create_async_engine(pg_async_url)
     async with engine.begin() as conn:
-        await conn.execute(text(
-            "TRUNCATE users, api_keys, app_settings, domains, blobs, "
-            "sources, articles, article_revisions, audit_log RESTART IDENTITY CASCADE"
-        ))
+        await conn.execute(
+            text(
+                "TRUNCATE users, api_keys, app_settings, domains, blobs, "
+                "sources, articles, article_revisions, audit_log RESTART IDENTITY CASCADE"
+            )
+        )
     await engine.dispose()
 
 
