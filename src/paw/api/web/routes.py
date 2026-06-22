@@ -31,7 +31,7 @@ async def login_page(request: Request) -> HTMLResponse:
 
 
 @router.get("/setup", response_class=HTMLResponse)
-async def setup_page(request: Request, session: AsyncSession = Depends(db)) -> HTMLResponse:
+async def setup_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "setup.html")
 
 
