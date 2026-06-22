@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paw.api.deps import current_user, db, require_csrf, require_role
+from paw.api.deps import db, require_csrf, require_role
 from paw.api.errors import ProblemError
 from paw.db.models import User
 from paw.db.repos.jobs import JobRepo
@@ -70,8 +70,6 @@ async def get_job(
     status_code=202,
     dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
 )
-async def cancel_job(
-    job_id: uuid.UUID, _: User = Depends(current_user), session: AsyncSession = Depends(db)
-) -> dict[str, str]:
+async def cancel_job(job_id: uuid.UUID, session: AsyncSession = Depends(db)) -> dict[str, str]:
     await JobService(session).cancel(job_id)
     return {"status": "cancelling"}

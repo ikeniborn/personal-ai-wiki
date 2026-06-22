@@ -55,3 +55,11 @@ async def test_cancel_sets_flag(client):
     ).json()["job_id"]
     r = await client.post(f"/api/v1/jobs/{job_id}/cancel", headers=h)
     assert r.status_code == 202
+
+
+async def test_cancel_unknown_job_404(client):
+    import uuid
+
+    csrf = client.cookies.get("paw_csrf")
+    r = await client.post(f"/api/v1/jobs/{uuid.uuid4()}/cancel", headers={"x-csrf-token": csrf})
+    assert r.status_code == 404

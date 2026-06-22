@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paw.api.errors import ProblemError
 from paw.config import get_settings
 from paw.db.models import Job
 from paw.db.repos.jobs import JobRepo
@@ -33,7 +34,11 @@ class JobService:
         pc = await psvc.get_provider()
         wiki = await psvc.get_wiki() if pc else WikiConfig()
         if pc is None:
-            raise RuntimeError("provider not configured")
+            raise ProblemError(
+                status=422,
+                title="Provider not configured",
+                detail="Configure an LLM provider before initialising a domain.",
+            )
         chat = build_chat_provider(pc, box)
         topics = await build_structure_plan(
             domain_name=str(domain_id), brief=brief, chat=chat, cfg=wiki
@@ -47,5 +52,8 @@ class JobService:
         return out
 
     async def cancel(self, job_id: uuid.UUID) -> None:
+        job = await self._repo.get(job_id)
+        if job is None:
+            raise ProblemError(status=404, title="Job not found")
         await self._repo.request_cancel(job_id)
         await self._s.commit()
