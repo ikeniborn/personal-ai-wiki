@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from paw.api.errors import install_error_handlers
+from paw.api.routers import articles as articles_router
 from paw.api.routers import auth as auth_router
 from paw.api.routers import domains as domains_router
 from paw.api.routers import sources as sources_router
@@ -17,6 +18,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router.router, prefix="/api/v1")
     app.include_router(domains_router.router, prefix="/api/v1")
     app.include_router(sources_router.router, prefix="/api/v1")
+    app.include_router(articles_router.router, prefix="/api/v1")
     return app
 
 
