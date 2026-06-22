@@ -82,8 +82,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for t in ("audit_log", "article_revisions", "articles", "sources", "blobs",
-              "domains", "app_settings", "api_keys", "users"):
+    for t in (
+        "audit_log",
+        "article_revisions",
+        "articles",
+        "sources",
+        "blobs",
+        "domains",
+        "app_settings",
+        "api_keys",
+        "users",
+    ):
         op.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
     for e in ("rev_origin", "source_status", "user_role"):
         op.execute(f"DROP TYPE IF EXISTS {e}")

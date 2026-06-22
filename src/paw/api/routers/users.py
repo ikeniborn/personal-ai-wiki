@@ -26,12 +26,17 @@ async def list_users(
     session: AsyncSession = Depends(db),
     _: User = Depends(require_role("admin")),
 ) -> list[UserOut]:
-    return [UserOut(id=str(u.id), email=u.email, role=u.role)
-            for u in await UserService(session).list()]
+    return [
+        UserOut(id=str(u.id), email=u.email, role=u.role) for u in await UserService(session).list()
+    ]
 
 
-@router.post("", status_code=201, response_model=UserOut,
-             dependencies=[Depends(require_csrf), Depends(require_role("admin"))])
+@router.post(
+    "",
+    status_code=201,
+    response_model=UserOut,
+    dependencies=[Depends(require_csrf), Depends(require_role("admin"))],
+)
 async def create_user(body: UserCreate, session: AsyncSession = Depends(db)) -> UserOut:
     u = await UserService(session).create(email=body.email, password=body.password, role=body.role)
     return UserOut(id=str(u.id), email=u.email, role=u.role)

@@ -23,20 +23,23 @@ async def client(wired_settings, db_session):
 
 
 async def test_login_sets_session_cookie(client):
-    r = await client.post("/api/v1/auth/login",
-                          json={"email": "admin@example.com", "password": "pw12345"})
+    r = await client.post(
+        "/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"}
+    )
     assert r.status_code == 200
     assert "paw_session" in r.cookies
 
 
 async def test_login_wrong_password_401(client):
-    r = await client.post("/api/v1/auth/login",
-                          json={"email": "admin@example.com", "password": "WRONG"})
+    r = await client.post(
+        "/api/v1/auth/login", json={"email": "admin@example.com", "password": "WRONG"}
+    )
     assert r.status_code == 401
 
 
 async def test_logout_clears_session(client):
-    await client.post("/api/v1/auth/login",
-                      json={"email": "admin@example.com", "password": "pw12345"})
+    await client.post(
+        "/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"}
+    )
     r = await client.post("/api/v1/auth/logout")
     assert r.status_code == 204

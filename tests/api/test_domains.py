@@ -31,16 +31,14 @@ async def client(seeded, wired_settings):
 
 async def test_admin_creates_domain(client):
     csrf = await _login(client, "admin@example.com", "pw12345")
-    r = await client.post("/api/v1/domains", json={"name": "net"},
-                          headers={"x-csrf-token": csrf})
+    r = await client.post("/api/v1/domains", json={"name": "net"}, headers={"x-csrf-token": csrf})
     assert r.status_code == 201
     assert r.json()["name"] == "net"
 
 
 async def test_viewer_cannot_create_domain(client):
     csrf = await _login(client, "viewer@example.com", "pw12345")
-    r = await client.post("/api/v1/domains", json={"name": "net"},
-                          headers={"x-csrf-token": csrf})
+    r = await client.post("/api/v1/domains", json={"name": "net"}, headers={"x-csrf-token": csrf})
     assert r.status_code == 403
 
 
@@ -63,9 +61,11 @@ async def test_list_domains_paginates(client):
 
 async def test_duplicate_domain_name_returns_409(client):
     csrf = await _login(client, "admin@example.com", "pw12345")
-    r1 = await client.post("/api/v1/domains", json={"name": "duplicate"},
-                           headers={"x-csrf-token": csrf})
+    r1 = await client.post(
+        "/api/v1/domains", json={"name": "duplicate"}, headers={"x-csrf-token": csrf}
+    )
     assert r1.status_code == 201
-    r2 = await client.post("/api/v1/domains", json={"name": "duplicate"},
-                           headers={"x-csrf-token": csrf})
+    r2 = await client.post(
+        "/api/v1/domains", json={"name": "duplicate"}, headers={"x-csrf-token": csrf}
+    )
     assert r2.status_code == 409

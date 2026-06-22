@@ -56,8 +56,7 @@ async def current_user(
 def require_role(*roles: str) -> Callable[..., Awaitable[User]]:
     async def _dep(user: User = Depends(current_user)) -> User:
         if user.role not in roles:
-            raise ProblemError(status=403, title="Forbidden",
-                               detail=f"requires role in {roles}")
+            raise ProblemError(status=403, title="Forbidden", detail=f"requires role in {roles}")
         return user
 
     return _dep

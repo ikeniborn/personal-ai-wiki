@@ -17,8 +17,7 @@ from paw.api.web import routes as web_routes
 _STATIC_DIR = Path(__file__).parent / "api" / "web" / "static"
 
 _CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self';"
-    " img-src 'self' data:; base-uri 'self'"
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'"
 )
 
 
@@ -36,8 +35,15 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    for r in (auth_router, domains_router, sources_router, articles_router,
-              setup_router, settings_router, users_router):
+    for r in (
+        auth_router,
+        domains_router,
+        sources_router,
+        articles_router,
+        setup_router,
+        settings_router,
+        users_router,
+    ):
         app.include_router(r.router, prefix="/api/v1")
     app.include_router(web_routes.router)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")

@@ -4,8 +4,9 @@ from sqlalchemy.exc import IntegrityError
 
 
 class ProblemError(Exception):
-    def __init__(self, status: int, title: str, detail: str | None = None,
-                 type_: str = "about:blank") -> None:
+    def __init__(
+        self, status: int, title: str, detail: str | None = None, type_: str = "about:blank"
+    ) -> None:
         self.status = status
         self.title = title
         self.detail = detail
@@ -17,9 +18,7 @@ def problem_response(exc: ProblemError) -> JSONResponse:
     body = {"type": exc.type, "title": exc.title, "status": exc.status}
     if exc.detail:
         body["detail"] = exc.detail
-    return JSONResponse(
-        status_code=exc.status, content=body, media_type="application/problem+json"
-    )
+    return JSONResponse(status_code=exc.status, content=body, media_type="application/problem+json")
 
 
 def install_error_handlers(app: FastAPI) -> None:

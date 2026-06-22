@@ -15,12 +15,14 @@ async def test_full_walking_skeleton(client):
     # 1. first run -> setup
     assert (await client.get("/api/v1/setup/status")).json()["needs_setup"] is True
     # 2. create admin
-    r = await client.post("/api/v1/setup",
-                          json={"email": "admin@example.com", "password": "pw12345"})
+    r = await client.post(
+        "/api/v1/setup", json={"email": "admin@example.com", "password": "pw12345"}
+    )
     assert r.status_code == 201
     # 3. login
-    await client.post("/api/v1/auth/login",
-                      json={"email": "admin@example.com", "password": "pw12345"})
+    await client.post(
+        "/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"}
+    )
     csrf = client.cookies.get("paw_csrf")
     h = {"x-csrf-token": csrf}
     # 4. create domain

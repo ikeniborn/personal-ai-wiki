@@ -13,8 +13,9 @@ class PostgresStorage:
     def __init__(self, session: AsyncSession) -> None:
         self._s = session
 
-    async def put(self, data: bytes, *, content_type: str | None = None,
-                  large: bool = False) -> str:
+    async def put(
+        self, data: bytes, *, content_type: str | None = None, large: bool = False
+    ) -> str:
         if large:
             row = await self._s.execute(text("SELECT lo_from_bytea(0, :d) AS oid"), {"d": data})
             oid = row.scalar_one()
@@ -61,9 +62,7 @@ class PostgresStorage:
     async def exists(self, ref: str) -> bool:
         kind, _, ident = ref.partition(":")
         if kind == "blob":
-            row = await self._s.execute(
-                text("SELECT 1 FROM blobs WHERE id = :id"), {"id": ident}
-            )
+            row = await self._s.execute(text("SELECT 1 FROM blobs WHERE id = :id"), {"id": ident})
             return row.scalar_one_or_none() is not None
         if kind == "lo":
             row = await self._s.execute(

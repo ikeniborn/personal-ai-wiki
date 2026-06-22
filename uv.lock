@@ -1094,7 +1094,7 @@ dev = [
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "ruff", specifier = ">=0.7" },
+    { name = "ruff", specifier = "==0.15.18" },
     { name = "testcontainers", extras = ["postgres", "redis"], specifier = ">=4.8" },
 ]
 

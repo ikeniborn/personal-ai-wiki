@@ -47,9 +47,7 @@ async def dashboard(
         return RedirectResponse("/login", status_code=307)
     domains = await DomainService(session).list()
     csrf = request.cookies.get(CSRF_COOKIE, "")
-    return templates.TemplateResponse(
-        request, "dashboard.html", {"domains": domains, "csrf": csrf}
-    )
+    return templates.TemplateResponse(request, "dashboard.html", {"domains": domains, "csrf": csrf})
 
 
 @router.get("/domains/{domain_id}", response_class=HTMLResponse)
@@ -81,9 +79,15 @@ async def article_page(
     revisions = await ArticleRepo(session).list_revisions(article_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(
-        request, "article.html",
-        {"article": body.article, "html": render_markdown(body.markdown),
-         "markdown": body.markdown, "revisions": revisions, "csrf": csrf},
+        request,
+        "article.html",
+        {
+            "article": body.article,
+            "html": render_markdown(body.markdown),
+            "markdown": body.markdown,
+            "revisions": revisions,
+            "csrf": csrf,
+        },
     )
 
 

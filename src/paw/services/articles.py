@@ -21,13 +21,14 @@ class ArticleService:
         self._repo = ArticleRepo(session)
         self._store = PostgresStorage(session)
 
-    async def create(self, *, domain_id: uuid.UUID, slug: str, title: str,
-                     markdown: str, author_id: uuid.UUID) -> Article:
+    async def create(
+        self, *, domain_id: uuid.UUID, slug: str, title: str, markdown: str, author_id: uuid.UUID
+    ) -> Article:
         ref = await self._store.put(markdown.encode(), content_type="text/markdown")
-        art = await self._repo.create(domain_id=domain_id, slug=slug, title=title,
-                                      storage_ref=ref)
-        await self._repo.add_revision(article_id=art.id, rev_no=1, storage_ref=ref,
-                                      author_id=author_id, origin="user")
+        art = await self._repo.create(domain_id=domain_id, slug=slug, title=title, storage_ref=ref)
+        await self._repo.add_revision(
+            article_id=art.id, rev_no=1, storage_ref=ref, author_id=author_id, origin="user"
+        )
         await self._s.commit()
         return art
 
@@ -38,26 +39,36 @@ class ArticleService:
         markdown = (await self._store.get(art.storage_ref)).decode()
         return ArticleBody(article=art, markdown=markdown)
 
-    async def update(self, *, article_id: uuid.UUID, expected_rev: int, title: str,
-                     markdown: str, author_id: uuid.UUID) -> Article:
+    async def update(
+        self,
+        *,
+        article_id: uuid.UUID,
+        expected_rev: int,
+        title: str,
+        markdown: str,
+        author_id: uuid.UUID,
+    ) -> Article:
         art = await self._repo.get(article_id)
         if art is None:
             raise ProblemError(status=404, title="Article not found")
         if art.current_rev != expected_rev:
-            raise ProblemError(status=409, title="Conflict",
-                               detail=f"stale revision (current={art.current_rev})")
+            raise ProblemError(
+                status=409, title="Conflict", detail=f"stale revision (current={art.current_rev})"
+            )
         new_rev = art.current_rev + 1
         ref = await self._store.put(markdown.encode(), content_type="text/markdown")
         art.title = title
         art.storage_ref = ref
         art.current_rev = new_rev
-        await self._repo.add_revision(article_id=art.id, rev_no=new_rev, storage_ref=ref,
-                                      author_id=author_id, origin="user")
+        await self._repo.add_revision(
+            article_id=art.id, rev_no=new_rev, storage_ref=ref, author_id=author_id, origin="user"
+        )
         await self._s.commit()
         return art
 
-    async def rollback(self, *, article_id: uuid.UUID, rev_no: int,
-                       author_id: uuid.UUID) -> Article:
+    async def rollback(
+        self, *, article_id: uuid.UUID, rev_no: int, author_id: uuid.UUID
+    ) -> Article:
         art = await self._repo.get(article_id)
         if art is None:
             raise ProblemError(status=404, title="Article not found")
@@ -68,9 +79,13 @@ class ArticleService:
         new_rev = art.current_rev + 1
         art.storage_ref = target.storage_ref
         art.current_rev = new_rev
-        await self._repo.add_revision(article_id=art.id, rev_no=new_rev,
-                                      storage_ref=target.storage_ref,
-                                      author_id=author_id, origin="user")
+        await self._repo.add_revision(
+            article_id=art.id,
+            rev_no=new_rev,
+            storage_ref=target.storage_ref,
+            author_id=author_id,
+            origin="user",
+        )
         await self._s.commit()
         return art
 

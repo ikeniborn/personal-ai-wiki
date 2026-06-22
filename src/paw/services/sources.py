@@ -16,14 +16,16 @@ class SourceService:
         self._repo = SourceRepo(session)
         self._store = PostgresStorage(session)
 
-    async def upload_text(self, *, domain_id: uuid.UUID, filename: str, data: bytes,
-                          content_type: str | None) -> Source:
+    async def upload_text(
+        self, *, domain_id: uuid.UUID, filename: str, data: bytes, content_type: str | None
+    ) -> Source:
         validate_text_upload(filename, data, max_bytes=get_settings().max_upload_bytes)
         checksum = hashlib.sha256(data).hexdigest()
         ref = await self._store.put(data, content_type=content_type or "text/markdown")
         ext = filename.rsplit(".", 1)[-1].lower()
-        src = await self._repo.create(domain_id=domain_id, storage_ref=ref,
-                                      filename=filename, type=ext, checksum=checksum)
+        src = await self._repo.create(
+            domain_id=domain_id, storage_ref=ref, filename=filename, type=ext, checksum=checksum
+        )
         await self._s.commit()
         return src
 

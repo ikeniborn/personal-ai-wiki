@@ -24,8 +24,12 @@ class DomainPage(BaseModel):
     next_cursor: str | None
 
 
-@router.post("", status_code=201, response_model=DomainOut,
-             dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))])
+@router.post(
+    "",
+    status_code=201,
+    response_model=DomainOut,
+    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+)
 async def create_domain(body: DomainCreate, session: AsyncSession = Depends(db)) -> DomainOut:
     d = await DomainService(session).create(body.name)
     return DomainOut(id=str(d.id), name=d.name)
@@ -41,7 +45,8 @@ async def list_domains(
     page = items[:limit]
     next_cursor = (
         encode_cursor(page[-1].created_at.isoformat(), str(page[-1].id))
-        if len(items) > limit else None
+        if len(items) > limit
+        else None
     )
     return DomainPage(
         items=[DomainOut(id=str(d.id), name=d.name) for d in page],

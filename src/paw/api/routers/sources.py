@@ -18,8 +18,12 @@ class SourceOut(BaseModel):
     type: str
 
 
-@router.post("", status_code=201, response_model=SourceOut,
-             dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))])
+@router.post(
+    "",
+    status_code=201,
+    response_model=SourceOut,
+    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+)
 async def upload_source(
     domain_id: uuid.UUID,
     file: UploadFile = File(...),
@@ -28,8 +32,10 @@ async def upload_source(
     data = await file.read()
     try:
         src = await SourceService(session).upload_text(
-            domain_id=domain_id, filename=file.filename or "upload",
-            data=data, content_type=file.content_type,
+            domain_id=domain_id,
+            filename=file.filename or "upload",
+            data=data,
+            content_type=file.content_type,
         )
     except UploadRejected as e:
         raise ProblemError(status=422, title="Upload rejected", detail=str(e)) from e

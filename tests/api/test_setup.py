@@ -19,13 +19,15 @@ async def test_first_run_needs_setup(client):
 
 
 async def test_complete_setup_creates_admin(client):
-    r = await client.post("/api/v1/setup",
-                          json={"email": "admin@example.com", "password": "pw12345"})
+    r = await client.post(
+        "/api/v1/setup", json={"email": "admin@example.com", "password": "pw12345"}
+    )
     assert r.status_code == 201
     assert r.json()["role"] == "admin"
     # second call rejected
-    r2 = await client.post("/api/v1/setup",
-                           json={"email": "admin@example.com", "password": "pw12345"})
+    r2 = await client.post(
+        "/api/v1/setup", json={"email": "admin@example.com", "password": "pw12345"}
+    )
     assert r2.status_code == 409
     status = await client.get("/api/v1/setup/status")
     assert status.json()["needs_setup"] is False

@@ -23,20 +23,24 @@ async def client(db_session, wired_settings):
 
 async def test_upload_md_source(client):
     csrf = client.cookies.get("paw_csrf")
-    dom = (await client.post("/api/v1/domains", json={"name": "net"},
-                             headers={"x-csrf-token": csrf})).json()
+    dom = (
+        await client.post("/api/v1/domains", json={"name": "net"}, headers={"x-csrf-token": csrf})
+    ).json()
     files = {"file": ("intro.md", b"# Intro\n\nbody", "text/markdown")}
-    r = await client.post(f"/api/v1/domains/{dom['id']}/sources",
-                          files=files, headers={"x-csrf-token": csrf})
+    r = await client.post(
+        f"/api/v1/domains/{dom['id']}/sources", files=files, headers={"x-csrf-token": csrf}
+    )
     assert r.status_code == 201
     assert r.json()["filename"] == "intro.md"
 
 
 async def test_upload_rejects_exe(client):
     csrf = client.cookies.get("paw_csrf")
-    dom = (await client.post("/api/v1/domains", json={"name": "net"},
-                             headers={"x-csrf-token": csrf})).json()
+    dom = (
+        await client.post("/api/v1/domains", json={"name": "net"}, headers={"x-csrf-token": csrf})
+    ).json()
     files = {"file": ("x.exe", b"MZbinary", "application/octet-stream")}
-    r = await client.post(f"/api/v1/domains/{dom['id']}/sources",
-                          files=files, headers={"x-csrf-token": csrf})
+    r = await client.post(
+        f"/api/v1/domains/{dom['id']}/sources", files=files, headers={"x-csrf-token": csrf}
+    )
     assert r.status_code == 422

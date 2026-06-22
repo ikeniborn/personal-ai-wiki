@@ -19,9 +19,7 @@ class SetupService:
     async def complete(self, *, email: str, password: str) -> User:
         if not await self.needs_setup():
             raise ProblemError(status=409, title="Already initialized")
-        admin = await self._users.create(
-            email=email, pw_hash=hash_password(password), role="admin"
-        )
+        admin = await self._users.create(email=email, pw_hash=hash_password(password), role="admin")
         await self._settings.upsert({})  # seed empty singleton
         await self._s.commit()
         return admin
