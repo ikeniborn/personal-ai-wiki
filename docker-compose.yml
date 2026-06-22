@@ -1,0 +1,92 @@
+services:
+  traefik:
+    image: traefik:v3.2
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+    ports: ["80:80", "443:443"]
+    volumes:
+      - "letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: paw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paw}
+      POSTGRES_DB: paw
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paw"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  init:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw
+      REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET}
+      FERNET_KEY: ${FERNET_KEY}
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: .
+    command: ["uvicorn", "paw.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw
+      REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET}
+      FERNET_KEY: ${FERNET_KEY}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      init: { condition: service_completed_successfully }
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paw.rule=Host(`${PAW_HOST:-localhost}`)"
+      - "traefik.http.routers.paw.entrypoints=websecure"
+      - "traefik.http.routers.paw.tls.certresolver=le"
+      - "traefik.http.services.paw.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build: .
+    command: ["arq", "paw.worker.WorkerSettings"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw
+      REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET}
+      FERNET_KEY: ${FERNET_KEY}
+    depends_on:
+      redis: { condition: service_healthy }
+      init: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
+  redisdata:
+  letsencrypt:
