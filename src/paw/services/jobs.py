@@ -39,10 +39,13 @@ class JobService:
                 title="Provider not configured",
                 detail="Configure an LLM provider before initialising a domain.",
             )
+        from paw.db.repos.domains import DomainRepo
+
+        dom = await DomainRepo(self._s).get(domain_id)
+        if dom is None:
+            raise ProblemError(status=404, title="Domain not found")
         chat = build_chat_provider(pc, box)
-        topics = await build_structure_plan(
-            domain_name=str(domain_id), brief=brief, chat=chat, cfg=wiki
-        )
+        topics = await build_structure_plan(domain_name=dom.name, brief=brief, chat=chat, cfg=wiki)
         out: list[tuple[str, uuid.UUID]] = []
         for topic in topics:
             job = await self._repo.create(domain_id=domain_id, kind="ingest")

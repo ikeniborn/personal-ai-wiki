@@ -24,6 +24,15 @@ class IngestCancelled(Exception):
     pass
 
 
+async def _safe_publish(redis: Any, jid: uuid.UUID, event: dict[str, Any]) -> None:
+    # Progress notifications are best-effort; a Redis hiccup must never change
+    # job status or fail an ingest.
+    try:
+        await publish(redis, jid, event)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 async def _build_providers(
     session: Any, box: SecretBox
 ) -> tuple[ChatProvider, EmbeddingProvider, WikiConfig, int]:
@@ -63,7 +72,7 @@ async def ingest_domain(
             if not got:
                 await jobs.set_status(jid, "failed", error="domain busy")
                 await job_s.commit()
-                await publish(redis, jid, {"step": "error", "status": "failed"})
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
@@ -75,7 +84,7 @@ async def ingest_domain(
                 await jobs.heartbeat(jid)
                 await jobs.append_log(jid, {"step": msg})
                 await job_s.commit()
-                await publish(redis, jid, {"step": msg})
+                await _safe_publish(redis, jid, {"step": msg})
 
             try:
                 chat, embedder, wiki, dim = await _build_providers(data_s, box)
@@ -102,7 +111,7 @@ async def ingest_domain(
                 await jobs.set_status(jid, "succeeded", article_id=result.article_id)
                 await jobs.append_log(jid, {"step": "done"})
                 await job_s.commit()
-                await publish(
+                await _safe_publish(
                     redis,
                     jid,
                     {"step": "done", "status": "succeeded", "article_id": str(result.article_id)},
@@ -112,11 +121,11 @@ async def ingest_domain(
                 await data_s.rollback()
                 await jobs.set_status(jid, "cancelled")
                 await job_s.commit()
-                await publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
+                await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
                 return "cancelled"
             except Exception as e:  # noqa: BLE001
                 await data_s.rollback()
                 await jobs.set_status(jid, "failed", error=str(e)[:500])
                 await job_s.commit()
-                await publish(redis, jid, {"step": "error", "status": "failed"})
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
