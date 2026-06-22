@@ -41,3 +41,4 @@ class SourceRepo:
 
     async def delete(self, source: Source) -> None:
         await self._s.delete(source)
+        await self._s.flush()
