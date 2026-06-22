@@ -29,5 +29,19 @@ class SourceService:
         await self._s.commit()
         return src
 
+    async def upload(
+        self, *, domain_id: uuid.UUID, filename: str, data: bytes, content_type: str | None
+    ) -> Source:
+        from paw.security.uploads import validate_source_upload
+
+        kind = validate_source_upload(filename, data, max_bytes=get_settings().max_upload_bytes)
+        checksum = hashlib.sha256(data).hexdigest()
+        ref = await self._store.put(data, content_type=content_type, large=len(data) > 256 * 1024)
+        src = await self._repo.create(
+            domain_id=domain_id, storage_ref=ref, filename=filename, type=kind, checksum=checksum
+        )
+        await self._s.commit()
+        return src
+
     async def list(self, domain_id: uuid.UUID) -> list[Source]:
         return await self._repo.list_by_domain(domain_id)
