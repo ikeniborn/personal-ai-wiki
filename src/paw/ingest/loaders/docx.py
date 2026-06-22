@@ -7,4 +7,4 @@ import mammoth  # type: ignore[import-untyped]
 
 def load(data: bytes) -> str:
     result = mammoth.convert_to_markdown(io.BytesIO(data))
-    return str(result.value)
+    return result.value or ""

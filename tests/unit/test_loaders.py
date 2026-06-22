@@ -68,6 +68,11 @@ def test_docx_extracts_text():
     assert "Docx body words" in out
 
 
+def test_docx_empty_raises():
+    with pytest.raises(ValueError):
+        load_source(_minimal_docx(""), "docx")
+
+
 def test_unsupported_type():
     with pytest.raises(UnsupportedSource):
         load_source(b"x", "epub")
