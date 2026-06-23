@@ -4,7 +4,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -117,7 +117,7 @@ async def chat(
 
 @router.get("/chat/sessions", response_model=SessionPage)
 async def list_sessions(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     cursor: str | None = None,
     user: User = Depends(require_role("admin", "editor", "viewer")),
     session: AsyncSession = Depends(db),

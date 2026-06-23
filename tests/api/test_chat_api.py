@@ -142,6 +142,11 @@ async def test_cross_user_denied(client, db_session, monkeypatch):
     ).status_code == 404
 
 
+async def test_sessions_limit_zero_rejected(client):
+    r = await client.get("/api/v1/chat/sessions?limit=0")
+    assert r.status_code == 422
+
+
 async def test_delete_session(client, monkeypatch):
     monkeypatch.setattr(
         chat_mod, "build_chat_provider",

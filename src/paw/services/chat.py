@@ -78,6 +78,8 @@ class ChatService:
         dom = await DomainRepo(self._s).get(domain_id)
         if dom is None:
             raise ProblemError(status=404, title="Domain not found")
+        # New session is committed before the first turn; an empty session orphaned by a
+        # failed turn is benign (GC prunes by age).
         sess = await repo.create_session(user_id=user.id, domain_id=domain_id)
         await self._s.commit()
         return sess
