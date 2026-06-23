@@ -75,6 +75,7 @@ async def domain_page(
     domain = await DomainRepo(session).get(domain_id)
     articles = await ArticleRepo(session).list_by_domain(domain_id)
     sources = await SourceRepo(session).list_by_domain(domain_id)
+    tree = await ArticleService(session).domain_tree(domain_id)
     latest_source_id = str(sources[-1].id) if sources else None
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(
@@ -83,6 +84,8 @@ async def domain_page(
         {
             "domain": domain,
             "articles": articles,
+            "tree": tree,
+            "domain_name": domain.name if domain else "",
             "csrf": csrf,
             "latest_source_id": latest_source_id,
         },

@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ domain.name }} · Personal AI Wiki{% endblock %}
-{% block sidebar %}
-<h3>{{ domain.name }}</h3>
-<ul>{% for a in articles %}<li><a href="/articles/{{ a.id }}">{{ a.title }}</a></li>{% endfor %}</ul>
-{% endblock %}
+{% block sidebar %}{% include "_sidebar_tree.html" %}{% endblock %}
 {% block content %}
 <h1>{{ domain.name }}</h1>
 <div class="content-header">
@@ -13,6 +10,7 @@
     <button type="submit" {% if not latest_source_id %}disabled{% endif %}>Ingest latest source</button>
   </form>
   <a class="btn" href="/domains/{{ domain.id }}/query">🔍 Query</a>
+  <a class="btn" href="/domains/{{ domain.id }}/graph">🕸 Graph</a>
 </div>
 <aside id="job-drawer" class="drawer"></aside>
 {% endblock %}
