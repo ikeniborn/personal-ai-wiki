@@ -1,8 +1,9 @@
 from types import SimpleNamespace
 
+from tests.stubs import StubChatProvider
+
 from paw.providers.base import Message
 from paw.providers.openai_compat import OpenAICompatProvider
-from tests.stubs import StubChatProvider
 
 
 async def test_stub_stream_yields_tokens():

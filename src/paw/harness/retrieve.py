@@ -146,4 +146,6 @@ async def retrieve(
         ref_rows.setdefault(s.article_id, Ref(article_id=s.article_id, slug=s.slug, title=s.title))
 
     block = _render_block(seed_passages, [(s.slug, s.text) for s in summaries])
-    return RetrievedContext(passages=seed_passages, refs=list(ref_rows.values()), prompt_block=block)
+    return RetrievedContext(
+        passages=seed_passages, refs=list(ref_rows.values()), prompt_block=block
+    )

@@ -43,7 +43,10 @@ async def client(db_session, wired_settings, monkeypatch):
     monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
-        await c.post("/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"})
+        await c.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "pw12345"},
+        )
         c._dom = dom  # type: ignore[attr-defined]
         c._csrf = c.cookies.get("paw_csrf", "")  # type: ignore[attr-defined]
         yield c

@@ -24,7 +24,8 @@ def _ingest_chat() -> StubChatProvider:
     draft = {
         "slug": "tcp", "title": "TCP", "summary": "TCP gives reliable ordered delivery.",
         "markdown": "## Overview\nTCP provides reliable ordered delivery.",
-        "entities": ["TCP"], "citations": [{"quote": "reliable, ordered delivery", "locator": None}],
+        "entities": ["TCP"],
+        "citations": [{"quote": "reliable, ordered delivery", "locator": None}],
     }
     payloads = iter([extraction, draft])
 

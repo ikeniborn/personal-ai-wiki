@@ -62,7 +62,9 @@ async def _search_wiki(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
         raise ValueError("search_wiki requires embedder + retrieval config in context")
     cfg = ctx.retrieval
     if args.get("top_k") is not None:
-        cfg = ctx.retrieval.model_copy(update={"top_n": int(args["top_k"])})  # type: ignore[arg-type]
+        cfg = ctx.retrieval.model_copy(
+            update={"top_n": int(args["top_k"])}  # type: ignore[arg-type]
+        )
     result = await retrieve(
         ctx.session,
         domain_id=ctx.domain_id,
