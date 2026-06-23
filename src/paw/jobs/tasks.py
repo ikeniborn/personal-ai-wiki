@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import UTC
 from typing import Any
 
 from paw.config import get_settings
@@ -129,3 +130,38 @@ async def ingest_domain(
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
+
+
+async def gc_housekeeping(ctx: dict[str, Any]) -> str:
+    """Prune chat sessions beyond each user's retention (count + age).
+
+    Admin-triggered in v1. Extensible: Phase 7 adds cache-TTL cleanup here.
+    """
+    from datetime import datetime
+
+    from paw.db.repos.chat import ChatRepo
+    from paw.db.repos.users import UserRepo
+    from paw.services.provider_settings import ProviderSettingsService
+    from paw.services.retention import resolve_retention, select_sessions_to_prune
+
+    box = SecretBox(get_settings().fernet_key)
+    pruned = 0
+    async with get_sessionmaker()() as session:
+        cfg = await ProviderSettingsService(session, box=box).get_chat()
+        now = datetime.now(UTC)
+        repo = ChatRepo(session)
+        for user in await UserRepo(session).list():
+            prefs = user.chat_prefs if isinstance(user.chat_prefs, dict) else {}
+            ret = resolve_retention(cfg, prefs)
+            sessions = await repo.list_for_gc(user.id)
+            doomed = select_sessions_to_prune(
+                sessions,
+                max_sessions=ret.max_sessions,
+                max_age_days=ret.max_age_days,
+                now=now,
+            )
+            if doomed:
+                await repo.delete_by_ids(doomed)
+                pruned += len(doomed)
+        await session.commit()
+    return f"gc:{pruned}"

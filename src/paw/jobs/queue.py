@@ -36,3 +36,8 @@ async def enqueue_ingest(
         str(source_id) if source_id else None,
         topic,
     )
+
+
+async def enqueue_gc_housekeeping(redis: Any | None = None) -> None:
+    pool = redis or await get_arq_pool()
+    await pool.enqueue_job("gc_housekeeping")
