@@ -97,11 +97,12 @@ class OpenAICompatProvider:
     async def stream(
         self, messages: list[Message], *, model: str | None = None
     ) -> AsyncIterator[str]:
-        resp = await self._client.chat.completions.create(
-            model=model or self.chat_model,
-            messages=[_message_to_dict(m) for m in messages],
-            stream=True,
-        )
+        kwargs: dict[str, Any] = {
+            "model": model or self.chat_model,
+            "messages": [_message_to_dict(m) for m in messages],
+            "stream": True,
+        }
+        resp = await self._client.chat.completions.create(**kwargs)
         async for chunk in resp:
             if not chunk.choices:
                 continue

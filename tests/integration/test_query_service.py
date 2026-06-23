@@ -49,7 +49,7 @@ async def test_answer_cites_articles(db_session, monkeypatch):
 
 
 async def test_empty_context_returns_dont_know(db_session, monkeypatch):
-    dom = await _provision(db_session, monkeypatch)
+    await _provision(db_session, monkeypatch)
     empty = await DomainRepo(db_session).create(name="empty", source_prefix="s", wiki_prefix="w")
     await db_session.commit()
     svc = QueryService(db_session, fernet_key=_FERNET)
@@ -64,6 +64,6 @@ async def test_missing_provider_raises_422(db_session, monkeypatch):
     svc = QueryService(db_session, fernet_key=_FERNET)
     try:
         await svc.prepare(domain_id=dom.id, question="q")
-        assert False, "expected ProblemError"
+        raise AssertionError("expected ProblemError")
     except ProblemError as e:
         assert e.status == 422

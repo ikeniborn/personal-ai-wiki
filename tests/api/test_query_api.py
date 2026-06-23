@@ -1,5 +1,3 @@
-import json
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from tests.stubs import StubChatProvider, StubEmbeddingProvider
