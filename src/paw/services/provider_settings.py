@@ -7,10 +7,12 @@ from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
 from paw.db.repos.settings import SettingsRepo
 from paw.providers.config import (
     CHAT_KEY,
+    GRAPH_KEY,
     PROVIDER_KEY,
     RETRIEVAL_KEY,
     WIKI_KEY,
     ChatConfig,
+    GraphConfig,
     ProviderConfig,
     RetrievalConfig,
     WikiConfig,
@@ -120,6 +122,10 @@ class ProviderSettingsService:
     async def get_chat(self) -> ChatConfig:
         raw = (await self._all()).get(CHAT_KEY)
         return ChatConfig.model_validate(raw) if raw else ChatConfig()
+
+    async def get_graph(self) -> GraphConfig:
+        raw = (await self._all()).get(GRAPH_KEY)
+        return GraphConfig.model_validate(raw) if raw else GraphConfig()
 
     async def set_wiki(self, cfg: WikiConfig) -> WikiConfig:
         settings = await self._all()

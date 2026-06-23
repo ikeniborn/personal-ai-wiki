@@ -4,8 +4,11 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.errors import ProblemError
-from paw.db.models import Article
+from paw.db.models import Article, ArticleRevision
 from paw.db.repos.articles import ArticleRepo
+from paw.db.repos.citations import CitationRepo, CitationView
+from paw.db.repos.links import LinkedArticle, LinkRepo
+from paw.graph.tree import TreeNode, build_tree, normalize_parent_child
 from paw.storage.postgres import PostgresStorage
 
 
@@ -13,6 +16,15 @@ from paw.storage.postgres import PostgresStorage
 class ArticleBody:
     article: Article
     markdown: str
+
+
+@dataclass
+class ArticleMeta:
+    article: Article
+    backlinks: list[LinkedArticle]
+    outgoing: list[LinkedArticle]
+    citations: list[CitationView]
+    revisions: list[ArticleRevision]
 
 
 class ArticleService:
@@ -91,3 +103,25 @@ class ArticleService:
 
     async def list_by_domain(self, domain_id: uuid.UUID) -> list[Article]:
         return await self._repo.list_by_domain(domain_id)
+
+    async def get_meta(self, article_id: uuid.UUID) -> ArticleMeta:
+        art = await self._repo.get(article_id)
+        if art is None:
+            raise ProblemError(status=404, title="Article not found")
+        links = LinkRepo(self._s)
+        return ArticleMeta(
+            article=art,
+            backlinks=await links.backlinks(article_id),
+            outgoing=await links.outgoing(article_id),
+            citations=await CitationRepo(self._s).list_for_article(article_id),
+            revisions=await self._repo.list_revisions(article_id),
+        )
+
+    async def domain_tree(self, domain_id: uuid.UUID) -> list[TreeNode]:
+        articles = await self._repo.list_by_domain(domain_id)
+        nodes = [(a.id, a.slug, a.title) for a in articles]
+        typed = await LinkRepo(self._s).parent_child_raw(domain_id)
+        return build_tree(nodes, normalize_parent_child(typed))
+
+    async def slug_map(self, domain_id: uuid.UUID) -> dict[str, uuid.UUID]:
+        return await self._repo.slug_id_map(domain_id)

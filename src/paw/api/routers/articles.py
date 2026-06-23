@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.deps import current_user, db, require_csrf, require_role
 from paw.db.models import User
-from paw.security.sanitize import render_markdown
+from paw.security.sanitize import render_markdown, resolve_wikilinks
 from paw.services.articles import ArticleService
 
 router = APIRouter(tags=["articles"])
@@ -67,13 +67,16 @@ async def get_article(
     session: AsyncSession = Depends(db),
     _: User = Depends(require_role("admin", "editor", "viewer")),
 ) -> ArticleDetail:
-    body = await ArticleService(session).get_body(article_id)
+    svc = ArticleService(session)
+    body = await svc.get_body(article_id)
+    slug_map = await svc.slug_map(body.article.domain_id)
+    html = render_markdown(resolve_wikilinks(body.markdown, slug_map))
     return ArticleDetail(
         id=str(body.article.id),
         slug=body.article.slug,
         title=body.article.title,
         current_rev=body.article.current_rev,
-        html=render_markdown(body.markdown),
+        html=html,
     )
 
 

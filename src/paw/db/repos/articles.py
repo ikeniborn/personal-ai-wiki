@@ -40,6 +40,12 @@ class ArticleRepo:
         )
         return list(res.scalars().all())
 
+    async def slug_id_map(self, domain_id: uuid.UUID) -> dict[str, uuid.UUID]:
+        res = await self._s.execute(
+            select(Article.slug, Article.id).where(Article.domain_id == domain_id)
+        )
+        return {row[0]: row[1] for row in res.all()}
+
     async def add_revision(
         self,
         *,

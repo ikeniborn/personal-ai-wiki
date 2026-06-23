@@ -1,0 +1,10 @@
+<h3>{{ domain_name }}</h3>
+<input type="text" id="tree-filter" placeholder="Filter…" autocomplete="off">
+<ul class="tree">
+{% for node in tree recursive %}
+  <li class="tree-item" data-title="{{ node.title | lower }}">
+    <a href="/articles/{{ node.id }}">{{ node.title }}</a>
+    {% if node.children %}<ul>{{ loop(node.children) }}</ul>{% endif %}
+  </li>
+{% endfor %}
+</ul>

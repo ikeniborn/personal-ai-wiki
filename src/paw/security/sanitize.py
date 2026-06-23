@@ -1,3 +1,6 @@
+import re
+import uuid
+
 import mistune
 import nh3
 
@@ -35,6 +38,25 @@ _md = mistune.create_markdown(
     renderer=mistune.HTMLRenderer(escape=False),
     plugins=["table", "strikethrough"],
 )
+
+# [[slug]] or [[slug|label]] — slug has no '|' or ']'; optional label has no ']'.
+_WIKILINK = re.compile(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]")
+
+
+def resolve_wikilinks(text: str, slug_to_id: dict[str, uuid.UUID]) -> str:
+    """Rewrite [[slug]] / [[slug|label]] to markdown links for known slugs.
+
+    Unknown slugs degrade to their plain label text (visible, not a broken link).
+    Call this BEFORE render_markdown.
+    """
+
+    def _replace(match: re.Match[str]) -> str:
+        slug = match.group(1).strip()
+        label = (match.group(2) or slug).strip()
+        article_id = slug_to_id.get(slug)
+        return f"[{label}](/articles/{article_id})" if article_id is not None else label
+
+    return _WIKILINK.sub(_replace, text)
 
 
 def render_markdown(text: str) -> str:

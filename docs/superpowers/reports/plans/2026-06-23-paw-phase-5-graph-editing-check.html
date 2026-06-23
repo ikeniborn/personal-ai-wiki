@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 5 (Graph + editing)</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+    --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+    --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+    --info:#1e88e5; --info-2:#1565c0;
+    --shadow:rgba(40,40,80,.18);
+  }
+  body:has(#theme-toggle:checked){
+    --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+    --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+    --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+    --info:#89dceb; --info-2:#74c7ec;
+    --shadow:rgba(0,0,0,.45);
+  }
+  body{
+    margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1120px;
+    font:16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+      var(--bg);
+    color:var(--fg); transition:background .3s, color .3s;
+  }
+  .theme-btn{
+    position:sticky; top:.5rem; float:right; z-index:5;
+    cursor:pointer; user-select:none; padding:.25rem .6rem;
+    border:1px solid var(--border); border-radius:6px; background:var(--surface);
+  }
+  h1{ font-size:1.7rem; margin:.2rem 0 .4rem; }
+  h2{ font-size:1.25rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+  h3{ font-size:1.02rem; margin:1.2rem 0 .4rem; color:var(--accent-2); }
+  p.lead{ color:var(--muted); margin:.2rem 0 1rem; }
+  code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.86em; }
+  .rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+    margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+    overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+  .rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .7rem; text-align:left; vertical-align:top; }
+  .rpt-table tbody tr:last-child td{ border-bottom:none; }
+  .rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+  .rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+  .rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+  .badge{ display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.74rem; font-weight:600; border:1px solid transparent; white-space:nowrap; }
+  .b-ok{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border-color:var(--ok); }
+  .b-info{ background:color-mix(in srgb,var(--info) 22%, var(--surface)); color:var(--info-2); border-color:var(--info); }
+  .b-warn{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border-color:var(--warn); }
+  .b-danger{ background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border-color:var(--danger); }
+  .b-open{ background:var(--surface); color:var(--muted); border-color:var(--border); }
+  .phases{ display:flex; flex-wrap:wrap; gap:.6rem; margin:1rem 0; }
+  .phase-card{ flex:1 1 180px; background:var(--surface); border:1px solid var(--border);
+    border-left:5px solid var(--ok); border-radius:8px; padding:.6rem .8rem; box-shadow:0 1px 6px var(--shadow); }
+  .phase-card .name{ font-weight:600; }
+  .phase-card .st{ color:var(--ok-2); font-size:.85rem; }
+  .note{ background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border:1px solid var(--border);
+    border-left:5px solid var(--accent); border-radius:8px; padding:.7rem .9rem; margin:1rem 0; }
+  .note.ok{ border-left-color:var(--ok); }
+  .verdict{ font-size:1.1rem; font-weight:700; padding:.7rem 1rem; border-radius:10px;
+    background:color-mix(in srgb,var(--ok) 16%, var(--surface)); border:1px solid var(--ok); color:var(--ok-2); margin:1rem 0; }
+  .chain{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.84rem; background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:.6rem .8rem; overflow:auto; }
+  figure.graph{ margin:1rem 0; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:1rem; box-shadow:0 2px 12px var(--shadow); overflow:auto; }
+  figure.graph figcaption{ color:var(--muted); font-size:.83rem; margin-top:.5rem; }
+  .legend{ display:flex; gap:1.2rem; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin:.4rem 0 0; }
+  .legend span{ display:inline-flex; align-items:center; gap:.35rem; }
+  .swatch{ width:14px; height:14px; border-radius:3px; display:inline-block; border:1px solid var(--border); }
+  .gnode rect{ fill:var(--surface); stroke:var(--accent); stroke-width:2; }
+  .gnode text{ fill:var(--fg); font:600 11px system-ui, sans-serif; }
+  .summary-cells{ display:flex; gap:.6rem; flex-wrap:wrap; margin:.8rem 0; }
+  .scell{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.5rem .9rem; box-shadow:0 1px 6px var(--shadow); }
+  .scell b{ font-size:1.3rem; display:block; }
+  .scell.crit b{ color:var(--danger-2); }
+  .scell.info b{ color:var(--info-2); }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+  <h1>Проверка плана — Phase 5: Graph + editing (link-aware UI)</h1>
+  <p class="lead">Валидация плана реализации против исходной спецификации. Фазовая модель: structure → coverage → dependencies → verifiability → consistency.</p>
+
+  <table class="rpt-table">
+    <thead><tr><th>Артефакт</th><th>Путь</th><th>Хеш тела</th></tr></thead>
+    <tbody>
+      <tr><td>План</td><td><code>docs/superpowers/plans/2026-06-23-paw-phase-5-graph-editing.md</code></td><td><code>9efea1ecefa9e67b</code></td></tr>
+      <tr><td>Спека</td><td><code>docs/superpowers/specs/2026-06-22-paw-phase-5-graph-editing-design.md</code></td><td><code>22bb325bfbd2b06a</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict">Вердикт: OK — план соответствует спецификации. Критических и блокирующих расхождений нет; 2 INFO — намеренные задокументированные отклонения.</div>
+
+  <div class="summary-cells">
+    <div class="scell crit"><b>0</b>CRITICAL open</div>
+    <div class="scell"><b>0</b>MAJOR open</div>
+    <div class="scell"><b>0</b>WARNING open</div>
+    <div class="scell info"><b>2</b>INFO open</div>
+  </div>
+
+  <!-- ================= БЛОК 3a: статусы фаз ================= -->
+  <h2>Статусы фаз проверки</h2>
+  <div class="phases">
+    <div class="phase-card"><div class="name">1 · structure</div><div class="st">passed</div></div>
+    <div class="phase-card"><div class="name">2 · coverage</div><div class="st">passed</div></div>
+    <div class="phase-card"><div class="name">3 · dependencies</div><div class="st">passed</div></div>
+    <div class="phase-card"><div class="name">4 · verifiability</div><div class="st">passed</div></div>
+    <div class="phase-card"><div class="name">5 · consistency</div><div class="st">passed</div></div>
+  </div>
+
+  <!-- ================= БЛОК 1: резюме плана / DoD ================= -->
+  <h2>Резюме плана — задачи и критерии готовности (DoD)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Задача</th><th>Что делает</th><th>Критерий готовности / DoD</th></tr></thead>
+    <tbody>
+      <tr><td><b>Task 1</b></td><td>Миграция backlink-индекса (alembic 0004)</td><td>pytest <code>test_graph_subgraph.py::test_backlink_index_exists</code> PASS — индекс <code>ix_links_dst_article_id</code> в <code>pg_indexes</code></td></tr>
+      <tr><td><b>Task 2</b></td><td><code>GraphConfig</code> + <code>get_graph()</code> (config-слой)</td><td>pytest <code>test_graph_config.py</code> PASS (2 теста: defaults depth=2/max=4/link_types; override валидируется)</td></tr>
+      <tr><td><b>Task 3</b></td><td>Чистый <code>build_subgraph</code> (BFS depth+type, cycle-safe)</td><td>pytest <code>test_subgraph.py</code> PASS (7 тестов: глубина, depth=0, неориентированность, type-фильтр, пустой type-set, цикл, induced-рёбра)</td></tr>
+      <tr><td><b>Task 4</b></td><td>Чистый <code>build_tree</code> / <code>normalize_parent_child</code></td><td>pytest <code>test_tree.py</code> PASS (4 теста: dedup обе стороны, вложенность сортировка по title, мульти-корни, cycle-safe)</td></tr>
+      <tr><td><b>Task 5</b></td><td><code>GraphRepo.subgraph</code> (DB-compose, <code>GraphNode</code>)</td><td>pytest <code>test_graph_subgraph.py</code> PASS (4 теста) + регрессия <code>test_graph_repo.py</code></td></tr>
+      <tr><td><b>Task 6</b></td><td><code>LinkRepo</code> (backlinks/outgoing/parent_child_raw) + <code>CitationRepo.list_for_article</code> (outer-join sources)</td><td>pytest <code>test_link_repo.py</code> + <code>test_citation_reads.py</code> PASS (4 теста) + регрессия <code>test_ingest_op.py</code></td></tr>
+      <tr><td><b>Task 7</b></td><td><code>GraphService</code> + <code>GET /api/v1/graph</code> (clamp depth, type-allowlist, 404)</td><td>pytest <code>test_graph_api.py</code> PASS (5 тестов: auth-401, nodes+edges, type-filter, clamp=4, root-404)</td></tr>
+      <tr><td><b>Task 8</b></td><td><code>resolve_wikilinks</code> (<code>[[slug]]</code>/<code>[[slug|label]]</code>)</td><td>pytest <code>test_wikilinks.py</code> PASS (5 тестов)</td></tr>
+      <tr><td><b>Task 9</b></td><td><code>ArticleService.get_meta/domain_tree/slug_map</code> + <code>ArticleRepo.slug_id_map</code></td><td>pytest <code>test_article_meta.py</code> PASS (3 теста)</td></tr>
+      <tr><td><b>Task 10</b></td><td>Article page: meta-секции + wikilinks в API html + rollback UI + sidebar tree</td><td>pytest <code>test_article_meta_web.py</code> PASS (3 теста) + регрессия <code>test_articles.py</code></td></tr>
+      <tr><td><b>Task 11</b></td><td>Domain page sidebar tree + 🕸 Graph button</td><td>pytest <code>test_graph_web.py</code> PASS (1 тест) + регрессия <code>test_web_pages.py</code></td></tr>
+      <tr><td><b>Task 12</b></td><td>Graph UI page + vendored Cytoscape + <code>graph.js</code> (CSP-safe)</td><td>pytest <code>test_graph_web.py</code> PASS (4 теста) + регрессия <code>test_web_shell.py</code>; static-ассеты отдаются</td></tr>
+      <tr><td><b>Task 13</b></td><td>E2E: ingest → graph → backlinks → edit/rollback round-trip</td><td>pytest <code>test_graph_editing_e2e.py</code> PASS (1 тест) + полный гейт <code>ruff + mypy + pytest -q</code> зелёный</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ================= БЛОК 2a: граф зависимостей ================= -->
+  <h2>Граф зависимостей шагов</h2>
+  <p class="lead">Узлы — задачи 1…13. Направленные рёбра M → N означают «результат задачи M используется в задаче N». Все рёбра идут от меньшего номера к большему — циклов и нарушений порядка нет.</p>
+  <figure class="graph">
+    <svg viewBox="0 0 980 360" width="100%" role="img" aria-label="Граф зависимостей задач плана">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+        </marker>
+      </defs>
+      <!-- edges (drawn first, under nodes). Node centers below. -->
+      <!-- column x: c1=70 c2=235 c3=400 c4=565 c5=730 c6=895 ; rows y: r1=55 r2=150 r3=245 r4=320 -->
+      <g stroke="var(--line)" stroke-width="2" fill="none" marker-end="url(#arrow)">
+        <!-- T1 -> T5, T6, T9 -->
+        <path d="M100,150 C200,120 230,90 305,75"/>            <!-- 1->5 -->
+        <path d="M100,160 C230,210 300,235 365,243"/>          <!-- 1->6 -->
+        <path d="M95,175 C160,300 470,330 535,323"/>           <!-- 1->9 -->
+        <!-- T2 -> T7 -->
+        <path d="M265,150 C420,140 540,150 600,150"/>          <!-- 2->7 -->
+        <!-- T3 -> T5 -->
+        <path d="M265,55 C300,58 305,62 305,62"/>              <!-- 3->5 -->
+        <!-- T5 -> T7 -->
+        <path d="M430,70 C540,90 575,120 605,138"/>            <!-- 5->7 -->
+        <!-- T4 -> T9 -->
+        <path d="M265,245 C420,250 470,252 535,250"/>          <!-- 4->9 -->
+        <!-- T6 -> T9 -->
+        <path d="M430,248 C470,250 500,250 535,250"/>          <!-- 6->9 -->
+        <!-- T8 -> T10 -->
+        <path d="M430,320 C480,320 510,320 535,320"/>          <!-- 8->10 -->
+        <!-- T9 -> T10 -->
+        <path d="M565,265 C560,290 560,300 562,303"/>          <!-- 9->10 -->
+        <!-- T9 -> T11 -->
+        <path d="M595,245 C660,240 690,200 718,165"/>          <!-- 9->11 -->
+        <!-- T10 -> T11 -->
+        <path d="M595,318 C660,300 690,200 722,168"/>          <!-- 10->11 -->
+        <!-- T7 -> T12 -->
+        <path d="M760,150 C810,150 840,150 865,150"/>          <!-- 7->12 -->
+        <!-- E2E fan-in T7,T10,T11,T12 -> T13 -->
+        <path d="M755,160 C810,230 850,280 885,303"/>          <!-- 7->13 -->
+        <path d="M620,330 C720,340 820,335 865,328"/>          <!-- 10->13 -->
+        <path d="M760,160 C820,230 855,290 890,305"/>          <!-- 11->13 -->
+        <path d="M895,170 C895,220 895,270 895,300"/>          <!-- 12->13 -->
+      </g>
+      <!-- nodes -->
+      <g class="gnode" text-anchor="middle">
+        <g><rect x="40"  y="40"  width="60" height="30" rx="7"/><text x="70"  y="60">T1</text></g>
+        <g><rect x="205" y="135" width="60" height="30" rx="7"/><text x="235" y="155">T2</text></g>
+        <g><rect x="205" y="40"  width="60" height="30" rx="7"/><text x="235" y="60">T3</text></g>
+        <g><rect x="205" y="230" width="60" height="30" rx="7"/><text x="235" y="250">T4</text></g>
+        <g><rect x="305" y="55"  width="125" height="30" rx="7"/><text x="367" y="75">T5 subgraph</text></g>
+        <g><rect x="305" y="233" width="125" height="30" rx="7"/><text x="367" y="253">T6 repos</text></g>
+        <g><rect x="600" y="135" width="160" height="30" rx="7"/><text x="680" y="155">T7 GraphService/API</text></g>
+        <g><rect x="305" y="305" width="125" height="30" rx="7"/><text x="367" y="325">T8 wikilinks</text></g>
+        <g><rect x="535" y="235" width="60" height="30" rx="7"/><text x="565" y="255">T9</text></g>
+        <g><rect x="535" y="305" width="85" height="30" rx="7"/><text x="577" y="325">T10 page</text></g>
+        <g><rect x="710" y="135" width="100" height="30" rx="7"/><text x="760" y="155">T11 domain</text></g>
+        <g><rect x="865" y="135" width="90" height="30" rx="7"/><text x="910" y="155">T12 UI</text></g>
+        <g><rect x="855" y="300" width="100" height="34" rx="7" stroke="var(--accent-2)"/><text x="905" y="321">T13 E2E</text></g>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--surface);border-color:var(--accent)"></span> задача</span>
+      <span><svg width="34" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="var(--line)" stroke-width="2"/></svg> зависимость M→N (M&lt;N)</span>
+    </div>
+    <figcaption>Топологически корректный DAG: каждое ребро направлено от меньшего номера задачи к большему. Циклов нет, нарушений порядка нет — фаза dependencies passed.</figcaption>
+  </figure>
+
+  <!-- ================= БЛОК 2b: пересечения по артефактам ================= -->
+  <h2>Пересечения задач по артефактам (overlap)</h2>
+  <p class="lead">Файлы, которых касаются несколько задач. Все пересечения последовательны (append-only либо «создаёт → переиспользует») и бесконфликтны.</p>
+  <table class="rpt-table">
+    <thead><tr><th>Артефакт</th><th>Задачи</th><th>Характер пересечения</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/paw/graph/repo.py</code></td><td>Task 5</td><td>Переписывает файл, сохраняя <code>link</code>/<code>cooccurrence_targets</code> из Phase 2; добавляет <code>GraphNode</code> + <code>subgraph</code></td></tr>
+      <tr><td><code>src/paw/db/repos/citations.py</code></td><td>Task 6</td><td>Переписывает, сохраняя <code>create</code>; добавляет <code>CitationView</code> + <code>list_for_article</code></td></tr>
+      <tr><td><code>src/paw/api/web/routes.py</code></td><td>Task 10, 11, 12</td><td><b>Три задачи</b> трогают один файл (article_page+web_rollback → domain_page tree → graph_page) — последовательно, без конфликта</td></tr>
+      <tr><td><code>src/paw/api/web/static/theme.css</code></td><td>Task 10, 12</td><td>Append-only (meta/tree-стили + graph-canvas-стили) — без конфликта</td></tr>
+      <tr><td><code>src/paw/api/web/templates/_sidebar_tree.html</code></td><td>Task 10 → 11</td><td>Создаётся в T10, переиспользуется через <code>include</code> в T11</td></tr>
+      <tr><td><code>tests/integration/test_graph_subgraph.py</code></td><td>Task 1 → 5</td><td>Создаётся в T1, расширяется в T5</td></tr>
+      <tr><td><code>tests/api/test_graph_web.py</code></td><td>Task 11 → 12</td><td>Создаётся в T11, расширяется в T12</td></tr>
+      <tr><td><code>src/paw/main.py</code></td><td>Task 7</td><td>Регистрация graph-router (одна задача)</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ================= БЛОК 2c: покрытие AC ================= -->
+  <h2>Покрытие требований (AC спеки → задачи)</h2>
+  <p class="lead">Каждый критерий приёмки спеки закрывается несколькими задачами. Лишних задач, не привязанных к требованию, нет.</p>
+  <table class="rpt-table">
+    <thead><tr><th>Критерий приёмки</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td><b>AC-1</b> · <code>GET /graph</code> subgraph, depth bound, type filter</td><td>Task 3, 5, 7</td></tr>
+      <tr><td><b>AC-2</b> · Graph UI (Cytoscape, drawer, open)</td><td>Task 12 (+ точки входа Task 10/11)</td></tr>
+      <tr><td><b>AC-3</b> · Article page: backlinks/related/citations/revisions/<code>[[refs]]</code></td><td>Task 6, 8, 9, 10</td></tr>
+      <tr><td><b>AC-4</b> · Sidebar parent/child tree + filter</td><td>Task 4, 9, 10, 11</td></tr>
+      <tr><td><b>AC-5</b> · Rollback + optimistic-lock 409</td><td>Phase 1 reuse, UI Task 10, verify Task 10 + 13</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ================= БЛОК 3b: findings ================= -->
+  <h2>Findings (результаты проверки)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>F-001</code></td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Scope decisions (read first)</td>
+        <td>Task 1 добавляет индекс <code>ix_links_dst_article_id</code> — намеренное отклонение от «No schema changes» спеки; план это явно обосновывает (Scope decision 1), индекс совпадает с упомянутым в «Data model touched», ни таблицы, ни колонки не добавляется. Информационно.</td>
+        <td><span class="badge b-open">open</span></td>
+      </tr>
+      <tr>
+        <td><code>F-002</code></td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Scope decisions (read first)</td>
+        <td>Спека в «Data model touched» перечисляет чтение таблицы <code>entities</code>, но ни одна задача плана её не отображает (зеркалит spec-finding F-001). Scope decision 8: <code>entities</code> остаётся внутренним co-occurrence-входом Phase 2. Намеренно и задокументировано. Информационно.</td>
+        <td><span class="badge b-open">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note ok">
+    <b>Примечание (проверено при ревью, расхождением НЕ является):</b> направление co-occurrence-ребра в E2E (Task 13) — <code>(a2, a1, "related")</code> — совпадает с фактической логикой Stage D ingest (<code>src = art.id</code> текущей статьи = a2, <code>dst</code> = цель = a1). Ассерт корректен. Все заявленные счётчики тестов («PASS (N tests)») сверены с числом тестовых функций в блоках кода — совпадают.
+  </div>
+
+  <h2>Цепочка трассировки</h2>
+  <div class="chain">intent: null&nbsp;&nbsp;→&nbsp;&nbsp;docs/superpowers/specs/2026-06-22-paw-phase-5-graph-editing-design.md&nbsp;&nbsp;→&nbsp;&nbsp;docs/superpowers/plans/2026-06-23-paw-phase-5-graph-editing.md</div>
+
+  <p class="lead" style="margin-top:2rem">Отчёт сгенерирован навыком <code>check-plan</code> (фазовая модель) + <code>html-report</code>. Дата прогона: 2026-06-23.</p>
+</main>
+</body>
+</html>

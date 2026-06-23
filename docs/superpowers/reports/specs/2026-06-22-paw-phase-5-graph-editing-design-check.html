@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Phase 5: Graph + editing</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+    --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+    --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+    --shadow:rgba(40,40,80,.18);
+  }
+  body:has(#theme-toggle:checked){
+    --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+    --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+    --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+    --shadow:rgba(0,0,0,.45);
+  }
+  body{
+    margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px;
+    font:16px/1.55 system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+      var(--bg);
+    color:var(--fg);
+    transition:background .3s, color .3s;
+  }
+  .theme-btn{
+    position:sticky; top:.5rem; float:right; z-index:10;
+    cursor:pointer; user-select:none;
+    padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+    background:var(--surface);
+  }
+  h1{font-size:1.7rem; margin:.2rem 0 .3rem; color:var(--fg);}
+  h2{font-size:1.25rem; margin:2.2rem 0 .8rem; padding-bottom:.3rem; border-bottom:2px solid var(--border); color:var(--accent);}
+  h3{font-size:1.05rem; margin:1.4rem 0 .5rem; color:var(--fg);}
+  .lead{color:var(--muted); margin:.2rem 0 1rem;}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.88em; background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05em .35em; border-radius:4px;}
+  table{border-collapse:collapse; width:100%; margin:.6rem 0 1.2rem; background:var(--surface); box-shadow:0 1px 4px var(--shadow); border-radius:8px; overflow:hidden;}
+  th,td{padding:.55rem .7rem; text-align:left; vertical-align:top; border-bottom:1px solid var(--border);}
+  th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); font-weight:600;}
+  tbody tr:nth-child(even){background:var(--zebra);}
+  .badge{display:inline-block; padding:.1rem .55rem; border-radius:999px; font-size:.78rem; font-weight:700; white-space:nowrap;}
+  .b-ok{background:color-mix(in srgb,var(--ok) 22%,transparent); color:var(--ok-2);}
+  .b-warn{background:color-mix(in srgb,var(--warn) 25%,transparent); color:var(--warn-2);}
+  .b-danger{background:color-mix(in srgb,var(--danger) 22%,transparent); color:var(--danger-2);}
+  .b-info{background:color-mix(in srgb,var(--accent) 22%,transparent); color:var(--accent-2);}
+  .note{border-left:4px solid var(--accent); background:color-mix(in srgb,var(--accent) 10%, var(--surface)); padding:.6rem .9rem; border-radius:0 8px 8px 0; margin:1rem 0;}
+  .note.warn{border-left-color:var(--warn); background:color-mix(in srgb,var(--warn) 12%, var(--surface));}
+  .summary-cards{display:flex; flex-wrap:wrap; gap:1rem; margin:1rem 0;}
+  .card{flex:1 1 150px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.8rem 1rem; box-shadow:0 1px 4px var(--shadow);}
+  .card .num{font-size:1.9rem; font-weight:800; line-height:1;}
+  .card .lbl{color:var(--muted); font-size:.85rem; margin-top:.25rem;}
+  figure{margin:1rem 0;}
+  figcaption{color:var(--muted); font-size:.85rem; margin-top:.4rem;}
+  /* block/flow diagram */
+  .flow{display:flex; flex-direction:column; gap:1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.2rem; box-shadow:0 1px 4px var(--shadow);}
+  .flow-row{display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; justify-content:center;}
+  .node{background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border:1.5px solid var(--accent); border-radius:8px; padding:.5rem .8rem; font-size:.86rem; text-align:center; min-width:120px;}
+  .node.data{border-style:dashed; border-color:var(--line); background:color-mix(in srgb,var(--line) 12%, var(--surface));}
+  .node.ui{border-color:var(--accent-2);}
+  .node.warnnode{border-color:var(--warn); background:color-mix(in srgb,var(--warn) 14%, var(--surface));}
+  .arrow{color:var(--muted); font-size:1.3rem; user-select:none;}
+  .layer-lbl{font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:.2rem;}
+  .cov-yes{color:var(--ok-2); font-weight:700;}
+  .cov-no{color:var(--danger-2); font-weight:700;}
+  .meta-line{color:var(--muted); font-size:.9rem;}
+  .chain{display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin:.6rem 0;}
+  .chain .node{min-width:auto;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<h1>Проверка спецификации — Phase 5: Graph + editing (link-aware UI)</h1>
+<p class="lead">Отчёт навыка <code>check-spec</code> · дата прогона: 2026-06-23 · <code>spec_hash: 22bb325bfbd2b06a</code></p>
+
+<div class="summary-cards">
+  <div class="card"><div class="num" style="color:var(--ok-2)">OK</div><div class="lbl">Финальный вердикт</div></div>
+  <div class="card"><div class="num">0</div><div class="lbl">CRITICAL open</div></div>
+  <div class="card"><div class="num">0</div><div class="lbl">WARNING open</div></div>
+  <div class="card"><div class="num" style="color:var(--accent-2)">4</div><div class="lbl">INFO open</div></div>
+  <div class="card"><div class="num" style="color:var(--ok-2)">4/4</div><div class="lbl">Фазы passed</div></div>
+</div>
+
+<!-- ============ BLOCK 1 ============ -->
+<h2>1. Резюме спецификации</h2>
+<p>Спека описывает <strong>Phase 5 — Graph + editing</strong>: навигацию по wiki через структуру ссылок.
+Полноэкранный граф показывает подграф вокруг любой статьи; страница статьи раскрывает реальные backlinks,
+related-ссылки, цитаты и ревизии; вторичный сайдбар превращается в дерево parent/child. Решение строится на
+данных link/entity/citation, которые производит Phase 2. Зависит от Phase 2. Изменений схемы БД нет.</p>
+
+<h3>Требования (по секциям)</h3>
+<table>
+  <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+  <tbody>
+    <tr><td>In scope · Graph read (LLD §6/§9)</td><td><code>graph/repo.py</code> — subgraph-запрос вокруг root, ограниченная глубина, фильтр по типу ссылки; <code>GET /graph?domain=&amp;root=&amp;depth=</code> возвращает nodes + типизированные edges.</td></tr>
+    <tr><td>In scope · Graph UI (frame 🕸)</td><td>Полноэкранный Cytoscape (vendored) + тонкие верхние контролы (выбор root, слайдер глубины, фильтр типов <code>related/parent/child/references/depends_on</code>); клик по узлу → slide-in drawer (summary + ссылки + open).</td></tr>
+    <tr><td>In scope · Link-aware article page (LLD §9)</td><td>Заполнить метаданные-секции (плейсхолдеры Phase 1): Citations/Sources (<code>citations</code>→<code>sources</code>), Backlinks (<code>links</code> по <code>dst_article_id</code>), Related/parent/child (<code>links</code> по типу), Revisions (<code>article_revisions</code> + rollback); <code>[[refs]]</code> рендерятся как внутренние wiki-ссылки.</td></tr>
+    <tr><td>In scope · Secondary sidebar tree (LLD §9)</td><td>Заменить плоский список статей Phase 1 деревом parent/child из <code>links</code> (тип parent/child) с фильтр-боксом.</td></tr>
+    <tr><td>In scope · Editing</td><td>Переиспользовать Edit/Preview вкладки Phase 1 + optimistic-lock 409 + rollback; правки, меняющие links/citations, отражаются в метаданных и графе.</td></tr>
+    <tr><td>Out of scope</td><td>Lint/fix, меняющие граф (Phase 6); query-cache stale-on-edit (Phase 7); graph pagination perf (backlog); новых таблиц нет.</td></tr>
+    <tr><td>Data model touched</td><td>Читает <code>links</code> (+ индекс <code>links(dst_article_id)</code>), <code>citations</code>, <code>entities</code>, <code>article_revisions</code> из Phase 2. Без изменений схемы.</td></tr>
+    <tr><td>Config (LLD §10)</td><td><code>bfs_depth</code>/дефолтная глубина графа, allowlist типов ссылок (display + filter), per-domain overrides.</td></tr>
+    <tr><td>Security</td><td>Read-эндпоинты ограничены доменным доступом вызывающего; рендер статьи + summary санитизируются (<code>nh3</code>); rollback пишет новую ревизию (origin сохранён/аудит), не деструктивная перезапись.</td></tr>
+  </tbody>
+</table>
+
+<h3>Success Criteria (Acceptance criteria, verifiable)</h3>
+<table>
+  <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+  <tbody>
+    <tr><td>AC#1</td><td><code>GET /graph</code> возвращает subgraph вокруг root в пределах глубины; edges несут тип; фильтр типов убирает отфильтрованные edges.</td></tr>
+    <tr><td>AC#2</td><td>Graph UI рендерит subgraph; слайдер глубины перезапрашивает; клик по узлу открывает drawer с summary + ссылки; «open» ведёт к статье.</td></tr>
+    <tr><td>AC#3</td><td>Страница статьи показывает реальные backlinks (обратная сторона исходящей ссылки), related/parent/child ссылки, цитаты со ссылками на их sources, и список ревизий.</td></tr>
+    <tr><td>AC#4</td><td>Вторичный сайдбар показывает дерево parent/child; фильтр сужает его.</td></tr>
+    <tr><td>AC#5</td><td>Rollback восстанавливает прежнюю ревизию как новую ревизию; optimistic-lock 409 сохраняется.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ BLOCK 2 ============ -->
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>2.1 Схема решения (компоненты и data/control flow)</h3>
+<figure>
+  <div class="flow">
+    <div>
+      <div class="layer-lbl">Источник данных (Phase 2)</div>
+      <div class="flow-row">
+        <div class="node data"><code>links</code> (+ idx dst_article_id)</div>
+        <div class="node data"><code>citations</code> → <code>sources</code></div>
+        <div class="node data"><code>entities</code></div>
+        <div class="node data"><code>article_revisions</code></div>
+      </div>
+    </div>
+    <div class="flow-row"><span class="arrow">▲ читают</span></div>
+    <div>
+      <div class="layer-lbl">Слой логики / репозитории</div>
+      <div class="flow-row">
+        <div class="node"><code>graph/repo.py</code><br>subgraph BFS · cycle-safe</div>
+        <div class="node">Article page sections<br>Citations · Backlinks · Related · Revisions</div>
+        <div class="node">Sidebar tree builder<br>parent/child · cycle-safe</div>
+        <div class="node">Editing<br>Edit/Preview · 409 · rollback</div>
+      </div>
+    </div>
+    <div class="flow-row"><span class="arrow">▲</span></div>
+    <div>
+      <div class="layer-lbl">API</div>
+      <div class="flow-row">
+        <div class="node"><code>GET /graph</code><br>nodes + typed edges</div>
+      </div>
+    </div>
+    <div class="flow-row"><span class="arrow">▲ запрашивает</span></div>
+    <div>
+      <div class="layer-lbl">UI (frame 🕸 / страница статьи)</div>
+      <div class="flow-row">
+        <div class="node ui">Graph UI · Cytoscape (vendored)<br>canvas → node click → slide-in drawer</div>
+        <div class="node ui">Article page · Secondary sidebar</div>
+      </div>
+    </div>
+  </div>
+  <figcaption>Поток: UI → <code>GET /graph</code> → <code>graph/repo.py</code> → таблицы Phase 2. Editing пишет <code>article_revisions</code> и обновляет links/citations → изменения отражаются в метаданных и графе при перезагрузке.</figcaption>
+</figure>
+
+<h3>2.2 Граф зависимостей (A → B = «A зависит от / использует B»)</h3>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 760 430" width="100%" role="img" aria-label="граф зависимостей требований">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+    </defs>
+    <!-- edges (drawn first, under nodes) -->
+    <!-- features -> data/api -->
+    <g stroke="var(--line)" stroke-width="1.6" marker-end="url(#arr)" fill="none">
+      <!-- graph/repo.py -> links-table -->
+      <line x1="170" y1="120" x2="120" y2="300"/>
+      <!-- GET-/graph -> graph/repo.py -->
+      <line x1="120" y1="60" x2="160" y2="100"/>
+      <!-- Graph-UI -> GET-/graph -->
+      <line x1="60" y1="60" x2="100" y2="55"/>
+      <!-- Article-page -> citations-table -->
+      <line x1="400" y1="120" x2="320" y2="300"/>
+      <!-- Article-page -> links-table -->
+      <line x1="395" y1="120" x2="160" y2="305"/>
+      <!-- Article-page -> article_revisions -->
+      <line x1="420" y1="120" x2="540" y2="300"/>
+      <!-- Sidebar-tree -> links-table -->
+      <line x1="560" y1="120" x2="180" y2="300"/>
+      <!-- Editing -> article_revisions -->
+      <line x1="660" y1="120" x2="560" y2="300"/>
+      <!-- Editing -> links-table -->
+      <line x1="650" y1="120" x2="200" y2="300"/>
+      <!-- Editing -> citations-table -->
+      <line x1="655" y1="120" x2="330" y2="300"/>
+      <!-- data tables -> Phase2-data -->
+      <line x1="120" y1="340" x2="350" y2="395"/>
+      <line x1="310" y1="340" x2="360" y2="395"/>
+      <line x1="450" y1="340" x2="400" y2="395"/>
+      <line x1="550" y1="340" x2="420" y2="395"/>
+    </g>
+
+    <!-- feature/api nodes (top, y~90) -->
+    <g font-size="11" text-anchor="middle">
+      <g>
+        <rect x="20" y="40" width="80" height="30" rx="6" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="1.6"/>
+        <text x="60" y="59" fill="var(--fg)">Graph-UI</text>
+      </g>
+      <g>
+        <rect x="80" y="42" width="86" height="28" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="123" y="60" fill="var(--fg)">GET /graph</text>
+      </g>
+      <g>
+        <rect x="150" y="92" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="198" y="111" fill="var(--fg)">graph/repo.py</text>
+      </g>
+      <g>
+        <rect x="360" y="92" width="86" height="30" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="403" y="111" fill="var(--fg)">Article-page</text>
+      </g>
+      <g>
+        <rect x="520" y="92" width="86" height="30" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="563" y="111" fill="var(--fg)">Sidebar-tree</text>
+      </g>
+      <g>
+        <rect x="625" y="92" width="78" height="30" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="664" y="111" fill="var(--fg)">Editing</text>
+      </g>
+    </g>
+
+    <!-- data table nodes (middle, y~310) -->
+    <g font-size="11" text-anchor="middle">
+      <g>
+        <rect x="70" y="310" width="100" height="30" rx="6" fill="var(--surface)" stroke="var(--line)" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <text x="120" y="329" fill="var(--fg)">links-table</text>
+      </g>
+      <g>
+        <rect x="255" y="310" width="110" height="30" rx="6" fill="var(--surface)" stroke="var(--line)" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <text x="310" y="329" fill="var(--fg)">citations-table</text>
+      </g>
+      <g>
+        <rect x="395" y="310" width="105" height="30" rx="6" fill="var(--surface)" stroke="var(--warn)" stroke-width="2"/>
+        <text x="447" y="329" fill="var(--fg)">entities-table</text>
+      </g>
+      <g>
+        <rect x="510" y="310" width="120" height="30" rx="6" fill="var(--surface)" stroke="var(--line)" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <text x="570" y="329" fill="var(--fg)">article_revisions</text>
+      </g>
+    </g>
+
+    <!-- entities edge -> Phase2 (dangling-in: no feature points to it) -->
+    <g stroke="var(--warn)" stroke-width="1.6" marker-end="url(#arr)" fill="none" stroke-dasharray="4 3">
+      <line x1="447" y1="340" x2="395" y2="395"/>
+    </g>
+
+    <!-- Phase2-data root node (bottom) -->
+    <g font-size="11" text-anchor="middle">
+      <rect x="330" y="395" width="110" height="30" rx="6" fill="color-mix(in srgb,var(--accent) 16%, var(--surface))" stroke="var(--accent)" stroke-width="1.8"/>
+      <text x="385" y="414" fill="var(--fg)">Phase2-data</text>
+    </g>
+  </svg>
+  <figcaption>
+    Все рёбра направлены сверху вниз к корню <code>Phase2-data</code> — <strong>циклов нет</strong> (DAG).
+    Жёлтым выделен узел <code>entities-table</code>: ни одна фича/AC не имеет ребра к нему — потенциально
+    неиспользуемое чтение (см. finding <strong>F-001</strong>).
+  </figcaption>
+</figure>
+
+<h3>2.3 Карта покрытия (In-scope задача → Acceptance criteria)</h3>
+<table>
+  <thead><tr><th>In-scope задача</th><th>Покрывающий критерий</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr><td>Graph read</td><td>AC#1</td><td class="cov-yes">покрыто</td></tr>
+    <tr><td>Graph UI</td><td>AC#2</td><td class="cov-yes">покрыто</td></tr>
+    <tr><td>Article page · Citations/Backlinks/Related/Revisions</td><td>AC#3</td><td class="cov-yes">покрыто</td></tr>
+    <tr><td>Article page · <code>[[refs]]</code> рендеринг</td><td>— нет AC —</td><td class="cov-no">НЕ покрыто (F-002)</td></tr>
+    <tr><td>Secondary sidebar tree</td><td>AC#4</td><td class="cov-yes">покрыто</td></tr>
+    <tr><td>Editing (optimistic-lock 409 + rollback)</td><td>AC#5</td><td class="cov-yes">покрыто</td></tr>
+    <tr><td>Data model · <code>entities</code></td><td>— не используется фичей —</td><td class="cov-no">висячее чтение (F-001)</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ BLOCK 3 ============ -->
+<h2>3. Результаты проверки</h2>
+
+<h3>3.1 Статусы фаз</h3>
+<table>
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Findings</th><th>Комментарий</th></tr></thead>
+  <tbody>
+    <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Нет плейсхолдеров TODO/TBD/???/FIXME; нет дубликатов заголовков; нумерации секций нет (именованные секции); битых внутренних ссылок нет (<code>§N</code> указывают на внешний LLD).</td></tr>
+    <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>2 INFO</td><td>Все 5 AC прослеживаются к In-scope; обратная трассировка полная. Висячее чтение <code>entities</code> (F-001) и непокрытый <code>[[refs]]</code> (F-002).</td></tr>
+    <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td><td>2 INFO</td><td>Терминология references vs citations (F-003); неуказанные дефолт/максимум глубины (F-004).</td></tr>
+    <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Предыдущего <code>review:</code>-блока нет — все секции новые, diff не с чем сопоставлять.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.2 Findings</h3>
+<table>
+  <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>F-001</td><td><span class="badge b-info">INFO</span></td><td>Data model touched</td>
+      <td><code>entities</code> указан как читаемая таблица (и Goal упоминает link/entity/citation data), но ни одна In-scope-фича / flow / AC не использует и не отображает entities — чтение объявлено без фичи.</td>
+      <td><span class="badge b-warn">open</span></td>
+    </tr>
+    <tr>
+      <td>F-002</td><td><span class="badge b-info">INFO</span></td><td>In scope</td>
+      <td>In-scope требует рендер <code>[[refs]]</code> как wiki-ссылок (стр. 28), но ни один AC это не проверяет (AC#3 молчит про <code>[[refs]]</code>) — требование без верифицирующего критерия.</td>
+      <td><span class="badge b-warn">open</span></td>
+    </tr>
+    <tr>
+      <td>F-003</td><td><span class="badge b-info">INFO</span></td><td>In scope</td>
+      <td>Терминология: фильтр графа использует тип <code>references</code> (стр. 23), а страница статьи и AC#3 — отдельную таблицу <code>citations</code>; их связь нигде не оговорена, references vs citations неоднозначно.</td>
+      <td><span class="badge b-warn">open</span></td>
+    </tr>
+    <tr>
+      <td>F-004</td><td><span class="badge b-info">INFO</span></td><td>Config (LLD §10)</td>
+      <td>Config называет <code>bfs_depth</code>/дефолтную глубину и слайдер, AC#1 ссылается на «depth bound», но дефолт и максимум глубины нигде не заданы — требование без явного значения/DoD.</td>
+      <td><span class="badge b-warn">open</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.3 Сводка</h3>
+<div class="summary-cards">
+  <div class="card"><div class="num" style="color:var(--ok-2)">0</div><div class="lbl">CRITICAL open</div></div>
+  <div class="card"><div class="num" style="color:var(--ok-2)">0</div><div class="lbl">WARNING open</div></div>
+  <div class="card"><div class="num" style="color:var(--accent-2)">4</div><div class="lbl">INFO open</div></div>
+</div>
+<div class="note">
+  <strong>Финальный вердикт: OK.</strong> Нет открытых CRITICAL или WARNING. Зафиксированы 4 INFO-замечания
+  к рассмотрению — не блокируют переход к планированию. Все 4 фазы (structure / coverage / clarity / consistency)
+  имеют статус <span class="badge b-ok">passed</span>.
+</div>
+
+<h3>3.4 Chain (intent → spec)</h3>
+<div class="chain">
+  <div class="node warnnode">intent: отсутствует</div>
+  <span class="arrow">→</span>
+  <div class="node">spec: Phase 5 — Graph + editing</div>
+</div>
+<p class="meta-line"><code>intent_path = null</code> — директории <code>docs/superpowers/intents/</code> в проекте нет, intent-документ для этой фазы не создавался. Цепочка проверена без блокировки.</p>
+
+<p class="meta-line" style="margin-top:2rem">Источник: <code>docs/superpowers/specs/2026-06-22-paw-phase-5-graph-editing-design.md</code> · <code>review.spec_hash = 22bb325bfbd2b06a</code> · последний прогон 2026-06-23.</p>
+
+</body>
+</html>
