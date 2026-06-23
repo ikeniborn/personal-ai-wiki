@@ -37,6 +37,13 @@ _OVERLAYS = {
         "you used inline like [slug]. If the context does not contain the answer, reply that "
         "you don't know — never invent facts or citations."
     ),
+    "fix": (
+        "You are repairing one wiki article to resolve a specific quality ISSUE. "
+        "You are given the article markdown and the issue. Return corrected article "
+        "markdown that resolves the issue WITHOUT inventing facts: keep all real "
+        "content, only fix the specific problem (e.g. remove or correct a broken "
+        "[[link]]). Headings '##' only. Optionally propose typed links to add."
+    ),
 }
 
 
