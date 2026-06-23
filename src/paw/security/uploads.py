@@ -19,6 +19,7 @@ def validate_text_upload(filename: str, data: bytes, *, max_bytes: int) -> None:
 
 _TEXT_EXT = {".md": "md", ".markdown": "md", ".txt": "txt"}
 _HTML_EXT = {".html": "html", ".htm": "html"}
+_TEXT_LIKE_EXT = {**_TEXT_EXT, **_HTML_EXT}  # utf-8-validated extensions
 _PDF_MAGIC = b"%PDF-"
 _ZIP_MAGIC = b"PK\x03\x04"
 
@@ -29,7 +30,7 @@ def validate_source_upload(filename: str, data: bytes, *, max_bytes: int) -> str
         raise UploadRejected("file too large")
     if not data:
         raise UploadRejected("empty file")
-    for ext, kind in {**_TEXT_EXT, **_HTML_EXT}.items():
+    for ext, kind in _TEXT_LIKE_EXT.items():
         if lower.endswith(ext):
             try:
                 data.decode("utf-8")

@@ -43,3 +43,13 @@ def test_validate_source_accepts_html_and_md():
 def test_validate_source_rejects_unknown_ext():
     with pytest.raises(UploadRejected):
         validate_source_upload("x.exe", b"MZ", max_bytes=1024)
+
+
+def test_validate_source_rejects_oversize():
+    with pytest.raises(UploadRejected):
+        validate_source_upload("big.md", b"x" * 100, max_bytes=10)
+
+
+def test_validate_source_rejects_empty():
+    with pytest.raises(UploadRejected):
+        validate_source_upload("empty.md", b"", max_bytes=1024)

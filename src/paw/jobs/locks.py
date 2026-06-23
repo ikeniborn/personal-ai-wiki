@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -22,12 +23,11 @@ async def model_lock(
     redis: Any, model: str, *, ttl: int = 600, poll: float = 0.05, timeout: float = 120.0
 ) -> AsyncIterator[None]:
     key = f"lock:model:{model}"
-    waited = 0.0
+    deadline = time.monotonic() + timeout
     while not await redis.set(key, "1", nx=True, ex=ttl):
-        await asyncio.sleep(poll)
-        waited += poll
-        if waited >= timeout:
+        if time.monotonic() >= deadline:
             raise TimeoutError(f"model lock timeout: {model}")
+        await asyncio.sleep(poll)
     try:
         yield
     finally:

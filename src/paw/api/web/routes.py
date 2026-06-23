@@ -1,12 +1,20 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paw.api.deps import CSRF_COOKIE, SESSION_COOKIE, db, get_session_store
+from paw.api.deps import (
+    CSRF_COOKIE,
+    SESSION_COOKIE,
+    db,
+    get_session_store,
+    require_csrf,
+    require_role,
+)
+from paw.db.models import User
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.sources import SourceRepo
@@ -14,6 +22,7 @@ from paw.security.sanitize import render_markdown
 from paw.security.sessions import SessionStore
 from paw.services.articles import ArticleService
 from paw.services.domains import DomainService
+from paw.services.jobs import JobService
 from paw.services.setup import SetupService
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -75,6 +84,22 @@ async def domain_page(
             "latest_source_id": latest_source_id,
         },
     )
+
+
+@router.post("/domains/{domain_id}/ingest", response_class=HTMLResponse)
+async def web_start_ingest(
+    domain_id: uuid.UUID,
+    request: Request,
+    source_id: uuid.UUID = Form(...),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    # Start the job and return the SSE-wired drawer partial so HTMX swaps a live
+    # progress drawer into #job-drawer (not the raw JSON the API endpoint returns).
+    job = await JobService(session).start_ingest(domain_id=domain_id, source_id=source_id)
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
 
 
 @router.get("/articles/{article_id}", response_class=HTMLResponse)

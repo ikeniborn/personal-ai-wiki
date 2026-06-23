@@ -63,8 +63,32 @@ async def test_domain_page_has_ingest_action(authed):
     c, csrf, dom = authed
     page = await c.get(f"/domains/{dom}")
     assert page.status_code == 200
-    assert 'hx-post="/api/v1/domains/' in page.text
+    # the ingest form posts to the web route that renders the drawer (not the JSON API)
+    assert f'hx-post="/domains/{dom}/ingest"' in page.text
     assert 'id="job-drawer"' in page.text
+
+
+async def test_web_ingest_renders_job_drawer(authed, monkeypatch):
+    import paw.services.jobs as jobs_svc
+
+    async def fake_enqueue(redis, **kwargs):
+        return None
+
+    monkeypatch.setattr(jobs_svc, "enqueue_ingest", fake_enqueue)
+    c, csrf, dom = authed
+    files = {"file": ("q.md", b"# Q\n\nbody", "text/markdown")}
+    src = (
+        await c.post(f"/api/v1/domains/{dom}/sources", files=files, headers={"x-csrf-token": csrf})
+    ).json()
+    r = await c.post(
+        f"/domains/{dom}/ingest",
+        data={"source_id": src["id"]},
+        headers={"x-csrf-token": csrf},
+    )
+    assert r.status_code == 200
+    # the SSE-wired drawer partial, not raw JSON
+    assert 'sse-connect="/api/v1/jobs/' in r.text
+    assert "Cancel" in r.text
 
 
 async def test_settings_shows_dim_change_warning(authed):

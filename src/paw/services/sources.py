@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paw.config import get_settings
 from paw.db.models import Source
 from paw.db.repos.sources import SourceRepo
-from paw.security.uploads import validate_text_upload
+from paw.security.uploads import validate_source_upload, validate_text_upload
 from paw.storage.postgres import PostgresStorage
 
 
@@ -32,8 +32,6 @@ class SourceService:
     async def upload(
         self, *, domain_id: uuid.UUID, filename: str, data: bytes, content_type: str | None
     ) -> Source:
-        from paw.security.uploads import validate_source_upload
-
         kind = validate_source_upload(filename, data, max_bytes=get_settings().max_upload_bytes)
         checksum = hashlib.sha256(data).hexdigest()
         ref = await self._store.put(data, content_type=content_type, large=len(data) > 256 * 1024)

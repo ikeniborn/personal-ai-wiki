@@ -7,7 +7,7 @@
 {% block content %}
 <h1>{{ domain.name }}</h1>
 <div class="content-header">
-  <form hx-post="/api/v1/domains/{{ domain.id }}/ingest" hx-ext="json-enc"
+  <form hx-post="/domains/{{ domain.id }}/ingest"
         hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-target="#job-drawer" hx-swap="innerHTML">
     <input type="hidden" name="source_id" value="{{ latest_source_id | default('') }}">
     <button type="submit" {% if not latest_source_id %}disabled{% endif %}>Ingest latest source</button>
