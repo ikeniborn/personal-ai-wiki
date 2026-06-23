@@ -25,6 +25,10 @@ class IngestCancelled(Exception):
     pass
 
 
+class MaintenanceCancelled(Exception):
+    pass
+
+
 async def _safe_publish(redis: Any, jid: uuid.UUID, event: dict[str, Any]) -> None:
     # Progress notifications are best-effort; a Redis hiccup must never change
     # job status or fail an ingest.
@@ -165,3 +169,62 @@ async def gc_housekeeping(ctx: dict[str, Any]) -> str:
                 pruned += len(doomed)
         await session.commit()
     return f"gc:{pruned}"
+
+
+async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
+    from datetime import datetime
+
+    from paw.harness.ops.lint import run_lint
+    from paw.services.provider_settings import ProviderSettingsService
+
+    redis = ctx["redis"]
+    box = SecretBox(get_settings().fernet_key)
+    jid = uuid.UUID(job_id)
+    did = uuid.UUID(domain_id)
+    maker = get_sessionmaker()
+    async with maker() as job_s, maker() as data_s:
+        jobs = JobRepo(job_s)
+        async with domain_lock(redis, domain_id) as got:
+            if not got:
+                await jobs.set_status(jid, "failed", error="domain busy")
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
+                return "failed"
+            await jobs.set_status(jid, "running")
+            await jobs.heartbeat(jid)
+            await job_s.commit()
+            try:
+                if await jobs.is_cancel_requested(jid):
+                    raise MaintenanceCancelled()
+                cfg = await ProviderSettingsService(data_s, box=box).get_maintenance()
+                result = await run_lint(
+                    data_s, domain_id=did, cfg=cfg, now=datetime.now(UTC)
+                )
+                payload = [
+                    {
+                        "id": i.id,
+                        "kind": i.kind,
+                        "target_slug": i.target_slug,
+                        "detail": i.detail,
+                        "fix": i.fix,
+                    }
+                    for i in result.issues
+                ]
+                await jobs.append_log(jid, {"step": "issues", "issues": payload})
+                await jobs.set_status(jid, "succeeded")
+                await jobs.append_log(jid, {"step": "done"})
+                await job_s.commit()
+                await _safe_publish(
+                    redis, jid, {"step": "done", "status": "succeeded", "count": len(payload)}
+                )
+                return "succeeded"
+            except MaintenanceCancelled:
+                await jobs.set_status(jid, "cancelled")
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
+                return "cancelled"
+            except Exception as e:  # noqa: BLE001
+                await jobs.set_status(jid, "failed", error=str(e)[:500])
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
+                return "failed"
