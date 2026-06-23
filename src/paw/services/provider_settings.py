@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paw.config import get_settings
 from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
 from paw.db.repos.settings import SettingsRepo
-from paw.providers.config import PROVIDER_KEY, WIKI_KEY, ProviderConfig, WikiConfig
+from paw.providers.config import (
+    PROVIDER_KEY,
+    RETRIEVAL_KEY,
+    WIKI_KEY,
+    ProviderConfig,
+    RetrievalConfig,
+    WikiConfig,
+)
 from paw.security.secrets import SecretBox
 
 
@@ -103,6 +110,10 @@ class ProviderSettingsService:
     async def get_wiki(self) -> WikiConfig:
         raw = (await self._all()).get(WIKI_KEY)
         return WikiConfig.model_validate(raw) if raw else WikiConfig()
+
+    async def get_retrieval(self) -> RetrievalConfig:
+        raw = (await self._all()).get(RETRIEVAL_KEY)
+        return RetrievalConfig.model_validate(raw) if raw else RetrievalConfig()
 
     async def set_wiki(self, cfg: WikiConfig) -> WikiConfig:
         settings = await self._all()
