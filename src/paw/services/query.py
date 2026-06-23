@@ -15,7 +15,6 @@ from paw.providers.config import RetrievalConfig
 from paw.providers.factory import build_chat_provider, build_embedding_provider
 from paw.security.secrets import SecretBox
 from paw.services.provider_settings import ProviderSettingsService
-from paw.vector.search import CURRENT_EMBEDDING_VERSION
 
 
 @dataclass
@@ -65,7 +64,7 @@ class QueryService:
             query=question,
             embedder=embedder,
             cfg=retr,
-            embedding_version=CURRENT_EMBEDDING_VERSION,
+            embedding_version=await psvc.get_embedding_version(),
             redis=self._redis,
             embed_model=pc.embedding_model,
         )

@@ -110,6 +110,7 @@ class ProviderSettingsService:
         )
         if current is not None and current != embedding_dim:
             await rebuild_embedding_column(self._s, embedding_dim)
+            await self.bump_embedding_version()
         else:
             await ensure_embedding_column(self._s, embedding_dim)
         await self._s.commit()

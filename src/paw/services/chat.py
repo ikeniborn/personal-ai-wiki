@@ -29,7 +29,6 @@ from paw.providers.factory import build_chat_provider, build_embedding_provider
 from paw.security.secrets import SecretBox
 from paw.services.provider_settings import ProviderSettingsService
 from paw.services.retention import resolve_retention
-from paw.vector.search import CURRENT_EMBEDDING_VERSION
 
 
 def auto_title(question: str, *, max_len: int = 60) -> str:
@@ -133,7 +132,7 @@ class ChatService:
             query=question,
             embedder=embedder,
             cfg=retr,
-            embedding_version=CURRENT_EMBEDDING_VERSION,
+            embedding_version=await psvc.get_embedding_version(),
             redis=self._redis,
             embed_model=pc.embedding_model,
         )
