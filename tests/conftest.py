@@ -101,7 +101,8 @@ async def _clean_db(pg_async_url: str) -> AsyncIterator[None]:
         await conn.execute(
             text(
                 "TRUNCATE users, api_keys, app_settings, domains, blobs, "
-                "sources, articles, article_revisions, audit_log RESTART IDENTITY CASCADE"
+                "sources, articles, article_revisions, audit_log, "
+                "chat_sessions, chat_messages RESTART IDENTITY CASCADE"
             )
         )
         # Drop the managed embedding column/index so each test starts with a clean DDL state.
