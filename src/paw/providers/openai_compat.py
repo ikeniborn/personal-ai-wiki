@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic import BaseModel
@@ -92,6 +93,21 @@ class OpenAICompatProvider:
             finish_reason=choice.finish_reason or "stop",
             usage={k: int(v) for k, v in usage.items() if isinstance(v, int)},
         )
+
+    async def stream(
+        self, messages: list[Message], *, model: str | None = None
+    ) -> AsyncIterator[str]:
+        resp = await self._client.chat.completions.create(
+            model=model or self.chat_model,
+            messages=[_message_to_dict(m) for m in messages],
+            stream=True,
+        )
+        async for chunk in resp:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta is not None and delta.content:
+                yield delta.content
 
     async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         resp = await self._client.embeddings.create(
