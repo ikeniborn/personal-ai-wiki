@@ -31,7 +31,7 @@ async def upload_source(
 ) -> SourceOut:
     data = await file.read()
     try:
-        src = await SourceService(session).upload_text(
+        src = await SourceService(session).upload(
             domain_id=domain_id,
             filename=file.filename or "upload",
             data=data,

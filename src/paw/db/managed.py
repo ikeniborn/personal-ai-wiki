@@ -22,6 +22,25 @@ async def ensure_embedding_column(session: AsyncSession, dim: int) -> None:
     await session.flush()
 
 
+async def rebuild_embedding_column(session: AsyncSession, dim: int) -> None:
+    """Change the chunks.embedding vector dimension: drop the HNSW index and
+    column, re-add at the new dim, recreate the index. DESTRUCTIVE — existing
+    embeddings are dropped and chunks must be re-embedded (this is the
+    ALTER + HNSW rebuild + reindex the settings UI warns about)."""
+    if isinstance(dim, bool) or not isinstance(dim, int) or dim <= 0:
+        raise ValueError(f"embedding dim must be a positive int, got {dim!r}")
+    await session.execute(text(f"DROP INDEX IF EXISTS {_HNSW_INDEX}"))
+    await session.execute(text("ALTER TABLE chunks DROP COLUMN IF EXISTS embedding"))
+    await session.execute(text(f"ALTER TABLE chunks ADD COLUMN embedding vector({dim})"))
+    await session.execute(
+        text(
+            f"CREATE INDEX IF NOT EXISTS {_HNSW_INDEX} "
+            "ON chunks USING hnsw (embedding vector_cosine_ops)"
+        )
+    )
+    await session.flush()
+
+
 async def embedding_dim(session: AsyncSession) -> int | None:
     row = await session.execute(
         text(

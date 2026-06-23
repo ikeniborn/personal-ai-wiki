@@ -44,3 +44,32 @@ async def test_upload_rejects_exe(client):
         f"/api/v1/domains/{dom['id']}/sources", files=files, headers={"x-csrf-token": csrf}
     )
     assert r.status_code == 422
+
+
+async def test_upload_pdf_source(client):
+    import fitz
+
+    csrf = client.cookies.get("paw_csrf")
+    dom = (
+        await client.post("/api/v1/domains", json={"name": "pdfs"}, headers={"x-csrf-token": csrf})
+    ).json()
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), "pdf body")
+    files = {"file": ("paper.pdf", doc.tobytes(), "application/pdf")}
+    r = await client.post(
+        f"/api/v1/domains/{dom['id']}/sources", files=files, headers={"x-csrf-token": csrf}
+    )
+    assert r.status_code == 201
+    assert r.json()["type"] == "pdf"
+
+
+async def test_upload_rejects_bad_magic_pdf(client):
+    csrf = client.cookies.get("paw_csrf")
+    dom = (
+        await client.post("/api/v1/domains", json={"name": "pdfs"}, headers={"x-csrf-token": csrf})
+    ).json()
+    files = {"file": ("fake.pdf", b"not a pdf at all", "application/pdf")}
+    r = await client.post(
+        f"/api/v1/domains/{dom['id']}/sources", files=files, headers={"x-csrf-token": csrf}
+    )
+    assert r.status_code == 422

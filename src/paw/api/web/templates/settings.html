@@ -5,6 +5,19 @@
 {% endblock %}
 {% block content %}
 <h1>Settings</h1>
-<section id="connection"><h2>Connection</h2><p>Configured in Phase 2 (LLM provider).</p></section>
+<section id="connection">
+  <h2>Connection</h2>
+  <form hx-post="/api/v1/settings/provider" hx-ext="json-enc"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}'>
+    <label>Base URL <input name="base_url" required></label>
+    <label>API key <input name="api_key" type="password"></label>
+    <label>Chat model <input name="chat_model" required></label>
+    <label>Embedding model <input name="embedding_model" required></label>
+    <label>Vision model <input name="vision_model"></label>
+    <label>Embedding dim <input name="embedding_dim" type="number" required></label>
+    <p class="warning">Changing the embedding dimension requires an ALTER + HNSW rebuild + reindex.</p>
+    <button type="submit">Save connection</button>
+  </form>
+</section>
 <section id="users"><h2>Users</h2></section>
 {% endblock %}
