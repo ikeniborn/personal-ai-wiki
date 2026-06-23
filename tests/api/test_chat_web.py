@@ -2,7 +2,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from tests.stubs import StubChatProvider, StubEmbeddingProvider
 
-import paw.services.query as query_mod
+import paw.services.chat as chat_mod
 from paw.db.managed import ensure_embedding_column
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.domains import DomainRepo
@@ -38,62 +38,48 @@ async def client(db_session, wired_settings, monkeypatch):
         embedder=emb,
     )
     await db_session.commit()
-    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
+    monkeypatch.setattr(chat_mod, "build_embedding_provider", lambda pc, b: emb)
+    monkeypatch.setattr(
+        chat_mod, "build_chat_provider",
+        lambda pc, b: StubChatProvider(script=[StubChatProvider.text("**reliable** means [tcp]")]),
+    )
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
         await c.post(
-            "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "pw12345"},
+            "/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"}
         )
         c._dom = dom  # type: ignore[attr-defined]
         c._csrf = c.cookies.get("paw_csrf", "")  # type: ignore[attr-defined]
         yield c
 
 
-async def test_sync_json_shape(client, monkeypatch):
-    monkeypatch.setattr(
-        query_mod, "build_chat_provider",
-        lambda pc, b: StubChatProvider(script=[StubChatProvider.text("reliable means [tcp]")]),
-    )
+async def test_chat_page_renders(client):
+    r = await client.get("/chat")
+    assert r.status_code == 200
+    assert "name=\"q\"" in r.text or "name='q'" in r.text
+
+
+async def test_web_post_creates_session_and_renders_answer(client):
     r = await client.post(
-        f"/api/v1/domains/{client._dom.id}/query",
-        json={"q": "what is reliable?"},
+        "/chat",
+        data={"q": "what is reliable?", "domain_id": str(client._dom.id)},
         headers={"x-csrf-token": client._csrf},
     )
     assert r.status_code == 200
-    body = r.json()
-    assert body["answer_md"] == "reliable means [tcp]"
-    assert any(ref["slug"] == "tcp" for ref in body["refs"])
-    assert body["passages"] and body["passages"][0]["chunk_id"]
+    assert "<strong>reliable</strong>" in r.text  # markdown rendered + sanitized
+    assert "tcp" in r.text  # source chip
+    assert "session_id" in r.text  # OOB hidden input for follow-up turns
 
 
-async def test_sse_streams_tokens(client, monkeypatch):
-    monkeypatch.setattr(
-        query_mod, "build_chat_provider",
-        lambda pc, b: StubChatProvider(stream_tokens=["reli", "able"]),
-    )
-    r = await client.post(
-        f"/api/v1/domains/{client._dom.id}/query",
-        json={"q": "what is reliable?"},
-        headers={"x-csrf-token": client._csrf, "accept": "text/event-stream"},
-    )
-    assert r.status_code == 200
-    assert "text/event-stream" in r.headers["content-type"]
-    assert "reli" in r.text and "able" in r.text
-    assert '"status": "done"' in r.text or '"status":"done"' in r.text
-    assert "tcp" in r.text  # refs delivered in the terminal event
-
-
-async def test_query_response_shape_valid(client, monkeypatch):
-    monkeypatch.setattr(
-        query_mod, "build_chat_provider",
-        lambda pc, b: StubChatProvider(script=[StubChatProvider.text("answer [tcp]")]),
-    )
-    r = await client.post(
-        f"/api/v1/domains/{client._dom.id}/query",
-        json={"q": "what is reliable?"},
+async def test_session_page_shows_prior_messages(client):
+    await client.post(
+        "/chat",
+        data={"q": "what is reliable?", "domain_id": str(client._dom.id)},
         headers={"x-csrf-token": client._csrf},
     )
-    assert r.status_code == 200
-    body = r.json()
-    assert set(body) == {"answer_md", "refs", "passages"}
+    sessions = (await client.get("/api/v1/chat/sessions")).json()["items"]
+    sid = sessions[0]["id"]
+    page = await client.get(f"/chat/{sid}")
+    assert page.status_code == 200
+    assert "what is reliable?" in page.text
+    assert "<strong>reliable</strong>" in page.text

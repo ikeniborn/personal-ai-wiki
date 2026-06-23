@@ -4,6 +4,67 @@ phase: 4
 status: design
 date: 2026-06-22
 depends_on: [3]
+chain:
+  intent: null
+review:
+  spec_hash: b94520f3b5efd1a5
+  last_run: 2026-06-23
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "In scope / Acceptance criteria / Tests"
+      section_hash: a026f265ab249639
+      text: >-
+        The "Web UI" in-scope item (dedicated Chat messenger screen, secondary
+        sidebar session history, turn stream, source chips per turn) has no
+        corresponding acceptance criterion and no test. SSE streaming is covered
+        by AC #4 and the API tests, but the rendered UI (chips, sidebar history
+        list) is not verifiable by any stated criterion.
+      verdict: open
+      verdict_at: null
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "In scope / Security / API"
+      section_hash: a026f265ab249639
+      text: >-
+        The same entity is named inconsistently as "session" and "thread":
+        `chat_sessions` table and "their own sessions" vs "own threads"
+        (GET /chat/sessions) and "Own-thread isolation" (Security). Pick one
+        term for the user-facing aggregate.
+      verdict: open
+      verdict_at: null
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "Config (LLD §10) / In scope"
+      section_hash: f89dcee8a1c3f872
+      text: >-
+        Config-key naming mismatch: global setting is `chat_history_depth`
+        (Config §10) while the per-user chat_prefs key is `history_depth`
+        (In scope). Confirm this is an intentional global-vs-override naming
+        difference, otherwise align the names.
+      verdict: open
+      verdict_at: null
+    - id: F-004
+      phase: clarity
+      severity: INFO
+      section: "In scope / Config / Acceptance criteria"
+      section_hash: a026f265ab249639
+      text: >-
+        Retention keys are written nested as `retention.max_sessions` /
+        `retention.max_age_days` in the In-scope chat_prefs override list, but
+        bare as `max_sessions` / `max_age_days` in Config §10 and in Acceptance
+        criterion #5. Clarify whether the `retention.` prefix is part of the key
+        path.
+      verdict: open
+      verdict_at: null
 ---
 
 # Phase 4 — Chat + history

@@ -63,7 +63,7 @@ async def _search_wiki(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
     cfg = ctx.retrieval
     if args.get("top_k") is not None:
         cfg = ctx.retrieval.model_copy(
-            update={"top_n": int(args["top_k"])}  # type: ignore[arg-type]
+            update={"top_n": int(args["top_k"])}  # type: ignore[call-overload]
         )
     result = await retrieve(
         ctx.session,

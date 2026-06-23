@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Phase 4: Chat + history</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+    --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+    --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+    --info:#1e88e5; --info-2:#1565c0;
+    --shadow:rgba(40,40,80,.18);
+  }
+  body:has(#theme-toggle:checked){
+    --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+    --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+    --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+    --info:#89dceb; --info-2:#74c7ec;
+    --shadow:rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+    font:16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+      var(--bg);
+    color:var(--fg);
+    transition:background .3s, color .3s;
+  }
+  .theme-btn{
+    position:sticky; top:.5rem; float:right; z-index:5;
+    cursor:pointer; user-select:none;
+    padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+    background:var(--surface); box-shadow:0 1px 4px var(--shadow);
+  }
+  h1{font-size:1.7rem; margin:.2rem 0 .2rem}
+  h2{font-size:1.25rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem}
+  h3{font-size:1.02rem; margin:1.2rem 0 .5rem; color:var(--accent-2)}
+  .sub{color:var(--muted); margin:0 0 1rem}
+  code{font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.86em;
+       background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px}
+  table{border-collapse:collapse; width:100%; margin:.5rem 0 1rem; background:var(--surface);
+        box-shadow:0 1px 6px var(--shadow); border-radius:8px; overflow:hidden}
+  th,td{border:1px solid var(--border); padding:.5rem .65rem; text-align:left; vertical-align:top}
+  th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); color:var(--accent-2)}
+  tbody tr:nth-child(even){background:var(--zebra)}
+  .tag{display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.78rem; font-weight:700; white-space:nowrap}
+  .t-ok{background:color-mix(in srgb,var(--ok) 24%,var(--surface)); color:var(--ok-2)}
+  .t-warn{background:color-mix(in srgb,var(--warn) 26%,var(--surface)); color:var(--warn-2)}
+  .t-danger{background:color-mix(in srgb,var(--danger) 26%,var(--surface)); color:var(--danger-2)}
+  .t-info{background:color-mix(in srgb,var(--info) 26%,var(--surface)); color:var(--info-2)}
+  .t-open{background:color-mix(in srgb,var(--muted) 22%,var(--surface)); color:var(--fg); border:1px solid var(--border)}
+  .note{background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent);
+        padding:.7rem 1rem; border-radius:6px; margin:1rem 0}
+  .verdict{font-size:1.15rem; font-weight:800}
+  /* solution flow diagram */
+  .flow{display:flex; flex-direction:column; gap:.55rem; margin:1rem 0}
+  .flow-row{display:flex; flex-wrap:wrap; align-items:center; gap:.5rem}
+  .box{background:var(--surface); border:2px solid var(--accent); border-radius:8px;
+       padding:.45rem .7rem; box-shadow:0 1px 5px var(--shadow); font-size:.9rem}
+  .box.ext{border-style:dashed; border-color:var(--line)}
+  .box.store{border-color:var(--ok-2)}
+  .box.job{border-color:var(--warn-2)}
+  .arr{color:var(--accent); font-weight:800}
+  .lbl{color:var(--muted); font-size:.8rem}
+  figure{margin:1rem 0}
+  figcaption{color:var(--muted); font-size:.85rem; margin-top:.3rem}
+  .legend{display:flex; gap:1rem; flex-wrap:wrap; font-size:.82rem; color:var(--muted); margin:.3rem 0 0}
+  .legend span{display:inline-flex; align-items:center; gap:.35rem}
+  .swatch{width:14px; height:14px; border-radius:3px; display:inline-block; border:2px solid var(--accent)}
+  .summary-cards{display:flex; gap:.8rem; flex-wrap:wrap; margin:1rem 0}
+  .card{flex:1 1 150px; background:var(--surface); border:1px solid var(--border); border-radius:10px;
+        padding:.8rem 1rem; box-shadow:0 1px 6px var(--shadow)}
+  .card .n{font-size:1.8rem; font-weight:800; line-height:1}
+  .card .c{color:var(--muted); font-size:.85rem}
+  .rpt-graph{text-align:center}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тёмную/светлую тему">🌙 / ☀️</label>
+
+<h1>Проверка спецификации — Phase 4: Chat + history</h1>
+<p class="sub">paw (Personal AI Wiki) · <code>2026-06-22-paw-phase-4-chat-design.md</code> · прогон 2026-06-23</p>
+
+<div class="note">
+  <strong>Цель спецификации:</strong> многоходовой диалог с доменом с сохранением истории; каждый ход
+  переиспользует retrieval-путь Phase 3 и возвращает ответы с цитатами. Сессии перечисляются,
+  титулуются, удаляются и чистятся по per-user retention.
+</div>
+
+<!-- ============ БЛОК 1 ============ -->
+<h2>1. Резюме спецификации</h2>
+
+<h3>Требования (по секциям)</h3>
+<table>
+  <thead><tr><th>ID</th><th>Секция</th><th>Требование</th></tr></thead>
+  <tbody>
+    <tr><td><strong>R1</strong></td><td>In scope / Chat op</td>
+      <td><code>harness/ops/chat.py</code> + chat prompt → <code>ChatTurn{answer_md, refs[]}</code>;
+      read-only tools (allowlist как у query); контекст треда = последние <code>history_depth</code> ходов;
+      retrieval = Phase 3 (hybrid + BFS + assembly).</td></tr>
+    <tr><td><strong>R2</strong></td><td>In scope / DB</td>
+      <td><code>chat_sessions</code> (user_id, domain_id, title, <code>last_active_at</code>,
+      индекс <code>(user_id, last_active_at DESC)</code>); <code>chat_messages</code> (session_id, role,
+      content, <code>meta</code> jsonb = refs/citations/model/prompt_version/tokens,
+      индекс <code>(session_id, created_at)</code>).</td></tr>
+    <tr><td><strong>R3</strong></td><td>In scope / Services</td>
+      <td><code>services/chat.py</code> — создать сессию; добавить user/assistant сообщения;
+      auto-title из первого хода; обновлять <code>last_active_at</code>.</td></tr>
+    <tr><td><strong>R4</strong></td><td>In scope / API</td>
+      <td><code>POST /chat</code> (+ SSE стрим ответа); <code>GET /chat/sessions</code> (cursor, свои треды
+      по last_active_at); <code>GET /chat/{session}</code> (сообщения); <code>DELETE /chat/{session}</code>.</td></tr>
+    <tr><td><strong>R5</strong></td><td>In scope / Web UI</td>
+      <td>Отдельный экран-мессенджер Chat (frame C); вторичный сайдбар = история сессий (свои, по
+      last_active_at, удаляемые) + поток ходов + ввод; ответ ассистента стримится через SSE;
+      source chips на ход.</td></tr>
+    <tr><td><strong>R6</strong></td><td>In scope / Retention</td>
+      <td><code>users.chat_prefs</code> overrides (<code>retention.max_sessions</code>,
+      <code>retention.max_age_days</code>, <code>history_depth</code>; null → global default);
+      <code>jobs/tasks.py:gc_housekeeping</code> — chat retention (прунинг сессий сверх N / старше N дней,
+      per user); в v1 запуск админом.</td></tr>
+    <tr><td><strong>R7</strong></td><td>Security</td>
+      <td>Own-thread isolation (только свои сессии list/read/delete, enforced в deps); контент чата
+      недоверенный в промптах (delimiters); нет write-tools в чате.</td></tr>
+  </tbody>
+</table>
+
+<h3>Success Criteria (Acceptance, verifiable)</h3>
+<table>
+  <thead><tr><th>ID</th><th>Критерий</th></tr></thead>
+  <tbody>
+    <tr><td><strong>AC1</strong></td><td>Многоходовой обмен держит контекст до <code>history_depth</code>; ход N+1 ссылается на ход N.</td></tr>
+    <tr><td><strong>AC2</strong></td><td>Первый ход авто-генерирует title; <code>last_active_at</code> обновляется на каждом ходу.</td></tr>
+    <tr><td><strong>AC3</strong></td><td><code>GET /chat/sessions</code> возвращает только сессии вызывающего, newest-active first, по курсору; чужой session id → 404/403 на read/delete.</td></tr>
+    <tr><td><strong>AC4</strong></td><td>Ходы ассистента стримятся через SSE и несут refs в <code>meta</code>.</td></tr>
+    <tr><td><strong>AC5</strong></td><td><code>gc_housekeeping</code> чистит сессии сверх <code>max_sessions</code> и старше <code>max_age_days</code>; дефолты при null <code>chat_prefs</code>.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ БЛОК 2 ============ -->
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>Схема решения (компоненты и поток данных)</h3>
+<figure>
+  <div class="flow">
+    <div class="flow-row">
+      <span class="box">Web UI · Chat (frame C)</span>
+      <span class="arr">→</span>
+      <span class="box">API · <code>/chat</code> · <code>/chat/sessions</code> · <code>/chat/{id}</code></span>
+      <span class="arr">→</span>
+      <span class="box">services/chat.py <span class="lbl">(commit boundary)</span></span>
+    </div>
+    <div class="flow-row">
+      <span class="lbl">services →</span>
+      <span class="box">harness/ops/chat.py</span>
+      <span class="arr">→</span>
+      <span class="box ext">retrieval Phase 3 <span class="lbl">(hybrid+BFS+assembly)</span></span>
+      <span class="arr">→</span>
+      <span class="box ext">LLM <span class="lbl">(streamed)</span></span>
+    </div>
+    <div class="flow-row">
+      <span class="lbl">services →</span>
+      <span class="box store">DB · chat_sessions · chat_messages <span class="lbl">(repos)</span></span>
+      <span class="arr">⟵ SSE ⟶</span>
+      <span class="box">Web UI <span class="lbl">(стрим ответа)</span></span>
+    </div>
+    <div class="flow-row">
+      <span class="box job">jobs/tasks.py:gc_housekeeping</span>
+      <span class="arr">→</span>
+      <span class="box store">DB · прунит chat_sessions по retention</span>
+    </div>
+    <div class="flow-row">
+      <span class="lbl">Config layering:</span>
+      <span class="box ext">env</span><span class="arr">⊕</span>
+      <span class="box ext">app_settings <span class="lbl">(chat_history_depth, retention)</span></span><span class="arr">⊕</span>
+      <span class="box ext">users.chat_prefs <span class="lbl">(overrides)</span></span><span class="arr">⊕</span>
+      <span class="box ext">domains <span class="lbl">(chat_model, languages)</span></span>
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="swatch"></span>компонент решения</span>
+    <span><span class="swatch" style="border-color:var(--line);border-style:dashed"></span>внешняя зависимость</span>
+    <span><span class="swatch" style="border-color:var(--ok-2)"></span>хранилище (DB)</span>
+    <span><span class="swatch" style="border-color:var(--warn-2)"></span>фоновая задача</span>
+  </div>
+  <figcaption>Control / data flow решения Phase 4. Чат-ход проходит Web UI → API → services → op → retrieval → LLM, затем персистится в DB и стримится обратно по SSE.</figcaption>
+</figure>
+
+<h3>Граф зависимостей требований (A → B = A зависит от / использует B)</h3>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 720 360" width="100%" style="max-width:720px" role="img" aria-label="граф зависимостей требований">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+    </defs>
+    <!-- edges (drawn first, under nodes) -->
+    <!-- R5 -> R4 -->
+    <line x1="120" y1="60"  x2="120" y2="118" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- R4 -> R3 -->
+    <line x1="120" y1="160" x2="120" y2="218" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- R3 -> R1 -->
+    <line x1="150" y1="248" x2="330" y2="158" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- R3 -> R2 -->
+    <line x1="150" y1="262" x2="330" y2="262" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- R1 -> Phase3 -->
+    <line x1="390" y1="118" x2="430" y2="70"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)" stroke-dasharray="5 4"/>
+    <!-- R6 -> R2 -->
+    <line x1="540" y1="262" x2="390" y2="262" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- R7 -> R4 -->
+    <line x1="560" y1="180" x2="160" y2="140" stroke="var(--line)" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="3 4"/>
+    <!-- R7 -> R3 -->
+    <line x1="560" y1="200" x2="160" y2="250" stroke="var(--line)" stroke-width="1.6" marker-end="url(#arrow)" stroke-dasharray="3 4"/>
+
+    <!-- nodes -->
+    <g font-size="13" font-weight="700" text-anchor="middle">
+      <g>
+        <rect x="78" y="22" width="84" height="38" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="120" y="38" fill="var(--fg)">R5</text><text x="120" y="52" fill="var(--muted)" font-size="10" font-weight="400">Web UI</text>
+      </g>
+      <g>
+        <rect x="78" y="120" width="84" height="38" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="120" y="136" fill="var(--fg)">R4</text><text x="120" y="150" fill="var(--muted)" font-size="10" font-weight="400">API</text>
+      </g>
+      <g>
+        <rect x="68" y="220" width="104" height="38" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="120" y="236" fill="var(--fg)">R3</text><text x="120" y="250" fill="var(--muted)" font-size="10" font-weight="400">Services</text>
+      </g>
+      <g>
+        <rect x="332" y="120" width="100" height="38" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="382" y="136" fill="var(--fg)">R1</text><text x="382" y="150" fill="var(--muted)" font-size="10" font-weight="400">Chat op</text>
+      </g>
+      <g>
+        <rect x="332" y="244" width="100" height="38" rx="8" fill="var(--surface)" stroke="var(--ok-2)" stroke-width="2"/>
+        <text x="382" y="260" fill="var(--fg)">R2</text><text x="382" y="274" fill="var(--muted)" font-size="10" font-weight="400">DB</text>
+      </g>
+      <g>
+        <rect x="540" y="244" width="120" height="38" rx="8" fill="var(--surface)" stroke="var(--warn-2)" stroke-width="2"/>
+        <text x="600" y="260" fill="var(--fg)">R6</text><text x="600" y="274" fill="var(--muted)" font-size="10" font-weight="400">Retention/GC</text>
+      </g>
+      <g>
+        <rect x="540" y="162" width="120" height="38" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="600" y="178" fill="var(--fg)">R7</text><text x="600" y="192" fill="var(--muted)" font-size="10" font-weight="400">Security</text>
+      </g>
+      <g>
+        <rect x="432" y="34" width="130" height="38" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="497" y="50" fill="var(--fg)" font-size="11">Phase 3</text><text x="497" y="64" fill="var(--muted)" font-size="10" font-weight="400">retrieval (внеш.)</text>
+      </g>
+    </g>
+  </svg>
+  <figcaption>Узлы — требования R1..R7 + внешняя зависимость Phase 3. Рёбра направлены «зависит от / использует». Сплошные — внутренние зависимости, штрих — внешняя (Phase 3) и сквозные (Security). <strong>Циклов нет — граф является DAG.</strong></figcaption>
+</figure>
+
+<h3>Карта покрытия (scope-item → требования / критерии / тесты)</h3>
+<table>
+  <thead><tr><th>Scope-item</th><th>Критерии</th><th>Тесты</th><th>Статус покрытия</th></tr></thead>
+  <tbody>
+    <tr><td>R1 — Chat op</td><td>AC1, AC4</td><td>Unit (history-depth windowing), E2E</td><td><span class="tag t-ok">покрыто</span></td></tr>
+    <tr><td>R2 — DB</td><td>AC5 (через GC)</td><td>Integration (cascade session→messages)</td><td><span class="tag t-ok">покрыто</span></td></tr>
+    <tr><td>R3 — Services</td><td>AC2</td><td>Integration</td><td><span class="tag t-ok">покрыто</span></td></tr>
+    <tr><td>R4 — API</td><td>AC3, AC4</td><td>API (SSE, cursor, own-only, delete, cross-user)</td><td><span class="tag t-ok">покрыто</span></td></tr>
+    <tr><td>R5 — Web UI</td><td>— (только SSE частично через AC4)</td><td>— (нет UI-теста)</td><td><span class="tag t-warn">пробел · F-001</span></td></tr>
+    <tr><td>R6 — Retention</td><td>AC5</td><td>Unit (retention selection), Integration (GC)</td><td><span class="tag t-ok">покрыто</span></td></tr>
+    <tr><td>R7 — Security</td><td>AC3</td><td>API (own-only, cross-user denial)</td><td><span class="tag t-ok">покрыто</span></td></tr>
+  </tbody>
+</table>
+
+<!-- ============ БЛОК 3 ============ -->
+<h2>3. Результаты проверки</h2>
+
+<table>
+  <tbody>
+    <tr><th>Файл</th><td><code>docs/superpowers/specs/2026-06-22-paw-phase-4-chat-design.md</code></td></tr>
+    <tr><th>spec_hash</th><td><code>b94520f3b5efd1a5</code></td></tr>
+    <tr><th>prev_hash</th><td>— (первый прогон)</td></tr>
+  </tbody>
+</table>
+
+<h3>Статус фаз</h3>
+<table>
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+  <tbody>
+    <tr><td>structure</td><td><span class="tag t-ok">passed</span></td><td>Нет плейсхолдеров, нет битых внутренних ссылок, заголовки уникальны, нумерации секций нет.</td></tr>
+    <tr><td>coverage</td><td><span class="tag t-ok">passed</span></td><td>1 WARNING (F-001).</td></tr>
+    <tr><td>clarity</td><td><span class="tag t-ok">passed</span></td><td>1 WARNING (F-002), 2 INFO (F-003, F-004).</td></tr>
+    <tr><td>consistency</td><td><span class="tag t-ok">passed</span></td><td>Первый прогон, предыдущего state нет, все секции новые.</td></tr>
+  </tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+  <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>F-001</strong></td><td><span class="tag t-warn">WARNING</span></td>
+      <td>In scope (Web UI) / Acceptance / Tests</td>
+      <td>Scope-item «Web UI» (экран Chat, source chips, сайдбар истории) не покрыт ни одним критерием приёмки и ни одним тестом; SSE частично покрыт AC4/API-тестами, но рендер UI не верифицируется.</td>
+      <td><span class="tag t-open">open</span></td>
+    </tr>
+    <tr>
+      <td><strong>F-002</strong></td><td><span class="tag t-warn">WARNING</span></td>
+      <td>In scope / Security / API</td>
+      <td>Одна сущность названа непоследовательно: «session» и «thread» (<code>chat_sessions</code> / «their own sessions» против «own threads» / «Own-thread isolation»).</td>
+      <td><span class="tag t-open">open</span></td>
+    </tr>
+    <tr>
+      <td><strong>F-003</strong></td><td><span class="tag t-info">INFO</span></td>
+      <td>Config §10 / In scope</td>
+      <td>Несовпадение имён ключей: глобальный <code>chat_history_depth</code> (Config) против per-user <code>history_depth</code> (chat_prefs).</td>
+      <td><span class="tag t-open">open</span></td>
+    </tr>
+    <tr>
+      <td><strong>F-004</strong></td><td><span class="tag t-info">INFO</span></td>
+      <td>In scope / Config / Acceptance</td>
+      <td>Ключи retention заданы вложенно <code>retention.max_sessions</code>/<code>retention.max_age_days</code> (In scope) и плоско <code>max_sessions</code>/<code>max_age_days</code> (Config §10, AC5).</td>
+      <td><span class="tag t-open">open</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Сводка</h3>
+<div class="summary-cards">
+  <div class="card"><div class="n" style="color:var(--ok-2)">0</div><div class="c">CRITICAL open</div></div>
+  <div class="card"><div class="n" style="color:var(--warn-2)">2</div><div class="c">WARNING open</div></div>
+  <div class="card"><div class="n" style="color:var(--info-2)">2</div><div class="c">INFO open</div></div>
+  <div class="card"><div class="n verdict" style="color:var(--ok-2)">OK</div><div class="c">Финальный вердикт</div></div>
+</div>
+
+<div class="note">
+  <span class="verdict" style="color:var(--ok-2)">Вердикт: OK</span> — критических находок нет, все 4 фазы
+  passed. Присутствуют 2 WARNING и 2 INFO для рассмотрения (не блокируют).
+</div>
+
+<h3>Chain</h3>
+<table>
+  <thead><tr><th>Шаг</th><th>Значение</th></tr></thead>
+  <tbody>
+    <tr><td>intent</td><td>не найден (<code>docs/superpowers/intents/</code> отсутствует) → <code>intent_path = null</code></td></tr>
+    <tr><td>spec</td><td><code>2026-06-22-paw-phase-4-chat-design.md</code></td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+<div class="bubble user">{{ question }}</div>
+<div class="bubble assistant">{{ answer_html | safe }}</div>
+{% if refs %}
+<div class="chips">
+  {% for r in refs %}<a class="chip" href="/articles/{{ r.article_id }}">{{ r.slug }}</a>{% endfor %}
+</div>
+{% endif %}
+{% if new_session_id %}
+<input type="hidden" id="session-id-input" name="session_id" value="{{ new_session_id }}"
+       hx-swap-oob="true">
+{% endif %}

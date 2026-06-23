@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from paw.api.errors import install_error_handlers
 from paw.api.routers import articles as articles_router
 from paw.api.routers import auth as auth_router
+from paw.api.routers import chat as chat_router
 from paw.api.routers import domains as domains_router
 from paw.api.routers import jobs as jobs_router
 from paw.api.routers import query as query_router
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
         users_router,
         jobs_router,
         query_router,
+        chat_router,
     ):
         app.include_router(r.router, prefix="/api/v1")
     app.include_router(web_routes.router)

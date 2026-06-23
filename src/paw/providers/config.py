@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 PROVIDER_KEY = "provider"
 WIKI_KEY = "wiki"
 RETRIEVAL_KEY = "retrieval"
+CHAT_KEY = "chat"
 
 
 class ProviderConfig(BaseModel):
@@ -45,3 +46,9 @@ class RetrievalConfig(BaseModel):
     entity_boost: float = 0.5  # added to fused score of chunks tagged with a query entity
     # Must match the regconfig used to build chunks.tsv (Phase 2 uses 'english').
     fts_regconfig: str = "english"
+
+
+class ChatConfig(BaseModel):
+    history_depth: int = 10  # last N turns folded into the chat prompt
+    retention_max_sessions: int = 50  # keep newest N sessions per user
+    retention_max_age_days: int = 90  # prune sessions inactive longer than this

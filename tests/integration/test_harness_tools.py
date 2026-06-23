@@ -20,6 +20,7 @@ def test_allowlist_ingest():
         "read_source",
         "get_article",
         "list_articles",
+        "search_wiki",
         "upsert_article",
         "add_link",
         "report_issue",

@@ -12,6 +12,7 @@ from paw.api.errors import ProblemError
 from paw.db.models import User
 from paw.db.repos.jobs import JobRepo
 from paw.jobs.progress import sse_events
+from paw.jobs.queue import enqueue_gc_housekeeping
 from paw.services.jobs import JobService
 
 router = APIRouter(tags=["jobs"])
@@ -85,3 +86,13 @@ async def job_events(
 async def cancel_job(job_id: uuid.UUID, session: AsyncSession = Depends(db)) -> dict[str, str]:
     await JobService(session).cancel(job_id)
     return {"status": "cancelling"}
+
+
+@router.post(
+    "/admin/gc",
+    status_code=202,
+    dependencies=[Depends(require_csrf), Depends(require_role("admin"))],
+)
+async def trigger_gc() -> dict[str, str]:
+    await enqueue_gc_housekeeping()
+    return {"status": "queued"}

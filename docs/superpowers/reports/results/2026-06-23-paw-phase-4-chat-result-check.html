@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Result Check — PAW Phase 4 Chat — 2026-06-23</title>
+<style>
+/* ── Themes ──────────────────────────────────────────────────── */
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui,sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s,color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+
+/* ── Typography ──────────────────────────────────────────────── */
+h1{ font-size:1.7rem; margin:.2rem 0 .25rem; color:var(--accent); }
+h2{ font-size:1.18rem; margin:2rem 0 .5rem; color:var(--accent-2); border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1rem; margin:1.2rem 0 .35rem; }
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.92rem; margin:.15rem 0; }
+code{ font-family:ui-monospace,monospace; font-size:.88em;
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface));
+  padding:.1em .35em; border-radius:4px; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note-ok{ border-left-color:var(--ok);
+  background:color-mix(in srgb,var(--ok) 8%,var(--surface)); }
+.note-warn{ border-left-color:var(--warn);
+  background:color-mix(in srgb,var(--warn) 8%,var(--surface)); }
+
+/* ── Badges ──────────────────────────────────────────────────── */
+.badge{ display:inline-block; font-size:.72rem; font-weight:600;
+  padding:.08rem .55rem; border-radius:999px; border:1px solid; vertical-align:middle; }
+.badge-ok   { color:var(--ok-2);    border-color:var(--ok);    background:color-mix(in srgb,var(--ok) 10%,var(--surface)); }
+.badge-warn { color:var(--warn-2);  border-color:var(--warn);  background:color-mix(in srgb,var(--warn) 10%,var(--surface)); }
+.badge-info { color:var(--accent-2);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface)); }
+.badge-done { color:var(--ok-2);    border-color:var(--ok);    background:color-mix(in srgb,var(--ok) 12%,var(--surface)); }
+.badge-miss { color:var(--danger-2);border-color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface)); }
+
+/* ── Tables ──────────────────────────────────────────────────── */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.91rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th,.rpt-table td{ border-bottom:1px solid var(--border);
+  padding:.5rem .8rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg);
+  position:sticky; top:0; font-size:.88rem; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb,var(--accent) 14%,var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+
+/* ── Summary scorecards ──────────────────────────────────────── */
+.scorecard-row{ display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0; }
+.scorecard{ flex:1 1 140px; background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.8rem 1rem; text-align:center;
+  box-shadow:0 2px 8px var(--shadow); }
+.scorecard .sc-num{ font-size:2.2rem; font-weight:700; line-height:1; }
+.scorecard .sc-lbl{ font-size:.8rem; color:var(--muted); margin-top:.25rem; }
+.sc-ok   { border-top:4px solid var(--ok);     }
+.sc-warn { border-top:4px solid var(--warn);   }
+.sc-crit { border-top:4px solid var(--danger); }
+.sc-info { border-top:4px solid var(--accent); }
+.sc-ok   .sc-num{ color:var(--ok-2);     }
+.sc-warn .sc-num{ color:var(--warn-2);   }
+.sc-crit .sc-num{ color:var(--danger-2); }
+.sc-info .sc-num{ color:var(--accent-2); }
+
+/* ── Coverage progress bar ───────────────────────────────────── */
+.prog-wrap{ background:var(--zebra); border-radius:999px; height:18px;
+  overflow:hidden; margin:.5rem 0 1rem; border:1px solid var(--border); }
+.prog-bar { height:100%; border-radius:999px;
+  background:linear-gradient(90deg,var(--ok),var(--ok-2));
+  transition:width .5s; display:flex; align-items:center; justify-content:flex-end; padding-right:.5rem; }
+.prog-bar span{ font-size:.75rem; font-weight:700; color:#fff; white-space:nowrap; }
+
+/* ── Details / expandable ────────────────────────────────────── */
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.6rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight li{ margin:.28rem 0; }
+
+/* ── Verdict banner ──────────────────────────────────────────── */
+.verdict-ok{
+  display:flex; align-items:center; gap:1rem;
+  background:color-mix(in srgb,var(--ok) 12%,var(--surface));
+  border:2px solid var(--ok); border-radius:12px;
+  padding:1rem 1.5rem; margin:1.5rem 0;
+  box-shadow:0 2px 12px var(--shadow);
+}
+.verdict-ok .v-icon{ font-size:2.5rem; line-height:1; }
+.verdict-ok .v-text .v-title{ font-size:1.3rem; font-weight:700; color:var(--ok-2); }
+.verdict-ok .v-text .v-sub{ color:var(--muted); font-size:.92rem; }
+
+/* ── Chain ───────────────────────────────────────────────────── */
+.chain-row{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:.5rem 0; }
+.chain-node{ background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.35rem .8rem; font-size:.88rem; box-shadow:0 1px 4px var(--shadow); }
+.chain-arrow{ color:var(--muted); font-size:1rem; padding:0 .1rem; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+
+<h1>Result Check — PAW Phase 4: Chat + History</h1>
+<p class="sub">Дата проверки: <strong>2026-06-23</strong> &nbsp;·&nbsp; Diff base: <code>git diff b1db8ac..HEAD</code> &nbsp;·&nbsp; 35 файлов изменено &nbsp;·&nbsp; plan_hash: <code>ba547eda5e866efb</code></p>
+
+<!-- Verdict banner -->
+<div class="verdict-ok">
+  <div class="v-icon">✅</div>
+  <div class="v-text">
+    <div class="v-title">Вердикт: OK</div>
+    <div class="v-sub">Все 9 задач плана выполнены · CRITICAL-находок нет · 5/5 Acceptance Criteria покрыто · CI зелёный (225 тестов)</div>
+  </div>
+</div>
+
+<!-- Chain -->
+<h2>Цепь документов</h2>
+<div class="chain-row">
+  <div class="chain-node">Intent: <em style="color:var(--muted)">null (не задан)</em></div>
+  <span class="chain-arrow">→</span>
+  <div class="chain-node"><code>docs/superpowers/specs/2026-06-22-paw-phase-4-chat-design.md</code></div>
+  <span class="chain-arrow">→</span>
+  <div class="chain-node"><code>docs/superpowers/plans/2026-06-23-paw-phase-4-chat.md</code></div>
+</div>
+
+<!-- Summary scorecards -->
+<h2>Сводка</h2>
+<div class="scorecard-row">
+  <div class="scorecard sc-ok"><div class="sc-num">9</div><div class="sc-lbl">Задач DONE</div></div>
+  <div class="scorecard sc-info"><div class="sc-num">0</div><div class="sc-lbl">PARTIAL</div></div>
+  <div class="scorecard sc-crit"><div class="sc-num">0</div><div class="sc-lbl">MISSING (CRITICAL)</div></div>
+  <div class="scorecard sc-ok"><div class="sc-num">5/5</div><div class="sc-lbl">AC покрыто</div></div>
+  <div class="scorecard sc-warn"><div class="sc-num">2</div><div class="sc-lbl">WARNING (excess)</div></div>
+  <div class="scorecard sc-info"><div class="sc-num">1</div><div class="sc-lbl">INFO</div></div>
+</div>
+
+<div class="note note-ok">
+  <strong>CI статус (подтверждено вызывающей стороной):</strong>
+  <code>ruff check .</code> — clean &nbsp;·&nbsp;
+  <code>mypy src</code> — clean (99 файлов) &nbsp;·&nbsp;
+  <code>pytest -q</code> — 225 passed (3 DeprecationWarnings — pre-existing testcontainers infra noise)
+</div>
+
+<!-- Plan coverage progress -->
+<h2>Покрытие шагов плана</h2>
+<div class="prog-wrap"><div class="prog-bar" style="width:100%"><span>9 / 9 DONE</span></div></div>
+
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Задача</th>
+      <th>Статус</th>
+      <th>Файлы в diff</th>
+      <th>Ключевые свидетельства</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><b>ChatConfig + retention resolver (pure)</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/providers/config.py</code><br>
+        <code>src/paw/services/provider_settings.py</code><br>
+        <code>src/paw/services/retention.py</code><br>
+        <code>tests/unit/test_retention.py</code>
+      </td>
+      <td><code>ChatConfig</code>, <code>CHAT_KEY</code> добавлены; <code>get_chat()</code> в ProviderSettingsService; <code>resolve_retention</code> / <code>select_sessions_to_prune</code> реализованы</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><b>DB models + migration (chat_sessions, chat_messages)</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/db/models.py</code><br>
+        <code>alembic/versions/0003_phase4_chat.py</code><br>
+        <code>tests/conftest.py</code><br>
+        <code>tests/integration/test_chat_migration.py</code>
+      </td>
+      <td><code>ChatSession</code>, <code>ChatMessage</code> модели; миграция с индексами <code>ix_chat_sessions_user_last_active</code> и <code>ix_chat_messages_session_created</code>; TRUNCATE в conftest обновлён</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><b>ChatRepo — session + message persistence</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/db/repos/chat.py</code><br>
+        <code>tests/integration/test_chat_repo.py</code>
+      </td>
+      <td>11 методов: <code>create_session</code>, <code>get</code>, <code>list_by_user</code> (keyset), <code>list_messages</code>, <code>count_messages</code>, <code>add_message</code>, <code>set_title</code>, <code>bump_last_active</code>, <code>delete</code>, <code>list_for_gc</code>, <code>delete_by_ids</code></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><b>Chat op — prompt overlay, history windowing, message builder</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/harness/prompts/__init__.py</code><br>
+        <code>src/paw/harness/ops/chat.py</code><br>
+        <code>tests/unit/test_chat_window.py</code><br>
+        <code>tests/unit/test_chat_prompt.py</code>
+      </td>
+      <td>Overlay <code>"chat"</code> добавлен в <code>_OVERLAYS</code>; <code>window_turns</code>, <code>build_chat_messages</code>, <code>ChatTurn</code>, <code>to_chat_turn</code>, <code>dont_know_turn</code>, <code>refs_payload</code></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><b>ChatService — turn pipeline + ownership</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/services/chat.py</code><br>
+        <code>tests/integration/test_chat_service.py</code>
+      </td>
+      <td><code>auto_title</code>, <code>PreparedTurn</code>, <code>ChatService</code> с методами <code>resolve_session</code> / <code>prepare_turn</code> / <code>complete_turn</code> / <code>record_turn</code> / <code>list_user_sessions</code> / <code>get_owned</code> / <code>session_messages</code> / <code>delete_owned</code></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><b>API router — POST /chat (sync + SSE), sessions CRUD</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/api/routers/chat.py</code><br>
+        <code>src/paw/main.py</code><br>
+        <code>tests/api/test_chat_api.py</code>
+      </td>
+      <td><code>POST /chat</code>, <code>GET /chat/sessions</code>, <code>GET /chat/{id}</code>, <code>DELETE /chat/{id}</code>; SSE via <code>StreamingResponse</code> с <code>ensure_ascii=False</code>; router зарегистрирован в main.py; коммит <code>db78109</code> добавил валидацию <code>limit&lt;1</code></td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><b>gc_housekeeping task + admin trigger</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/jobs/tasks.py</code><br>
+        <code>src/paw/jobs/queue.py</code><br>
+        <code>src/paw/worker.py</code><br>
+        <code>src/paw/api/routers/jobs.py</code><br>
+        <code>tests/integration/test_gc_housekeeping.py</code>
+      </td>
+      <td><code>gc_housekeeping</code> в <code>WorkerSettings.functions</code>; <code>enqueue_gc_housekeeping</code> в queue.py; маршрут <code>POST /admin/gc</code> (admin-only, 202) добавлен</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><b>Web Chat screen (sync render)</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>src/paw/api/web/templates/chat.html</code><br>
+        <code>src/paw/api/web/templates/_chat_turn.html</code><br>
+        <code>src/paw/api/web/routes.py</code><br>
+        <code>src/paw/api/web/templates/base.html</code><br>
+        <code>tests/api/test_chat_web.py</code>
+      </td>
+      <td><code>GET /chat</code>, <code>GET /chat/{id}</code>, <code>POST /chat</code> (web); rail icon → <code>/chat</code>; OOB hidden input для follow-up сессий; 3 rendered-UI теста (chips + sidebar + prior messages)</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><b>E2E — multi-turn carried context + cited answers</b></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td><code>tests/e2e/test_chat_e2e.py</code></td>
+      <td><code>test_multi_turn_carries_context_and_cites</code>: перенос контекста (AC 1), auto-title + last_active_at bump (AC 2), cited answer end-to-end</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Acceptance Criteria coverage -->
+<h2>Покрытие Acceptance Criteria (Spec)</h2>
+<div class="prog-wrap"><div class="prog-bar" style="width:100%"><span>5 / 5 AC покрыто</span></div></div>
+
+<table class="rpt-table">
+  <thead>
+    <tr><th>#</th><th>Acceptance Criterion</th><th>Статус</th><th>Тесты</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AC 1</td>
+      <td>Multi-turn keeps context up to <code>history_depth</code>; turn N+1 references turn N</td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>test_chat_window::test_window_pairs_and_truncates</code><br>
+        <code>test_chat_service::test_second_turn_sees_prior_context</code><br>
+        <code>test_chat_e2e::test_multi_turn_carries_context_and_cites</code>
+      </td>
+    </tr>
+    <tr>
+      <td>AC 2</td>
+      <td>First turn auto-titles; <code>last_active_at</code> updates on each turn</td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>test_chat_service::test_first_turn_titles_and_persists</code><br>
+        <code>test_chat_repo::test_title_and_bump</code><br>
+        <code>test_chat_e2e</code> (title + bump asserts)
+      </td>
+    </tr>
+    <tr>
+      <td>AC 3</td>
+      <td><code>GET /chat/sessions</code> own-only, newest-active first, by cursor; cross-user → 404</td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>test_chat_api::test_sessions_list_cursor_and_detail</code><br>
+        <code>test_chat_api::test_cross_user_denied</code><br>
+        <code>test_chat_service::test_get_owned_rejects_other_user</code><br>
+        <code>test_chat_repo::test_list_by_user_keyset_pagination</code>
+      </td>
+    </tr>
+    <tr>
+      <td>AC 4</td>
+      <td>Assistant turns stream via SSE and carry refs in <code>meta</code></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td><code>test_chat_api::test_chat_sse_streams_and_persists</code></td>
+    </tr>
+    <tr>
+      <td>AC 5</td>
+      <td><code>gc_housekeeping</code> prunes by <code>max_sessions</code> / <code>max_age_days</code>; null-key → global default</td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>
+        <code>test_gc_housekeeping.py</code> (3 теста)<br>
+        <code>test_retention.py</code> (resolver + selector)
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Findings -->
+<h2>Findings</h2>
+
+<div class="note note-ok">
+  <strong>CRITICAL (MISSING-шаги):</strong> отсутствуют. Вердикт: <strong>OK</strong>.
+</div>
+
+<details open>
+  <summary><span class="badge badge-warn">WARNING</span> &nbsp; Excess файлы — коммит <code>a1d3e0f</code></summary>
+  <p style="margin:.5rem 0 .3rem"><strong>Plan:</strong> файлы не упомянуты ни в одном шаге плана</p>
+  <p style="margin:.3rem 0"><strong>Diff:</strong> следующие файлы изменены в коммите <code>a1d3e0f "chore: fix pre-existing ruff/mypy errors under ruff 0.15.18 / mypy 2.1.0"</code></p>
+  <ul class="tight">
+    <li><code>src/paw/harness/tools.py</code></li>
+    <li><code>src/paw/providers/openai_compat.py</code></li>
+    <li><code>tests/api/test_query_api.py</code></li>
+    <li><code>tests/integration/test_query_service.py</code></li>
+  </ul>
+  <p style="margin:.3rem 0"><strong>Оценка:</strong> обоснованный сопутствующий коммит — существующие ошибки Phase 2/3 трипнули новые версии ruff 0.15.18 / mypy 2.1.0. Исправления хирургические, поведение не изменено. Необходимо для прохождения CI-гейтов Phase 4.</p>
+</details>
+
+<details open>
+  <summary><span class="badge badge-warn">WARNING</span> &nbsp; Excess файл — коммит <code>74c659d</code></summary>
+  <p style="margin:.5rem 0 .3rem"><strong>Plan:</strong> файл не упомянут в плане</p>
+  <p style="margin:.3rem 0"><strong>Diff:</strong> <code>tests/integration/test_harness_tools.py</code> изменён в коммите <code>74c659d "test(harness): update ingest allowlist test for search_wiki"</code></p>
+  <p style="margin:.3rem 0"><strong>Оценка:</strong> тест Phase 3 обновлён для отражения <code>search_wiki</code> в READ_TOOLS, добавленного ранее. Существовавший до Phase 4 сбой, выявленный при полном прогоне тестов Phase 4. Поведение не изменено — исправление теста, не кода.</p>
+</details>
+
+<details>
+  <summary><span class="badge badge-info">INFO</span> &nbsp; Spec findings F-001..F-004: все закрыты в реализации</summary>
+  <table class="rpt-table" style="margin:.6rem 0">
+    <thead><tr><th>ID</th><th>Описание (из spec)</th><th>Закрытие</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>F-001</strong></td>
+        <td>Web UI не имел теста (chips, sidebar, turn stream)</td>
+        <td>Task 8 добавил <code>tests/api/test_chat_web.py</code> с 3 тестами рендеренного UI</td>
+      </tr>
+      <tr>
+        <td><strong>F-002</strong></td>
+        <td>Несогласованность «session» vs «thread»</td>
+        <td>В коде используется только «session»; слово «thread» отсутствует в <code>chat.py</code>, <code>repos/chat.py</code>, <code>routers/chat.py</code></td>
+      </tr>
+      <tr>
+        <td><strong>F-003</strong></td>
+        <td>Несоответствие имён config-ключей (global vs per-user)</td>
+        <td><code>ChatConfig</code>: <code>history_depth</code> / <code>retention_max_sessions</code> / <code>retention_max_age_days</code>; per-user: <code>history_depth</code> + <code>retention.{max_sessions, max_age_days}</code>; единственная точка маппинга — <code>resolve_retention()</code></td>
+      </tr>
+      <tr>
+        <td><strong>F-004</strong></td>
+        <td>Неясно, нужен ли prefix <code>retention.</code> в chat_prefs</td>
+        <td>Закреплено в Scope decision §6 плана: per-user используют <code>retention.{max_sessions, max_age_days}</code>; <code>resolve_retention</code> — единственная точка маппинга</td>
+      </tr>
+    </tbody>
+  </table>
+</details>
+
+<!-- Excess changes table -->
+<h2>Excess Changes (все обоснованы)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Файл</th><th>Коммит</th><th>Причина</th><th>Поведение изменено?</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>src/paw/harness/tools.py</code></td>
+      <td><code>a1d3e0f</code></td>
+      <td>chore: fix pre-existing ruff/mypy для CI gate</td>
+      <td><span class="badge badge-ok">Нет</span></td>
+    </tr>
+    <tr>
+      <td><code>src/paw/providers/openai_compat.py</code></td>
+      <td><code>a1d3e0f</code></td>
+      <td>chore: fix pre-existing ruff/mypy для CI gate</td>
+      <td><span class="badge badge-ok">Нет</span></td>
+    </tr>
+    <tr>
+      <td><code>tests/api/test_query_api.py</code></td>
+      <td><code>a1d3e0f</code></td>
+      <td>chore: fix pre-existing ruff/mypy для CI gate</td>
+      <td><span class="badge badge-ok">Нет</span></td>
+    </tr>
+    <tr>
+      <td><code>tests/integration/test_query_service.py</code></td>
+      <td><code>a1d3e0f</code></td>
+      <td>chore: fix pre-existing ruff/mypy для CI gate</td>
+      <td><span class="badge badge-ok">Нет</span></td>
+    </tr>
+    <tr>
+      <td><code>tests/integration/test_harness_tools.py</code></td>
+      <td><code>74c659d</code></td>
+      <td>test: update Phase 3 тест для search_wiki</td>
+      <td><span class="badge badge-ok">Нет</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Spec in-scope checklist -->
+<h2>Покрытие In-scope требований Spec</h2>
+<table class="rpt-table">
+  <thead><tr><th>Требование (spec)</th><th>Статус</th><th>Реализация</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Chat op: <code>harness/ops/chat.py</code> + prompt overlay + <code>ChatTurn{answer_md, refs[]}</code></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>Task 4</td>
+    </tr>
+    <tr>
+      <td>DB: <code>chat_sessions</code> + <code>chat_messages</code> + индексы + миграция <code>0003</code></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>Task 2</td>
+    </tr>
+    <tr>
+      <td>Services: создание сессии, append messages, auto-title, bump <code>last_active_at</code></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>Task 5</td>
+    </tr>
+    <tr>
+      <td>API: <code>POST /chat</code> (sync + SSE) + <code>GET /chat/sessions</code> (cursor) + <code>GET /chat/{id}</code> + <code>DELETE /chat/{id}</code></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>Task 6</td>
+    </tr>
+    <tr>
+      <td>Web UI: Chat messenger screen (sidebar сессий, turn stream, source chips)</td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>Task 8 (sync render; live streaming → Phase 7)</td>
+    </tr>
+    <tr>
+      <td>Retention: <code>gc_housekeeping</code> (count + age), per-user overrides, admin trigger <code>POST /admin/gc</code></td>
+      <td><span class="badge badge-done">DONE</span></td>
+      <td>Tasks 1 + 7</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- result_check frontmatter confirmation -->
+<h2>Frontmatter result_check</h2>
+<div class="note note-ok">
+  Блок <code>result_check</code> записан в frontmatter плана:
+  <pre style="margin:.5rem 0 0; padding:.6rem; background:color-mix(in srgb,var(--ok) 6%,var(--surface)); border-radius:6px; font-size:.88rem; overflow-x:auto;">result_check:
+  verdict: OK
+  plan_hash: ba547eda5e866efb
+  last_run: 2026-06-23</pre>
+</div>
+
+<!-- Footer -->
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0">
+<p class="sub">
+  Chain: <em>(intent: null)</em> →
+  <code>docs/superpowers/specs/2026-06-22-paw-phase-4-chat-design.md</code> →
+  <code>docs/superpowers/plans/2026-06-23-paw-phase-4-chat.md</code>
+  &nbsp;·&nbsp; Сгенерировано: 2026-06-23
+</p>
+
+</main>
+</body>
+</html>

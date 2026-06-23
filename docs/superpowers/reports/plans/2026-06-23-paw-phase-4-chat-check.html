@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 4 Chat + history (check-plan)</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+h1{ font-size:1.7rem; margin:.2rem 0 .3rem; }
+h2{ font-size:1.25rem; margin:2rem 0 .5rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.05rem; margin:1.4rem 0 .4rem; color:var(--accent-2); }
+.lead{ color:var(--muted); margin:.2rem 0 1rem; }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.86em; }
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.badge{ display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.74rem; font-weight:600;
+  border:1px solid var(--border); }
+.badge.ok{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border-color:var(--ok); }
+.badge.warn{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border-color:var(--warn); }
+.badge.danger{ background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border-color:var(--danger); }
+.badge.tid{ background:color-mix(in srgb,var(--accent) 18%, var(--surface)); color:var(--accent-2); border-color:var(--accent); }
+.note{ background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border:1px solid var(--border);
+  border-left:4px solid var(--accent); border-radius:8px; padding:.7rem 1rem; margin:1rem 0; }
+.note.ok{ border-left-color:var(--ok); }
+.verdict{ font-size:1.15rem; font-weight:700; padding:.8rem 1.2rem; border-radius:10px;
+  background:color-mix(in srgb,var(--ok) 18%, var(--surface)); border:1px solid var(--ok); color:var(--ok-2);
+  display:inline-block; margin:.5rem 0; }
+.summary-grid{ display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0; }
+.stat{ flex:1 1 130px; background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.8rem 1rem; box-shadow:0 1px 6px var(--shadow); }
+.stat .n{ font-size:1.8rem; font-weight:700; }
+.stat .l{ color:var(--muted); font-size:.82rem; }
+.chain{ font-family:ui-monospace,monospace; font-size:.88rem; background:var(--surface);
+  border:1px solid var(--border); border-radius:8px; padding:.7rem 1rem; margin:1rem 0; word-break:break-word; }
+.phase-row{ display:flex; gap:.6rem; flex-wrap:wrap; margin:1rem 0; }
+.phase-row .pill{ background:var(--surface); border:1px solid var(--ok); border-radius:999px;
+  padding:.35rem .9rem; font-size:.85rem; color:var(--ok-2); }
+figure{ margin:1.2rem 0; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.4rem; text-align:center; }
+.rpt-graph{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  box-shadow:0 2px 12px var(--shadow); padding:1rem; overflow-x:auto; }
+.gnode text{ font:600 13px system-ui,sans-serif; fill:var(--fg); }
+.gnode rect{ fill:var(--surface); stroke:var(--accent); stroke-width:2; rx:8; transition:stroke-width .15s; }
+.elabel{ font:11px ui-monospace,monospace; fill:var(--muted); }
+small.dim{ color:var(--muted); }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+<h1>Проверка плана — Phase 4 «Chat + history»</h1>
+<p class="lead">Навык <code>check-plan</code> · валидация плана против спецификации с фазовой моделью · 2026-06-23</p>
+
+<div class="verdict">Вердикт: OK — гейт пройден (PASS)</div>
+
+<div class="chain">
+  <strong>Chain:</strong> intent (null) →
+  spec: docs/superpowers/specs/2026-06-22-paw-phase-4-chat-design.md →
+  plan: docs/superpowers/plans/2026-06-23-paw-phase-4-chat.md<br>
+  <small class="dim">plan_hash = ba547eda5e866efb · spec_hash = b94520f3b5efd1a5 · last_run = 2026-06-23</small>
+</div>
+
+<!-- ================= БЛОК 1 ================= -->
+<h2>1. Резюме плана — таски и критерии готовности (DoD)</h2>
+<table class="rpt-table">
+  <thead><tr><th>№</th><th>Таск</th><th>Создаёт / меняет</th><th>Критерий готовности (DoD)</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge tid">T1</span></td>
+      <td>ChatConfig + retention resolver (pure)</td>
+      <td><code>config.py</code> (+ChatConfig, CHAT_KEY), <code>provider_settings.py</code> (+get_chat), <code>services/retention.py</code></td>
+      <td><code>pytest tests/unit/test_retention.py</code> — PASS (5 тестов); ruff+mypy чисто</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T2</span></td>
+      <td>DB-модели + миграция (<code>chat_sessions</code>, <code>chat_messages</code>)</td>
+      <td><code>db/models.py</code> (ChatSession, ChatMessage), <code>alembic/0003_phase4_chat.py</code>, <code>conftest.py</code></td>
+      <td><code>pytest tests/integration/test_chat_migration.py</code> — PASS (2 теста)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T3</span></td>
+      <td>ChatRepo — персистентность сессий и сообщений</td>
+      <td><code>db/repos/chat.py</code></td>
+      <td><code>pytest tests/integration/test_chat_repo.py</code> — PASS (4 теста)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T4</span></td>
+      <td>Chat op — overlay промпта, окно истории, билдер сообщений</td>
+      <td><code>harness/prompts/__init__.py</code> (+chat overlay), <code>harness/ops/chat.py</code></td>
+      <td><code>pytest tests/unit/test_chat_window.py test_chat_prompt.py</code> — PASS (8 тестов)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T5</span></td>
+      <td>ChatService — пайплайн хода + ownership</td>
+      <td><code>services/chat.py</code></td>
+      <td><code>pytest tests/integration/test_chat_service.py</code> — PASS (5 тестов)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T6</span></td>
+      <td>API router — POST /chat (sync+SSE), список сессий, деталь, удаление</td>
+      <td><code>api/routers/chat.py</code>, <code>main.py</code></td>
+      <td><code>pytest tests/api/test_chat_api.py</code> — PASS (5 тестов)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T7</span></td>
+      <td>gc_housekeeping + admin-триггер</td>
+      <td><code>jobs/tasks.py</code> (+gc_housekeeping), <code>jobs/queue.py</code>, <code>worker.py</code>, <code>api/routers/jobs.py</code></td>
+      <td><code>pytest tests/integration/test_gc_housekeeping.py</code> — PASS (3 теста)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T8</span></td>
+      <td>Web Chat screen (sync render)</td>
+      <td><code>templates/chat.html</code>, <code>_chat_turn.html</code>, <code>web/routes.py</code>, <code>base.html</code></td>
+      <td><code>pytest tests/api/test_chat_web.py</code> — PASS (3 теста)</td>
+    </tr>
+    <tr>
+      <td><span class="badge tid">T9</span></td>
+      <td>E2E — multi-turn carried context + cited answers</td>
+      <td><code>tests/e2e/test_chat_e2e.py</code></td>
+      <td><code>pytest tests/e2e/test_chat_e2e.py</code> — PASS (1 тест); полный прогон ruff+mypy+pytest зелёный</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ================= БЛОК 2 ================= -->
+<h2>2. Зависимости и пересечения шагов</h2>
+
+<h3>2a. Граф зависимостей шагов</h3>
+<figure>
+  <div class="rpt-graph">
+    <svg viewBox="0 0 760 360" width="760" role="img" aria-label="Граф зависимостей тасков T1–T9">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+        </marker>
+      </defs>
+      <!-- edges (M -> N, M<N) -->
+      <g stroke="var(--line)" stroke-width="2" fill="none" marker-end="url(#arrow)">
+        <line x1="100" y1="60"  x2="318" y2="140"/> <!-- T1->T5 -->
+        <line x1="100" y1="60"  x2="318" y2="300"/> <!-- T1->T7 -->
+        <line x1="100" y1="150" x2="100" y2="232"/> <!-- T2->T3 -->
+        <line x1="160" y1="270" x2="318" y2="165"/> <!-- T3->T5 -->
+        <line x1="160" y1="270" x2="318" y2="300"/> <!-- T3->T7 -->
+        <line x1="100" y1="350" x2="318" y2="175"/> <!-- T4->T5 -->
+        <line x1="430" y1="150" x2="560" y2="60"/>  <!-- T5->T6 -->
+        <line x1="430" y1="160" x2="560" y2="160"/> <!-- T5->T8 -->
+        <line x1="430" y1="170" x2="560" y2="300"/> <!-- T5->T9 -->
+      </g>
+      <!-- edge labels -->
+      <text class="elabel" x="205" y="92">retention/ChatConfig</text>
+      <text class="elabel" x="120" y="200">models</text>
+      <text class="elabel" x="210" y="222">ChatRepo</text>
+      <text class="elabel" x="200" y="262">chat op</text>
+      <text class="elabel" x="470" y="98">service</text>
+      <!-- nodes -->
+      <g class="gnode">
+        <g><rect x="48"  y="38"  width="104" height="44"/><text x="100" y="65" text-anchor="middle">T1 config</text></g>
+        <g><rect x="48"  y="128" width="104" height="44"/><text x="100" y="155" text-anchor="middle">T2 models</text></g>
+        <g><rect x="48"  y="248" width="104" height="44"/><text x="100" y="275" text-anchor="middle">T3 repo</text></g>
+        <g><rect x="48"  y="328" width="104" height="44" rx="8" y2="0"/><text x="100" y="355" text-anchor="middle">T4 op</text></g>
+        <g><rect x="320" y="128" width="112" height="56"/><text x="376" y="160" text-anchor="middle">T5 service</text></g>
+        <g><rect x="560" y="38"  width="112" height="44"/><text x="616" y="65" text-anchor="middle">T6 API</text></g>
+        <g><rect x="560" y="138" width="112" height="44"/><text x="616" y="165" text-anchor="middle">T8 web</text></g>
+        <g><rect x="560" y="278" width="112" height="44"/><text x="616" y="305" text-anchor="middle">T9 e2e</text></g>
+        <g><rect x="320" y="278" width="112" height="44"/><text x="376" y="305" text-anchor="middle">T7 gc</text></g>
+      </g>
+    </svg>
+  </div>
+  <figcaption>Рёбра M→N: «артефакт таска M используется в таске N» (M&lt;N). Циклов и нарушений порядка не обнаружено — топологический порядок T1…T9 валиден.</figcaption>
+</figure>
+
+<h3>2b. Пересечения по артефактам (один файл — несколько тасков)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Артефакт / файл</th><th>Создаёт / меняет</th><th>Потребляет</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/paw/services/chat.py</code></td><td><span class="badge tid">T5</span></td><td>T6, T8, T9 (импорт)</td></tr>
+    <tr><td><code>src/paw/db/repos/chat.py</code></td><td><span class="badge tid">T3</span></td><td>T5, T7, T8 (web routes), тесты T6/T9</td></tr>
+    <tr><td><code>src/paw/providers/config.py</code> (ChatConfig)</td><td><span class="badge tid">T1</span></td><td>T4 (WikiConfig рядом), T5, T7</td></tr>
+    <tr><td><code>src/paw/harness/ops/chat.py</code></td><td><span class="badge tid">T4</span></td><td>T5, T6 (refs_payload)</td></tr>
+    <tr><td><code>tests/conftest.py</code> (TRUNCATE list)</td><td><span class="badge tid">T2</span></td><td>— (единственный таск, трогающий conftest)</td></tr>
+  </tbody>
+</table>
+<div class="note ok">Пересечений-конфликтов (два таска пишут один файл) нет. T6 и T8 меняют разные файлы (<code>routers/chat.py</code> vs <code>web/routes.py</code>).</div>
+
+<h3>2c. Покрытие требований (одно требование — несколько тасков)</h3>
+<table class="rpt-table">
+  <thead><tr><th>Требование</th><th>Покрывающие таски</th></tr></thead>
+  <tbody>
+    <tr><td>AC#1 — multi-turn context</td><td>T4, T5, T9</td></tr>
+    <tr><td>AC#2 — auto-title + bump <code>last_active_at</code></td><td>T5, T3, T9</td></tr>
+    <tr><td>AC#3 — own-only sessions, cursor, cross-user 404</td><td>T6, T5, T3</td></tr>
+    <tr><td>AC#4 — SSE + refs в <code>meta</code></td><td>T6</td></tr>
+    <tr><td>AC#5 — gc по max_sessions / max_age_days, null→global</td><td>T7, T1</td></tr>
+    <tr><td>Spec F-001 — Web UI без теста</td><td>закрыт T8 (rendered-UI тесты)</td></tr>
+  </tbody>
+</table>
+
+<!-- ================= БЛОК 3 ================= -->
+<h2>3. Результаты проверки</h2>
+
+<h3>Статусы фаз</h3>
+<div class="phase-row">
+  <span class="pill">structure — passed ✓</span>
+  <span class="pill">coverage — passed ✓</span>
+  <span class="pill">dependencies — passed ✓</span>
+  <span class="pill">verifiability — passed ✓</span>
+  <span class="pill">consistency — passed ✓</span>
+</div>
+
+<h3>Findings</h3>
+<div class="note ok"><strong>Findings не зафиксировано (0).</strong> Закрытые чек-листы всех пяти фаз пройдены без замечаний.</div>
+
+<h3>Сводка</h3>
+<div class="summary-grid">
+  <div class="stat"><div class="n" style="color:var(--danger-2)">0</div><div class="l">CRITICAL open</div></div>
+  <div class="stat"><div class="n" style="color:var(--warn-2)">0</div><div class="l">WARNING open</div></div>
+  <div class="stat"><div class="n" style="color:var(--muted)">0</div><div class="l">INFO open</div></div>
+  <div class="stat"><div class="n" style="color:var(--ok-2)">5/5</div><div class="l">фаз passed</div></div>
+</div>
+
+<div class="verdict">Финальный вердикт: OK — план соответствует спецификации, гейт PASS</div>
+
+<h3>Примечание: собственные findings спецификации</h3>
+<p>Спецификация содержала 4 собственных finding (F-001…F-004, уровни WARNING/INFO). План явно их разрешает:</p>
+<table class="rpt-table">
+  <thead><tr><th>Spec finding</th><th>Как разрешён в плане</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge warn">F-001</span> Web UI без теста</td><td>Task 8 — rendered-UI тесты (chips + sidebar + prior messages)</td></tr>
+    <tr><td><span class="badge warn">F-002</span> «session» vs «thread»</td><td>Единый термин <code>session</code> во всём плане (Global Constraints / Naming)</td></tr>
+    <tr><td><span class="badge">F-003</span> config-key naming</td><td>Scope decision 6 + <code>resolve_retention</code> как единая точка маппинга</td></tr>
+    <tr><td><span class="badge">F-004</span> retention.* префикс</td><td>Scope decision 6: flat global <code>ChatConfig</code> ⊕ nested user <code>chat_prefs</code></td></tr>
+  </tbody>
+</table>
+
+<p style="margin-top:2rem;color:var(--muted);font-size:.85rem">
+Сгенерировано навыком <code>html-report</code> по запросу <code>check-plan</code>. Самодостаточный offline-артефакт.
+</p>
+</main>
+
+<script>
+  // hover-highlight узлов графа — подсветка при наведении
+  document.querySelectorAll('.gnode rect').forEach(function (n) {
+    n.addEventListener('mouseenter', function () { n.setAttribute('stroke-width', '4'); });
+    n.addEventListener('mouseleave', function () { n.setAttribute('stroke-width', '2'); });
+  });
+</script>
+</body>
+</html>
