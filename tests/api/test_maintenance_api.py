@@ -37,3 +37,14 @@ async def test_lint_requires_csrf(ctx):
     c, csrf, dom = ctx
     r = await c.post(f"/api/v1/domains/{dom}/lint")
     assert r.status_code == 403
+
+
+async def test_fix_endpoint_returns_job_id(ctx):
+    c, csrf, dom = ctx
+    r = await c.post(
+        f"/api/v1/domains/{dom}/fix",
+        json={"issue_ids": ["abc123"]},
+        headers={"x-csrf-token": csrf},
+    )
+    assert r.status_code == 202
+    assert uuid.UUID(r.json()["job_id"])

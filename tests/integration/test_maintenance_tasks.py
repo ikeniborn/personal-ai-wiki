@@ -29,3 +29,45 @@ async def test_lint_task_records_issues_and_writes_nothing(
     issues_entry = next(e for e in got.log if e.get("step") == "issues")
     ids = {i["id"] for i in issues_entry["issues"]}
     assert issue_id("broken_ref", "intro", "ghost") in ids
+
+
+async def test_fix_task_resolves_selected_issue(
+    db_session, redis_client, wired_settings, monkeypatch
+):
+    from datetime import UTC, datetime
+
+    from tests.stubs import StubChatProvider, StubEmbeddingProvider
+
+    from paw.harness.ops.lint import run_lint
+    from paw.providers.config import MaintenanceConfig, WikiConfig
+
+    dom, _ = await _seed_lintable(db_session)  # 'intro' with a broken [[ghost]]
+    job = await JobRepo(db_session).create(domain_id=dom.id, kind="fix")
+    await db_session.commit()
+
+    issues = (
+        await run_lint(
+            db_session, domain_id=dom.id, cfg=MaintenanceConfig(),
+            now=datetime.now(UTC),
+        )
+    ).issues
+    broken = next(i for i in issues if i.kind == "broken_ref")
+
+    async def fake_build(session, box):
+        chat = StubChatProvider(
+            [StubChatProvider.tool("emit_result", {"markdown": "Clean body.", "summary": ""})]
+        )
+        return chat, StubEmbeddingProvider(dim=8), WikiConfig(), 8
+
+    monkeypatch.setattr(tasks_mod, "_build_providers", fake_build)
+    out = await tasks_mod.fix_issues(
+        {"redis": redis_client}, str(job.id), str(dom.id), [broken.id]
+    )
+    assert out == "succeeded"
+    # a fresh lint no longer reports the broken ref
+    after = (
+        await run_lint(
+            db_session, domain_id=dom.id, cfg=MaintenanceConfig(), now=datetime.now(UTC)
+        )
+    ).issues
+    assert broken.id not in {i.id for i in after}

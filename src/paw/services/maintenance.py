@@ -8,7 +8,7 @@ from paw.api.errors import ProblemError
 from paw.db.models import Job
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.jobs import JobRepo
-from paw.jobs.queue import enqueue_lint
+from paw.jobs.queue import enqueue_fix, enqueue_lint
 from paw.providers.config import MaintenanceConfig
 from paw.services.provider_settings import ProviderSettingsService
 
@@ -42,4 +42,11 @@ class MaintenanceService:
         job = await self._repo.create(domain_id=domain_id, kind="lint")
         await self._s.commit()
         await enqueue_lint(None, job_id=job.id, domain_id=domain_id)
+        return job
+
+    async def start_fix(self, *, domain_id: uuid.UUID, issue_ids: list[str]) -> Job:
+        await self._require_enabled(domain_id, "fix")
+        job = await self._repo.create(domain_id=domain_id, kind="fix")
+        await self._s.commit()
+        await enqueue_fix(None, job_id=job.id, domain_id=domain_id, issue_ids=issue_ids)
         return job

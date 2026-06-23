@@ -48,3 +48,14 @@ async def enqueue_lint(
 ) -> None:
     pool = redis or await get_arq_pool()
     await pool.enqueue_job("lint_domain", str(job_id), str(domain_id))
+
+
+async def enqueue_fix(
+    redis: Any | None = None,
+    *,
+    job_id: uuid.UUID,
+    domain_id: uuid.UUID,
+    issue_ids: list[str],
+) -> None:
+    pool = redis or await get_arq_pool()
+    await pool.enqueue_job("fix_issues", str(job_id), str(domain_id), issue_ids)
