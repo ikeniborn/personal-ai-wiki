@@ -6,6 +6,7 @@ PROVIDER_KEY = "provider"
 WIKI_KEY = "wiki"
 RETRIEVAL_KEY = "retrieval"
 CHAT_KEY = "chat"
+GRAPH_KEY = "graph"
 
 
 class ProviderConfig(BaseModel):
@@ -52,3 +53,11 @@ class ChatConfig(BaseModel):
     history_depth: int = 10  # last N turns folded into the chat prompt
     retention_max_sessions: int = 50  # keep newest N sessions per user
     retention_max_age_days: int = 90  # prune sessions inactive longer than this
+
+
+class GraphConfig(BaseModel):
+    default_depth: int = 2  # neighbourhood depth for graph view
+    max_depth: int = 4  # hard ceiling the endpoint clamps requested depth to
+    link_types: list[str] = Field(
+        default_factory=lambda: ["related", "parent", "child", "references", "depends_on"]
+    )
