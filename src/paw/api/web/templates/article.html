@@ -1,8 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ article.title }} · Personal AI Wiki{% endblock %}
+{% block sidebar %}{% include "_sidebar_tree.html" %}{% endblock %}
 {% block content %}
 <div id="conflict-banner" class="banner" style="display:none">
   This article changed on the server (409 conflict). Reload the page before saving again.
+</div>
+<div class="content-header">
+  <a class="btn" href="/domains/{{ article.domain_id }}/graph?root={{ article.id }}">🕸 Open in graph</a>
 </div>
 <div data-tabs>
   <div class="tabs">
@@ -19,8 +23,46 @@
     <button type="submit">Save</button>
   </form>
 </div>
-<section>
+
+<section class="meta">
+  <h3>Citations / Sources</h3>
+  {% if meta.citations %}
+  <ul>{% for c in meta.citations %}
+    <li>{% if c.quote %}"{{ c.quote }}"{% endif %}{% if c.locator %} <small>({{ c.locator }})</small>{% endif %}
+      — {% if c.source_filename %}{{ c.source_filename }}{% else %}<em class="muted">no source</em>{% endif %}</li>
+  {% endfor %}</ul>
+  {% else %}<p class="muted">No citations.</p>{% endif %}
+</section>
+
+<section class="meta">
+  <h3>Backlinks</h3>
+  {% if meta.backlinks %}
+  <ul>{% for b in meta.backlinks %}
+    <li><a href="/articles/{{ b.article_id }}">{{ b.title }}</a> <small>({{ b.link_type }})</small></li>
+  {% endfor %}</ul>
+  {% else %}<p class="muted">No backlinks.</p>{% endif %}
+</section>
+
+<section class="meta">
+  <h3>Related / Parent / Child</h3>
+  {% if meta.outgoing %}
+  {% for group, items in meta.outgoing | groupby("link_type") %}
+  <h4>{{ group }}</h4>
+  <ul>{% for o in items %}<li><a href="/articles/{{ o.article_id }}">{{ o.title }}</a></li>{% endfor %}</ul>
+  {% endfor %}
+  {% else %}<p class="muted">No outgoing links.</p>{% endif %}
+</section>
+
+<section class="meta">
   <h3>Revisions</h3>
-  <ul>{% for r in revisions %}<li>v{{ r.rev_no }} · {{ r.origin }}</li>{% endfor %}</ul>
+  <ul>{% for r in meta.revisions %}
+    <li>v{{ r.rev_no }} · {{ r.origin }}
+      {% if r.rev_no != article.current_rev %}
+      <button type="button" hx-post="/articles/{{ article.id }}/rollback"
+              hx-vals='{"rev_no": {{ r.rev_no }}}'
+              hx-headers='{"x-csrf-token": "{{ csrf }}"}'>Rollback</button>
+      {% endif %}
+    </li>
+  {% endfor %}</ul>
 </section>
 {% endblock %}

@@ -14,3 +14,12 @@ body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); colo
 .banner { background:#fde; border:1px solid #e88; padding:.6rem 1rem; border-radius:8px; }
 button { background:var(--accent); color:#fff; border:0; padding:.4rem .8rem; border-radius:6px; cursor:pointer; }
 input, textarea { width:100%; padding:.4rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); }
+.content-header { display:flex; gap:.6rem; align-items:center; margin-bottom:1rem; }
+.btn { display:inline-block; text-decoration:none; background:var(--accent); color:#fff;
+       padding:.4rem .8rem; border-radius:6px; }
+.meta { margin-top:1.5rem; border-top:1px solid var(--border); padding-top:.8rem; }
+.meta h4 { margin:.4rem 0 .2rem; text-transform:capitalize; }
+.muted { color:#888; }
+.tree { list-style:none; padding-left:0; }
+.tree ul { list-style:none; padding-left:1rem; }
+.tree-item { padding:.1rem 0; }

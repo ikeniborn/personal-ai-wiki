@@ -19,7 +19,7 @@ from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.chat import ChatRepo
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.sources import SourceRepo
-from paw.security.sanitize import render_markdown
+from paw.security.sanitize import render_markdown, resolve_wikilinks
 from paw.security.sessions import SessionStore
 from paw.services.articles import ArticleService
 from paw.services.chat import ChatService
@@ -149,20 +149,41 @@ async def article_page(
 ) -> Response:
     if not await _current_uid(request, store):
         return RedirectResponse("/login", status_code=307)
-    body = await ArticleService(session).get_body(article_id)
-    revisions = await ArticleRepo(session).list_revisions(article_id)
+    svc = ArticleService(session)
+    body = await svc.get_body(article_id)
+    meta = await svc.get_meta(article_id)
+    tree = await svc.domain_tree(body.article.domain_id)
+    slug_map = await svc.slug_map(body.article.domain_id)
+    domain = await DomainRepo(session).get(body.article.domain_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(
         request,
         "article.html",
         {
             "article": body.article,
-            "html": render_markdown(body.markdown),
+            "html": render_markdown(resolve_wikilinks(body.markdown, slug_map)),
             "markdown": body.markdown,
-            "revisions": revisions,
+            "meta": meta,
+            "tree": tree,
+            "domain_name": domain.name if domain else "",
             "csrf": csrf,
         },
     )
+
+
+@router.post("/articles/{article_id}/rollback")
+async def web_rollback(
+    article_id: uuid.UUID,
+    rev_no: int = Form(...),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    user: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    await ArticleService(session).rollback(
+        article_id=article_id, rev_no=rev_no, author_id=user.id
+    )
+    # HTMX reloads the page so the new revision + metadata sections refresh.
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 
 @router.get("/settings", response_class=HTMLResponse)

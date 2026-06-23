@@ -16,3 +16,12 @@ document.body.addEventListener("htmx:responseError", (e) => {
     if (banner) banner.style.display = "block";
   }
 });
+
+// Sidebar parent/child tree filter (CSP-safe: external file, no inline handlers).
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "tree-filter") return;
+  const needle = e.target.value.toLowerCase();
+  document.querySelectorAll(".tree-item").forEach((li) => {
+    li.style.display = li.dataset.title.includes(needle) ? "" : "none";
+  });
+});
