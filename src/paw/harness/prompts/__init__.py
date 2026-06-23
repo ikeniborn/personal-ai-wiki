@@ -44,6 +44,12 @@ _OVERLAYS = {
         "content, only fix the specific problem (e.g. remove or correct a broken "
         "[[link]]). Headings '##' only. Optionally propose typed links to add."
     ),
+    "format": (
+        "Reformat and normalize the article markdown for readability (headings '##' "
+        "only, consistent lists and spacing) WITHOUT changing any facts. Every named "
+        "entity and every quoted citation present in the original MUST remain present "
+        "verbatim. Do not add or remove information. Return only the reformatted markdown."
+    ),
 }
 
 
