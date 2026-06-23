@@ -71,3 +71,35 @@ async def test_fix_task_resolves_selected_issue(
         )
     ).issues
     assert broken.id not in {i.id for i in after}
+
+
+async def test_format_task_revises_articles(db_session, redis_client, wired_settings, monkeypatch):
+    from tests.stubs import StubChatProvider, StubEmbeddingProvider
+
+    from paw.db.repos.articles import ArticleRepo
+    from paw.providers.config import WikiConfig
+    from paw.services.ingest_write import upsert_article
+
+    dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
+    art, _ = await upsert_article(
+        db_session, domain_id=dom.id, slug="quic", title="QUIC",
+        markdown="QUIC over UDP.", summary="", author_id=None,
+    )
+    job = await JobRepo(db_session).create(domain_id=dom.id, kind="format")
+    await db_session.commit()
+
+    async def fake_build(session, box):
+        chat = StubChatProvider(
+            responder=lambda msgs, tools: StubChatProvider.tool(
+                "emit_result", {"markdown": "## Overview\n\nQUIC over UDP."}
+            )
+        )
+        return chat, StubEmbeddingProvider(dim=8), WikiConfig(), 8
+
+    monkeypatch.setattr(tasks_mod, "_build_providers", fake_build)
+    out = await tasks_mod.format_articles({"redis": redis_client}, str(job.id), str(dom.id))
+    assert out == "succeeded"
+    art_id = art.id
+    db_session.expire_all()
+    refreshed = await ArticleRepo(db_session).get(art_id)
+    assert refreshed is not None and refreshed.current_rev == 2

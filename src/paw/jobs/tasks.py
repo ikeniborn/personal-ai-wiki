@@ -241,6 +241,74 @@ async def fix_issues(
                 return "failed"
 
 
+async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
+    from paw.db.repos.articles import ArticleRepo
+    from paw.db.repos.citations import CitationRepo
+    from paw.harness.ops.format import run_format_article
+
+    redis = ctx["redis"]
+    box = SecretBox(get_settings().fernet_key)
+    jid = uuid.UUID(job_id)
+    did = uuid.UUID(domain_id)
+    maker = get_sessionmaker()
+    async with maker() as job_s, maker() as data_s:
+        jobs = JobRepo(job_s)
+        async with domain_lock(redis, domain_id) as got:
+            if not got:
+                await jobs.set_status(jid, "failed", error="domain busy")
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
+                return "failed"
+            await jobs.set_status(jid, "running")
+            await jobs.heartbeat(jid)
+            await job_s.commit()
+            try:
+                chat, _embedder, wiki, _dim = await _build_providers(data_s, box)
+                repo = ArticleRepo(data_s)
+                citations = CitationRepo(data_s)
+                articles = await repo.list_by_domain(did)
+                formatted = 0
+                async with model_lock(redis, getattr(chat, "chat_model", "default")):
+                    for art in articles:
+                        if await jobs.is_cancel_requested(jid):
+                            raise MaintenanceCancelled()
+                        names = await repo.entity_names_for(art.id)
+                        quotes = [
+                            c.quote
+                            for c in await citations.list_for_article(art.id)
+                            if c.quote
+                        ]
+                        if await run_format_article(
+                            data_s, domain_id=did, article=art, entity_names=names,
+                            citation_quotes=quotes, chat=chat, cfg=wiki, author_id=None,
+                        ):
+                            formatted += 1
+                        await jobs.heartbeat(jid)
+                        await jobs.append_log(jid, {"step": "format", "slug": art.slug})
+                        await job_s.commit()
+                        await _safe_publish(redis, jid, {"step": "format", "slug": art.slug})
+                await data_s.commit()
+                await jobs.set_status(jid, "succeeded")
+                await jobs.append_log(jid, {"step": "formatted", "count": formatted})
+                await job_s.commit()
+                await _safe_publish(
+                    redis, jid, {"step": "done", "status": "succeeded", "count": formatted}
+                )
+                return "succeeded"
+            except MaintenanceCancelled:
+                await data_s.rollback()
+                await jobs.set_status(jid, "cancelled")
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
+                return "cancelled"
+            except Exception as e:  # noqa: BLE001
+                await data_s.rollback()
+                await jobs.set_status(jid, "failed", error=str(e)[:500])
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
+                return "failed"
+
+
 async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
     from datetime import datetime
 

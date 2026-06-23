@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paw.db.models import Article, ArticleRevision
+from paw.db.models import Article, ArticleEntity, ArticleRevision, Entity
 
 
 class ArticleRepo:
@@ -73,3 +73,12 @@ class ArticleRepo:
             .order_by(ArticleRevision.rev_no.desc())
         )
         return list(res.scalars().all())
+
+    async def entity_names_for(self, article_id: uuid.UUID) -> list[str]:
+        res = await self._s.execute(
+            select(Entity.name)
+            .join(ArticleEntity, ArticleEntity.entity_id == Entity.id)
+            .where(ArticleEntity.article_id == article_id)
+            .order_by(Entity.name)
+        )
+        return [r[0] for r in res.all()]

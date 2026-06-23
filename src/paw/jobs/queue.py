@@ -59,3 +59,10 @@ async def enqueue_fix(
 ) -> None:
     pool = redis or await get_arq_pool()
     await pool.enqueue_job("fix_issues", str(job_id), str(domain_id), issue_ids)
+
+
+async def enqueue_format(
+    redis: Any | None = None, *, job_id: uuid.UUID, domain_id: uuid.UUID
+) -> None:
+    pool = redis or await get_arq_pool()
+    await pool.enqueue_job("format_articles", str(job_id), str(domain_id))
