@@ -43,6 +43,11 @@ _md = mistune.create_markdown(
 _WIKILINK = re.compile(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]")
 
 
+def extract_wikilink_targets(text: str) -> list[str]:
+    """Return the slug of every [[slug]] / [[slug|label]] occurrence, in order."""
+    return [m.group(1).strip() for m in _WIKILINK.finditer(text)]
+
+
 def resolve_wikilinks(text: str, slug_to_id: dict[str, uuid.UUID]) -> str:
     """Rewrite [[slug]] / [[slug|label]] to markdown links for known slugs.
 
