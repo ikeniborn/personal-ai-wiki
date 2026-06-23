@@ -36,7 +36,7 @@ class SetupService:
         from paw.services.provider_settings import ProviderSettingsService
 
         psvc = ProviderSettingsService(self._s)
-        await psvc.set_provider(
+        await psvc.persist_provider(
             base_url=base_url,
             chat_model=chat_model,
             embedding_model=embedding_model,

@@ -77,17 +77,20 @@ def wired_settings(
     monkeypatch.setenv("FERNET_KEY", "k" * 43 + "=")
     import paw.api.deps as deps
     import paw.db.session as db_session_mod
+    import paw.jobs.queue as queue_mod
     from paw.config import get_settings
 
     get_settings.cache_clear()
     deps._redis = None
     db_session_mod._engine = None
     db_session_mod._sessionmaker = None
+    queue_mod._pool = None
     yield
     get_settings.cache_clear()
     deps._redis = None
     db_session_mod._engine = None
     db_session_mod._sessionmaker = None
+    queue_mod._pool = None
 
 
 @pytest.fixture(autouse=True)

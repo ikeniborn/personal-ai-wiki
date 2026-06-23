@@ -67,3 +67,18 @@ async def test_sse_live_tail_subscribe_then_publish(db_session, redis_client):
     assert "extract" in body
     assert "succeeded" in body
     assert all(f.startswith("data: ") and f.endswith("\n\n") for f in frames)
+
+
+async def test_sse_emits_keepalive_on_idle(db_session, redis_client):
+    """An idle live-tail (no event before idle_timeout) yields an SSE keep-alive comment."""
+    dom = await DomainRepo(db_session).create(name="d4", source_prefix="s4", wiki_prefix="w4")
+    repo = JobRepo(db_session)
+    job = await repo.create(domain_id=dom.id, kind="ingest")  # non-terminal, empty log
+    await db_session.commit()
+    gen = sse_events(redis_client, repo, job.id, idle_timeout=0.05)
+    try:
+        frame = await asyncio.wait_for(gen.__anext__(), timeout=2)
+        assert frame == ": keep-alive\n\n"
+        assert not frame.startswith("data: ")  # comment line, ignored by EventSource clients
+    finally:
+        await gen.aclose()

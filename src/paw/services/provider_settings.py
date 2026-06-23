@@ -23,7 +23,7 @@ class ProviderSettingsService:
         raw = (await self._all()).get(PROVIDER_KEY)
         return ProviderConfig.model_validate(raw) if raw else None
 
-    async def set_provider(
+    async def persist_provider(
         self,
         *,
         base_url: str,
@@ -33,6 +33,11 @@ class ProviderSettingsService:
         api_key: str,
         vision_model: str | None = None,
     ) -> ProviderConfig:
+        """Write the provider config to the session WITHOUT committing.
+
+        The caller owns the commit boundary, so the provider row and any
+        related migration (embedding column) land in a single transaction.
+        """
         pc = ProviderConfig(
             base_url=base_url,
             api_key_enc=self._box.encrypt(api_key),
@@ -44,6 +49,26 @@ class ProviderSettingsService:
         settings = await self._all()
         settings[PROVIDER_KEY] = pc.model_dump()
         await self._repo.upsert(settings)
+        return pc
+
+    async def set_provider(
+        self,
+        *,
+        base_url: str,
+        chat_model: str,
+        embedding_model: str,
+        embedding_dim: int,
+        api_key: str,
+        vision_model: str | None = None,
+    ) -> ProviderConfig:
+        pc = await self.persist_provider(
+            base_url=base_url,
+            chat_model=chat_model,
+            embedding_model=embedding_model,
+            embedding_dim=embedding_dim,
+            api_key=api_key,
+            vision_model=vision_model,
+        )
         await self._s.commit()
         return pc
 
@@ -60,7 +85,7 @@ class ProviderSettingsService:
         from paw.db.managed import embedding_dim as current_embedding_dim
 
         current = await current_embedding_dim(self._s)
-        pc = await self.set_provider(
+        pc = await self.persist_provider(
             base_url=base_url,
             chat_model=chat_model,
             embedding_model=embedding_model,
