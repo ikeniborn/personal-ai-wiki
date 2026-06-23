@@ -3,15 +3,15 @@
   "use strict";
 
   const cy_el = document.getElementById("cy");
-  if (!cy_el) return;
+  if (!cy_el || typeof cytoscape === "undefined") return;
 
   const domain_id = cy_el.dataset.domain;
   const default_depth = parseInt(cy_el.dataset.depth || "2", 10);
 
-  const root_sel = document.getElementById("root-select");
-  const depth_inp = document.getElementById("depth-range");
-  const depth_lbl = document.getElementById("depth-label");
-  const type_checks = document.querySelectorAll(".type-check");
+  const root_sel = document.getElementById("graph-root");
+  const depth_inp = document.getElementById("graph-depth");
+  const depth_lbl = document.getElementById("graph-depth-val");
+  const type_checks = document.querySelectorAll(".graph-type");
   const drawer = document.getElementById("graph-drawer");
   const drawer_title = document.getElementById("drawer-title");
   const drawer_summary = document.getElementById("drawer-summary");
@@ -31,7 +31,7 @@
     const root = root_sel ? root_sel.value : cy_el.dataset.root;
     const depth = depth_inp ? depth_inp.value : default_depth;
     const types = selected_types();
-    let url = "/api/v1/graph?domain_id=" + domain_id + "&root=" + root + "&depth=" + depth;
+    let url = "/api/v1/graph?domain=" + domain_id + "&root=" + root + "&depth=" + depth;
     if (types.length) url += "&types=" + types.join(",");
     return url;
   }

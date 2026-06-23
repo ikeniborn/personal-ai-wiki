@@ -50,14 +50,18 @@ async def test_graph_page_has_canvas_and_vendored_scripts(ctx):
     c, csrf, dom, db_session = ctx
     repo = ArticleRepo(db_session)
     did = uuid.UUID(dom)
-    await repo.create(domain_id=did, slug="ga", title="GA", storage_ref="b:ga")
+    a = await repo.create(domain_id=did, slug="ga", title="GA", storage_ref="b:ga")
     await db_session.commit()
 
-    page = await c.get(f"/domains/{dom}/graph")
+    page = await c.get(f"/domains/{dom}/graph?root={a.id}")
     assert page.status_code == 200
     assert 'id="cy"' in page.text
-    assert "cytoscape.min.js" in page.text
-    assert "graph.js" in page.text
+    assert f'data-domain="{dom}"' in page.text
+    assert f'data-root="{a.id}"' in page.text
+    assert 'src="/static/cytoscape.min.js"' in page.text
+    assert 'src="/static/graph.js"' in page.text
+    assert 'id="graph-root"' in page.text
+    assert 'id="graph-depth"' in page.text
 
 
 async def test_graph_static_assets_served(ctx):
@@ -80,4 +84,4 @@ async def test_graph_page_root_defaults_to_first_article(ctx):
     page = await c.get(f"/domains/{dom}/graph")
     assert page.status_code == 200
     # root article id should appear in the page as data-root attribute
-    assert str(a.id) in page.text
+    assert f'data-root="{a.id}"' in page.text
