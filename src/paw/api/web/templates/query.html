@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Query · {{ domain.name }}{% endblock %}
+{% block sidebar %}<h3>{{ domain.name }}</h3>{% endblock %}
+{% block content %}
+<h1>🔍 Query · {{ domain.name }}</h1>
+<form hx-post="/domains/{{ domain.id }}/query"
+      hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+      hx-target="#query-result" hx-swap="innerHTML">
+  <input type="text" name="q" placeholder="Ask a question…" autocomplete="off" required>
+  <button type="submit">Ask</button>
+</form>
+<section id="query-result" class="query-result"></section>
+{% endblock %}

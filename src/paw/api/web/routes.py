@@ -23,6 +23,7 @@ from paw.security.sessions import SessionStore
 from paw.services.articles import ArticleService
 from paw.services.domains import DomainService
 from paw.services.jobs import JobService
+from paw.services.query import QueryService
 from paw.services.setup import SetupService
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -100,6 +101,41 @@ async def web_start_ingest(
     job = await JobService(session).start_ingest(domain_id=domain_id, source_id=source_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
+
+
+@router.get("/domains/{domain_id}/query", response_class=HTMLResponse)
+async def query_page(
+    domain_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    store: SessionStore = Depends(get_session_store),
+) -> Response:
+    if not await _current_uid(request, store):
+        return RedirectResponse("/login", status_code=307)
+    domain = await DomainRepo(session).get(domain_id)
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(request, "query.html", {"domain": domain, "csrf": csrf})
+
+
+@router.post("/domains/{domain_id}/query", response_class=HTMLResponse)
+async def web_query(
+    domain_id: uuid.UUID,
+    request: Request,
+    q: str = Form(...),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor", "viewer")),
+) -> Response:
+    answer = await QueryService(session).answer(domain_id=domain_id, question=q)
+    return templates.TemplateResponse(
+        request,
+        "_query_result.html",
+        {
+            "answer_html": render_markdown(answer.answer_md),
+            "refs": answer.refs,
+            "passages": answer.passages,
+        },
+    )
 
 
 @router.get("/articles/{article_id}", response_class=HTMLResponse)
