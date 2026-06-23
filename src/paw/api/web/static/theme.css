@@ -23,3 +23,12 @@ input, textarea { width:100%; padding:.4rem; border:1px solid var(--border); bor
 .tree { list-style:none; padding-left:0; }
 .tree ul { list-style:none; padding-left:1rem; }
 .tree-item { padding:.1rem 0; }
+/* Graph canvas + drawer */
+.graph-controls { display:flex; flex-wrap:wrap; gap:.8rem; align-items:center; margin-bottom:.8rem; }
+.graph-controls label { display:flex; gap:.3rem; align-items:center; }
+.type-checks { display:flex; flex-wrap:wrap; gap:.4rem; }
+#cy { width:100%; height:calc(100vh - 220px); border:1px solid var(--border); border-radius:8px;
+      background:var(--surface); }
+#graph-drawer { display:none; position:fixed; right:0; top:0; width:280px; height:100vh;
+                background:var(--surface); border-left:1px solid var(--border);
+                padding:1rem; overflow:auto; z-index:10; }

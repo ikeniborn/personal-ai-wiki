@@ -24,6 +24,7 @@ from paw.security.sessions import SessionStore
 from paw.services.articles import ArticleService
 from paw.services.chat import ChatService
 from paw.services.domains import DomainService
+from paw.services.graph import GraphService
 from paw.services.jobs import JobService
 from paw.services.query import QueryService
 from paw.services.setup import SetupService
@@ -88,6 +89,35 @@ async def domain_page(
             "domain_name": domain.name if domain else "",
             "csrf": csrf,
             "latest_source_id": latest_source_id,
+        },
+    )
+
+
+@router.get("/domains/{domain_id}/graph", response_class=HTMLResponse)
+async def graph_page(
+    domain_id: uuid.UUID,
+    request: Request,
+    root: uuid.UUID | None = None,
+    session: AsyncSession = Depends(db),
+    store: SessionStore = Depends(get_session_store),
+) -> Response:
+    if not await _current_uid(request, store):
+        return RedirectResponse("/login", status_code=307)
+    domain = await DomainRepo(session).get(domain_id)
+    articles = await ArticleRepo(session).list_by_domain(domain_id)
+    cfg = await GraphService(session).config_for(domain_id)
+    tree = await ArticleService(session).domain_tree(domain_id)
+    root_id = root if root is not None else (articles[0].id if articles else None)
+    return templates.TemplateResponse(
+        request,
+        "graph.html",
+        {
+            "domain": domain,
+            "articles": articles,
+            "cfg": cfg,
+            "tree": tree,
+            "domain_name": domain.name if domain else "",
+            "root_id": root_id,
         },
     )
 

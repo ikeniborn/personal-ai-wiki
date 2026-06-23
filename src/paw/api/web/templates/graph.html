@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Graph · {{ domain.name }} · Personal AI Wiki{% endblock %}
+{% block sidebar %}{% include "_sidebar_tree.html" %}{% endblock %}
+{% block content %}
+<h1>{{ domain.name }} — Graph</h1>
+<div class="graph-controls">
+  <label>Root article:
+    <select id="root-select">
+      {% for article in articles %}
+      <option value="{{ article.id }}"{% if article.id == root_id %} selected{% endif %}>{{ article.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Depth: <span id="depth-label">{{ cfg.default_depth }}</span>
+    <input id="depth-range" type="range" min="0" max="{{ cfg.max_depth }}" value="{{ cfg.default_depth }}">
+  </label>
+  <span class="type-checks">
+    {% for lt in cfg.link_types %}
+    <label><input class="type-check" type="checkbox" value="{{ lt }}" checked> {{ lt }}</label>
+    {% endfor %}
+  </span>
+</div>
+<div id="cy"
+     data-domain="{{ domain.id }}"
+     data-root="{{ root_id }}"
+     data-depth="{{ cfg.default_depth }}"></div>
+<aside id="graph-drawer">
+  <h3 id="drawer-title"></h3>
+  <p id="drawer-summary"></p>
+  <a id="drawer-link" href="#" class="btn">Open</a>
+</aside>
+{% endblock %}
+{% block scripts %}
+<script src="/static/cytoscape.min.js" defer></script>
+<script src="/static/graph.js" defer></script>
+{% endblock %}
