@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 3 Retrieval/Query (RAG)</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#171e26; --panel2:#1e2733; --fg:#e6edf3; --muted:#8b98a5;
+    --border:#2a3441; --accent:#4ea1ff; --ok:#3fb950; --warn:#d29922; --crit:#f85149;
+    --pending:#6e7681; --edge:#5a6b7d; --chip:#223;
+    --node:#1e2733; --node-fg:#e6edf3;
+  }
+  [data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --fg:#1f2328; --muted:#57606a;
+    --border:#d0d7de; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
+    --pending:#8c959f; --edge:#8c959f; --node:#ffffff; --node-fg:#1f2328;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1140px;margin:0 auto;padding:28px 20px 60px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+    border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:24px}
+  h1{font-size:23px;margin:0 0 6px} h2{font-size:18px;margin:34px 0 12px;
+    border-left:3px solid var(--accent);padding-left:10px}
+  .sub{color:var(--muted);font-size:13px;max-width:820px}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12.5px}
+  .toggle{background:var(--panel2);color:var(--fg);border:1px solid var(--border);
+    border-radius:20px;padding:7px 14px;cursor:pointer;font-size:13px;white-space:nowrap}
+  .verdict{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 4px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:12px 16px;min-width:120px}
+  .kpi .n{font-size:24px;font-weight:700} .kpi .l{color:var(--muted);font-size:12px}
+  .kpi.crit .n{color:var(--crit)} .kpi.warn .n{color:var(--warn)} .kpi.ok .n{color:var(--ok)}
+  .banner{background:linear-gradient(90deg,color-mix(in srgb,var(--crit) 22%,var(--panel)),var(--panel));
+    border:1px solid var(--crit);border-radius:10px;padding:12px 16px;margin:14px 0;font-weight:600}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--panel2);font-size:12.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:700}
+  .pill.passed{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
+  .pill.in_progress{background:color-mix(in srgb,var(--crit) 18%,transparent);color:var(--crit)}
+  .pill.pending{background:color-mix(in srgb,var(--pending) 22%,transparent);color:var(--pending)}
+  .pill.CRITICAL{background:color-mix(in srgb,var(--crit) 20%,transparent);color:var(--crit)}
+  .pill.WARNING{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
+  .pill.open{background:color-mix(in srgb,var(--crit) 14%,transparent);color:var(--crit);border:1px solid var(--crit)}
+  figure{margin:0;background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:14px;overflow-x:auto}
+  figcaption{color:var(--muted);font-size:12.5px;margin-bottom:8px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .chain{font-size:13px;color:var(--muted);margin-top:8px}
+  .chain b{color:var(--fg)}
+  details{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-top:10px}
+  summary{cursor:pointer;font-weight:600}
+  svg text{font:12px -apple-system,Segoe UI,Roboto,sans-serif;fill:var(--node-fg)}
+  .nrect{fill:var(--node);stroke:var(--border);stroke-width:1.2}
+  .nrect.crit{stroke:var(--crit);stroke-width:2}
+  .nrect.term{stroke:var(--accent);stroke-width:1.6}
+  .edge{stroke:var(--edge);stroke-width:1.3;fill:none;marker-end:url(#arrow)}
+  .foot{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Проверка плана — Phase 3 · Retrieval / Query (RAG)</h1>
+      <div class="sub">План <code>2026-06-23-paw-phase-3-retrieval-query.md</code>
+        (plan_hash <code>edf01b96c3c3cc5a</code>) против спеки
+        <code>2026-06-22-paw-phase-3-retrieval-query-design.md</code>
+        (spec_hash <code>15369ae5ac20922b</code>). Дата прогона: 2026-06-23.</div>
+    </div>
+    <button class="toggle" id="tg">◐ Тема</button>
+  </header>
+
+  <div class="banner">Финальный вердикт: ТРЕБУЕТ ДОРАБОТКИ — 1 critical, 3 warning</div>
+  <div class="verdict">
+    <div class="kpi crit"><div class="n">1</div><div class="l">CRITICAL open</div></div>
+    <div class="kpi warn"><div class="n">3</div><div class="l">WARNING open</div></div>
+    <div class="kpi"><div class="n">0</div><div class="l">INFO</div></div>
+    <div class="kpi ok"><div class="n">15</div><div class="l">задач в плане</div></div>
+    <div class="kpi ok"><div class="n">0</div><div class="l">циклов / нарушений порядка</div></div>
+  </div>
+  <div class="chain">Chain: <b>intent: null</b> → <b>spec</b> 2026-06-22-…-design.md → <b>plan</b> 2026-06-23-…-retrieval-query.md</div>
+
+  <h2>Блок 1 · Резюме плана (задачи и критерии готовности)</h2>
+  <table>
+    <thead><tr><th>Задача</th><th>Файлы</th><th>Критерий готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr><td><b>T1</b> RetrievalConfig + loader</td><td><code>providers/config.py</code>, <code>services/provider_settings.py</code></td><td>unit <code>test_retrieval_config</code>: дефолты + merge override зелёные</td></tr>
+      <tr><td><b>T2</b> ChatProvider.stream()</td><td><code>providers/base.py</code>, <code>openai_compat.py</code>, <code>tests/stubs.py</code></td><td>unit <code>test_provider_stream</code>: stub + openai_compat парсят дельты</td></tr>
+      <tr><td><b>T3</b> RRF merge (pure)</td><td><code>vector/search.py</code></td><td>unit <code>test_rrf</code>: 3 теста ранжирования зелёные</td></tr>
+      <tr><td><b>T4</b> Repo read methods</td><td><code>db/repos/entities.py</code>, <code>db/repos/chunks.py</code></td><td>integration <code>test_repo_reads</code>: fetch_passages/summaries/tagged_with/list_by_domain</td></tr>
+      <tr><td><b>T5</b> Hybrid search</td><td><code>vector/search.py</code></td><td>unit <code>test_entity_match</code> + integration: ordering, version-filter, boost</td></tr>
+      <tr><td><b>T6</b> Graph BFS</td><td><code>graph/traverse.py</code></td><td>integration <code>test_bfs_traverse</code>: outgoing-only, depth-bound, cycle-safe, empty</td></tr>
+      <tr><td><b>T7</b> Query-embedding cache</td><td><code>vector/embed_cache.py</code></td><td>integration <code>test_embed_cache</code>: кэш-хит, None-redis bypass</td></tr>
+      <tr><td><b>T8</b> Context assembly + retrieve</td><td><code>harness/retrieve.py</code></td><td>unit <code>test_context_budget</code> + integration <code>test_retrieve</code>: seed+neighbor, empty</td></tr>
+      <tr><td><b>T9</b> Query prompt overlay</td><td><code>harness/prompts/__init__.py</code></td><td>unit <code>test_query_prompt</code>: grounding/cite/dont-know</td></tr>
+      <tr><td><b>T10</b> search_wiki tool + allowlist</td><td><code>harness/tools.py</code></td><td>integration <code>test_search_wiki_tool</code>: read-only allowlist, hits dict</td></tr>
+      <tr><td><b>T11</b> Query op (sync + empty)</td><td><code>harness/ops/query.py</code></td><td>integration <code>test_query_op</code>: messages, to_answer, DONT_KNOW</td></tr>
+      <tr><td><b>T12</b> QueryService</td><td><code>services/query.py</code></td><td>integration <code>test_query_service</code>: cite, dont-know, 422</td></tr>
+      <tr><td><b>T13</b> API router (sync + SSE)</td><td><code>api/routers/query.py</code>, <code>main.py</code></td><td>api <code>test_query_api</code>: sync shape, SSE tokens, empty</td></tr>
+      <tr><td><b>T14</b> Web Query screen</td><td><code>api/web/routes.py</code>, templates, <code>base/domain.html</code></td><td>api <code>test_query_web</code>: страница + sanitized answer + chips</td></tr>
+      <tr><td><b>T15</b> E2E ingest→query</td><td><code>tests/e2e/test_query_e2e.py</code></td><td>e2e: cited answer; off-topic→dont-know; полный <code>ruff+mypy+pytest</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Блок 2 · Граф зависимостей шагов</h2>
+  <figure>
+    <figcaption>Рёбра M→N: артефакт задачи M используется в N. Циклов нет; все рёбра идут вперёд (M&lt;N). Красный контур — задача с открытым CRITICAL (T10); синий — терминальные потребители.</figcaption>
+    <svg viewBox="0 0 1070 470" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Граф зависимостей задач">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-opacity="0.35"/>
+        </filter>
+      </defs>
+      <!-- edges (drawn first) -->
+      <g>
+        <!-- T1(150,39) -> T5(200,219) ; T1 -> T12(740,249) -->
+        <path class="edge" d="M150,39 C 250,39 100,219 200,219"/>
+        <path class="edge" d="M150,39 C 480,20 480,249 740,249"/>
+        <!-- T2(150,104) -> T13(920,139) -->
+        <path class="edge" d="M150,104 C 560,104 560,139 920,139"/>
+        <!-- T3(150,169) -> T5(200,219) -->
+        <path class="edge" d="M150,169 C 180,169 180,219 200,219"/>
+        <!-- T4(150,234) -> T5 ; T4 -> T8(380,259) -->
+        <path class="edge" d="M150,234 C 180,234 180,219 200,219"/>
+        <path class="edge" d="M150,234 C 280,234 280,259 380,259"/>
+        <!-- T5(330,219) -> T8 ; T5 -> T12 -->
+        <path class="edge" d="M330,219 C 360,219 360,259 380,259"/>
+        <path class="edge" d="M330,219 C 560,200 560,249 740,249"/>
+        <!-- T6(150,299) -> T8 -->
+        <path class="edge" d="M150,299 C 280,299 280,259 380,259"/>
+        <!-- T7(150,364) -> T8 -->
+        <path class="edge" d="M150,364 C 280,364 280,275 380,275"/>
+        <!-- T8(510,259) -> T10(560,169); T8 -> T11(560,319); T8 -> T13 -->
+        <path class="edge" d="M510,259 C 540,259 540,169 560,169"/>
+        <path class="edge" d="M510,259 C 540,259 540,319 560,319"/>
+        <path class="edge" d="M510,259 C 720,259 720,150 920,150"/>
+        <!-- T9(150,429) -> T11 -->
+        <path class="edge" d="M150,429 C 540,429 540,319 560,319"/>
+        <!-- T11(690,319) -> T12 ; T11 -> T13 -->
+        <path class="edge" d="M690,319 C 715,319 715,249 740,249"/>
+        <path class="edge" d="M690,319 C 800,319 800,160 920,160"/>
+        <!-- T12(870,249) -> T13 ; -> T14(920,259); -> T15(920,359) -->
+        <path class="edge" d="M870,249 C 895,249 895,150 920,150"/>
+        <path class="edge" d="M870,249 C 895,249 895,259 920,259"/>
+        <path class="edge" d="M870,249 C 895,249 895,359 920,359"/>
+      </g>
+      <!-- nodes -->
+      <g filter="url(#ds)">
+        <g><rect class="nrect" x="20" y="20" width="130" height="38" rx="7"/><text x="85" y="44" text-anchor="middle">T1 · Config</text></g>
+        <g><rect class="nrect" x="20" y="85" width="130" height="38" rx="7"/><text x="85" y="109" text-anchor="middle">T2 · stream()</text></g>
+        <g><rect class="nrect" x="20" y="150" width="130" height="38" rx="7"/><text x="85" y="174" text-anchor="middle">T3 · RRF</text></g>
+        <g><rect class="nrect" x="20" y="215" width="130" height="38" rx="7"/><text x="85" y="239" text-anchor="middle">T4 · Repos</text></g>
+        <g><rect class="nrect" x="20" y="280" width="130" height="38" rx="7"/><text x="85" y="304" text-anchor="middle">T6 · BFS</text></g>
+        <g><rect class="nrect" x="20" y="345" width="130" height="38" rx="7"/><text x="85" y="369" text-anchor="middle">T7 · EmbCache</text></g>
+        <g><rect class="nrect" x="20" y="410" width="130" height="38" rx="7"/><text x="85" y="434" text-anchor="middle">T9 · Prompt</text></g>
+        <g><rect class="nrect" x="200" y="200" width="130" height="38" rx="7"/><text x="265" y="224" text-anchor="middle">T5 · Hybrid</text></g>
+        <g><rect class="nrect" x="380" y="240" width="130" height="38" rx="7"/><text x="445" y="264" text-anchor="middle">T8 · Retrieve</text></g>
+        <g><rect class="nrect crit" x="560" y="150" width="130" height="38" rx="7"/><text x="625" y="174" text-anchor="middle">T10 · search_wiki ⚠</text></g>
+        <g><rect class="nrect" x="560" y="300" width="130" height="38" rx="7"/><text x="625" y="324" text-anchor="middle">T11 · Query op</text></g>
+        <g><rect class="nrect" x="740" y="230" width="130" height="38" rx="7"/><text x="805" y="254" text-anchor="middle">T12 · Service</text></g>
+        <g><rect class="nrect term" x="920" y="120" width="130" height="38" rx="7"/><text x="985" y="144" text-anchor="middle">T13 · API</text></g>
+        <g><rect class="nrect term" x="920" y="240" width="130" height="38" rx="7"/><text x="985" y="264" text-anchor="middle">T14 · Web</text></g>
+        <g><rect class="nrect term" x="920" y="350" width="130" height="38" rx="7"/><text x="985" y="374" text-anchor="middle">T15 · E2E</text></g>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--crit)"></span>открытый CRITICAL (T10)</span>
+      <span><span class="dot" style="background:var(--accent)"></span>терминальные потребители</span>
+      <span><span class="dot" style="background:var(--edge)"></span>зависимость M→N</span>
+    </div>
+  </figure>
+
+  <h2>Блок 2 · Матрица пересечений по артефактам</h2>
+  <table>
+    <thead><tr><th>Артефакт / файл</th><th>Задачи</th><th>Характер пересечения</th></tr></thead>
+    <tbody>
+      <tr><td><code>vector/search.py</code></td><td>T3, T5</td><td>создан в T3 (RRF), расширен в T5 (arms + boost)</td></tr>
+      <tr><td><code>db/repos/chunks.py</code></td><td>T4</td><td>добавлены read-методы поверх Phase 2</td></tr>
+      <tr><td><code>harness/retrieve.py</code></td><td>T8 → T10, T11, T13</td><td>создан в T8, потребляется тремя задачами</td></tr>
+      <tr><td><code>services/query.py</code></td><td>T12</td><td>единственный владелец</td></tr>
+      <tr><td><code>api/routers/query.py</code> + <code>main.py</code></td><td>T13</td><td>роутер + регистрация в одной задаче</td></tr>
+      <tr><td><code>api/web/routes.py</code></td><td>T14</td><td>web-экран</td></tr>
+      <tr><td><code>tests/integration/test_hybrid_search.py</code></td><td>T4, T5</td><td>создан в T4, дополнен в T5 — overlap тест-файла</td></tr>
+    </tbody>
+  </table>
+  <details>
+    <summary>Покрытие требований спеки задачами (coverage)</summary>
+    <table style="margin-top:10px">
+      <thead><tr><th>Требование спеки</th><th>Задачи</th></tr></thead>
+      <tbody>
+        <tr><td>Hybrid search (vector + FTS + RRF)</td><td>T3, T5</td></tr>
+        <tr><td>Graph BFS (outgoing, cycle-safe)</td><td>T6</td></tr>
+        <tr><td>Context assembly + query→entity + entity-boost + embedding-cache</td><td>T5, T7, T8</td></tr>
+        <tr><td>Query op + prompt + read-only allowlist + search_wiki + empty→don't-know</td><td>T9, T10, T11, T12</td></tr>
+        <tr><td>API POST /query (sync JSON + SSE)</td><td>T13</td></tr>
+        <tr><td>Web Query screen</td><td>T14</td></tr>
+        <tr><td>Acceptance criteria 1–5</td><td>T12, T13, T15 (+ T5, T6, T8)</td></tr>
+      </tbody>
+    </table>
+    <p style="color:var(--muted);font-size:12.5px">Один-ко-многим: критерий «hybrid RRF + BFS» закрывается T3+T5+T6+T8. Лишних (непривязанных к спеке) задач не найдено.</p>
+  </details>
+
+  <h2>Блок 3 · Результаты проверки по фазам</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="pill passed">passed</span></td><td>нет TODO/TBD/FIXME, нумерация 1–15 без пропусков; 2 WARNING (F-002, F-003)</td></tr>
+      <tr><td>coverage</td><td><span class="pill passed">passed</span></td><td>все требования спеки покрыты, лишних задач нет</td></tr>
+      <tr><td>dependencies</td><td><span class="pill in_progress">in_progress</span></td><td>0 циклов, 0 нарушений порядка; 1 CRITICAL (F-001) блокирует гейт</td></tr>
+      <tr><td>verifiability</td><td><span class="pill pending">pending</span></td><td>заблокирована CRITICAL-гейтом фазы dependencies</td></tr>
+      <tr><td>consistency</td><td><span class="pill pending">pending</span></td><td>первый прогон, все секции новые; предварительно зафиксирован F-004</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Findings</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>F-001</b></td><td><span class="pill CRITICAL">CRITICAL</span></td><td>Task 10</td>
+        <td><code>test_search_wiki_tool.py</code> вызывает <code>Budget()</code> без аргументов; <code>harness/limits.py</code> <code>Budget.__init__</code> — keyword-only без дефолтов → <code>TypeError</code>, тест недостижим до PASS. Использовать <code>Budget.from_wiki(WikiConfig())</code>.</td>
+        <td><span class="pill open">open</span></td>
+      </tr>
+      <tr>
+        <td><b>F-002</b></td><td><span class="pill WARNING">WARNING</span></td><td>Task 10</td>
+        <td>Инструкция импорта дублирует уже существующие в <code>tools.py</code> импорты <code>ToolSpec</code> и <code>WikiConfig</code> (ruff F811/F401); надо расширить существующие строки, добавив лишь <code>EmbeddingProvider</code> и <code>RetrievalConfig</code>.</td>
+        <td><span class="pill open">open</span></td>
+      </tr>
+      <tr>
+        <td><b>F-003</b></td><td><span class="pill WARNING">WARNING</span></td><td>Task 13</td>
+        <td><code>test_empty_context_dont_know</code> содержит мёртвый/битый код (<code>empty = await DomainRepo</code>; неиспользуемый импорт <code>_DR</code>); блок не запустится / падает ruff. Заменить на shape-only проверку из примечания.</td>
+        <td><span class="pill open">open</span></td>
+      </tr>
+      <tr>
+        <td><b>F-004</b></td><td><span class="pill WARNING">WARNING</span></td><td>Task 8</td>
+        <td>Step 4 содержит два варианта кода сборки <code>refs</code> с указанием взять второй (первый — «fragile zip»); риск реализовать неверный. Свести к одному каноническому блоку (<code>seed_titles</code>).</td>
+        <td><span class="pill open">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="foot">
+    Сводка: CRITICAL open = 1 · WARNING open = 3 · INFO = 0. Вердикт: <b>требует доработки</b>.<br>
+    Previous step: docs/superpowers/specs/2026-06-22-paw-phase-3-retrieval-query-design.md<br>
+    Chain: (intent: null) → spec 2026-06-22-paw-phase-3-retrieval-query-design.md → plan 2026-06-23-paw-phase-3-retrieval-query.md
+  </div>
+</div>
+<script>
+  (function(){
+    var b=document.getElementById('tg'), r=document.documentElement;
+    b.addEventListener('click',function(){
+      r.setAttribute('data-theme', r.getAttribute('data-theme')==='dark'?'light':'dark');
+    });
+  })();
+</script>
+</body>
+</html>
