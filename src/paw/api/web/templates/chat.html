@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Chat{% endblock %}
+{% block sidebar %}
+<h3>Chats</h3>
+<ul class="chat-sessions">
+  {% for s in sessions %}
+  <li>
+    <a href="/chat/{{ s.id }}">{{ s.title or "New chat" }}</a>
+    <button class="link-danger" hx-delete="/api/v1/chat/{{ s.id }}"
+            hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+            hx-confirm="Delete this chat?" hx-target="closest li" hx-swap="outerHTML">✕</button>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}
+{% block content %}
+<h1>💬 Chat</h1>
+<section id="chat-stream" class="chat-stream">
+  {% for m in messages %}
+  {% if m.role == "user" %}<div class="bubble user">{{ m.content }}</div>
+  {% else %}<div class="bubble assistant">{{ m.html | safe }}</div>{% endif %}
+  {% endfor %}
+</section>
+<form id="chat-form" hx-post="/chat"
+      hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+      hx-target="#chat-stream" hx-swap="beforeend">
+  <input type="hidden" id="session-id-input" name="session_id"
+         value="{{ session.id if session else '' }}">
+  {% if session %}
+  <input type="hidden" name="domain_id" value="{{ session.domain_id }}">
+  {% else %}
+  <select name="domain_id" required>
+    {% for d in domains %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <input type="text" name="q" placeholder="Ask a question…" autocomplete="off" required>
+  <button type="submit">Send</button>
+</form>
+{% endblock %}

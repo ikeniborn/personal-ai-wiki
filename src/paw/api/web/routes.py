@@ -16,11 +16,13 @@ from paw.api.deps import (
 )
 from paw.db.models import User
 from paw.db.repos.articles import ArticleRepo
+from paw.db.repos.chat import ChatRepo
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.sources import SourceRepo
 from paw.security.sanitize import render_markdown
 from paw.security.sessions import SessionStore
 from paw.services.articles import ArticleService
+from paw.services.chat import ChatService
 from paw.services.domains import DomainService
 from paw.services.jobs import JobService
 from paw.services.query import QueryService
@@ -173,3 +175,85 @@ async def settings_page(
         return RedirectResponse("/login", status_code=307)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(request, "settings.html", {"csrf": csrf})
+
+
+@router.get("/chat", response_class=HTMLResponse)
+async def chat_page(
+    request: Request,
+    session: AsyncSession = Depends(db),
+    store: SessionStore = Depends(get_session_store),
+) -> Response:
+    uid = await _current_uid(request, store)
+    if not uid:
+        return RedirectResponse("/login", status_code=307)
+    sessions = await ChatRepo(session).list_by_user(uuid.UUID(uid), limit=50)
+    domains = await DomainService(session).list()
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {"sessions": sessions, "domains": domains, "session": None, "messages": [], "csrf": csrf},
+    )
+
+
+@router.get("/chat/{session_id}", response_class=HTMLResponse)
+async def chat_session_page(
+    session_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    store: SessionStore = Depends(get_session_store),
+) -> Response:
+    uid = await _current_uid(request, store)
+    if not uid:
+        return RedirectResponse("/login", status_code=307)
+    svc = ChatService(session)
+    sess = await svc.get_owned(session_id=session_id, user_id=uuid.UUID(uid))  # 404 if not owned
+    rows = await svc.session_messages(session_id)
+    messages = [
+        {"role": m.role, "content": m.content, "html": render_markdown(m.content)} for m in rows
+    ]
+    sessions = await ChatRepo(session).list_by_user(uuid.UUID(uid), limit=50)
+    domains = await DomainService(session).list()
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {
+            "sessions": sessions,
+            "domains": domains,
+            "session": sess,
+            "messages": messages,
+            "csrf": csrf,
+        },
+    )
+
+
+@router.post("/chat", response_class=HTMLResponse)
+async def web_chat(
+    request: Request,
+    q: str = Form(...),
+    domain_id: uuid.UUID | None = Form(None),
+    session_id: uuid.UUID | None = Form(None),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    user: User = Depends(require_role("admin", "editor", "viewer")),
+) -> Response:
+    svc = ChatService(session)
+    is_new = session_id is None
+    sess = await svc.resolve_session(user=user, domain_id=domain_id, session_id=session_id)
+    prepared = await svc.prepare_turn(session=sess, question=q)
+    turn, usage = await svc.complete_turn(prepared)
+    await svc.record_turn(
+        session=sess, question=q, answer_md=turn.answer_md, refs=turn.refs,
+        model=prepared.model, prompt_version=prepared.prompt_version, usage=usage,
+    )
+    return templates.TemplateResponse(
+        request,
+        "_chat_turn.html",
+        {
+            "question": q,
+            "answer_html": render_markdown(turn.answer_md),
+            "refs": turn.refs,
+            "new_session_id": str(sess.id) if is_new else None,
+        },
+    )
