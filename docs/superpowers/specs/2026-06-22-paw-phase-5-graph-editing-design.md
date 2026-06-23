@@ -4,6 +4,49 @@ phase: 5
 status: design
 date: 2026-06-22
 depends_on: [2]
+review:
+  spec_hash: 22bb325bfbd2b06a
+  last_run: 2026-06-23
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: INFO
+      section: "Data model touched"
+      section_hash: c8b5b6c357398d00
+      text: "`entities` is listed as a table read (and the Goal mentions building on link/entity/citation data), but no In-scope feature, key flow, or acceptance criterion consumes or displays entities. The article-page section enumerates Citations/Backlinks/Related/Revisions only — the `entities` read is declared without a feature using it."
+      verdict: open
+      verdict_at: null
+    - id: F-002
+      phase: coverage
+      severity: INFO
+      section: "In scope"
+      section_hash: f142e058afff033a
+      text: "In-scope requires `[[refs]]` render as in-wiki links (line 28), but no acceptance criterion verifies it. AC#3 covers backlinks/related/citations/revisions and is silent on `[[refs]]` rendering — requirement without a verifying criterion."
+      verdict: open
+      verdict_at: null
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "In scope"
+      section_hash: f142e058afff033a
+      text: "Terminology: the graph link-type filter allowlist uses `references` (line 23), while the article page and AC#3 use the separate `citations` table (lines 27-28, 41, 69). Spec reads `links` for edges and `citations` separately, so link-type `references` is distinct from `citations` — but this is never stated, leaving the references/citations relationship ambiguous."
+      verdict: open
+      verdict_at: null
+    - id: F-004
+      phase: clarity
+      severity: INFO
+      section: "Config (LLD §10)"
+      section_hash: 382a414977938b9a
+      text: "Config names `bfs_depth`/graph default depth and the depth slider, and AC#1 references 'the depth bound', but no default value or maximum-depth ceiling is specified anywhere. The depth bound is delegated to config without a stated default or cap — requirement without explicit DoD/value."
+      verdict: open
+      verdict_at: null
+chain:
+  intent: null
 ---
 
 # Phase 5 — Graph + editing (link-aware UI)
