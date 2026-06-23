@@ -18,6 +18,7 @@ from paw.db.models import User
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.chat import ChatRepo
 from paw.db.repos.domains import DomainRepo
+from paw.db.repos.jobs import JobRepo
 from paw.db.repos.sources import SourceRepo
 from paw.security.sanitize import render_markdown, resolve_wikilinks
 from paw.security.sessions import SessionStore
@@ -26,6 +27,7 @@ from paw.services.chat import ChatService
 from paw.services.domains import DomainService
 from paw.services.graph import GraphService
 from paw.services.jobs import JobService
+from paw.services.maintenance import MaintenanceService
 from paw.services.query import QueryService
 from paw.services.setup import SetupService
 
@@ -134,6 +136,91 @@ async def web_start_ingest(
     # Start the job and return the SSE-wired drawer partial so HTMX swaps a live
     # progress drawer into #job-drawer (not the raw JSON the API endpoint returns).
     job = await JobService(session).start_ingest(domain_id=domain_id, source_id=source_id)
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
+
+
+async def _web_start_maintenance(
+    domain_id: uuid.UUID, request: Request, session: AsyncSession, op: str
+) -> Response:
+    svc = MaintenanceService(session)
+    starter = {
+        "lint": svc.start_lint,
+        "format": svc.start_format,
+        "reindex": svc.start_reindex,
+    }[op]
+    job = await starter(domain_id=domain_id)
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
+
+
+@router.post("/domains/{domain_id}/lint", response_class=HTMLResponse)
+async def web_lint(
+    domain_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    return await _web_start_maintenance(domain_id, request, session, "lint")
+
+
+@router.post("/domains/{domain_id}/format", response_class=HTMLResponse)
+async def web_format(
+    domain_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    return await _web_start_maintenance(domain_id, request, session, "format")
+
+
+@router.post("/domains/{domain_id}/reindex", response_class=HTMLResponse)
+async def web_reindex(
+    domain_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    return await _web_start_maintenance(domain_id, request, session, "reindex")
+
+
+@router.get("/domains/{domain_id}/lint/{job_id}/results", response_class=HTMLResponse)
+async def web_lint_results(
+    domain_id: uuid.UUID,
+    job_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    store: SessionStore = Depends(get_session_store),
+) -> Response:
+    if not await _current_uid(request, store):
+        return RedirectResponse("/login", status_code=307)
+    job = await JobRepo(session).get(job_id)
+    issues: list[dict[str, object]] = []
+    if job is not None:
+        for entry in job.log:
+            if entry.get("step") == "issues":
+                issues = entry.get("issues", [])
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(
+        request,
+        "_lint_results.html",
+        {"domain_id": domain_id, "issues": issues, "csrf": csrf},
+    )
+
+
+@router.post("/domains/{domain_id}/fix", response_class=HTMLResponse)
+async def web_fix(
+    domain_id: uuid.UUID,
+    request: Request,
+    issue_ids: list[str] = Form(default=[]),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    job = await MaintenanceService(session).start_fix(domain_id=domain_id, issue_ids=issue_ids)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
 
