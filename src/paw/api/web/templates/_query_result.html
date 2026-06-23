@@ -1,0 +1,11 @@
+<article class="answer">{{ answer_html | safe }}</article>
+{% if refs %}
+<div class="chips">
+  {% for r in refs %}<a class="chip" href="/articles/{{ r.article_id }}">{{ r.slug }}</a>{% endfor %}
+</div>
+{% endif %}
+{% if passages %}
+<details class="passages"><summary>{{ passages | length }} passages</summary>
+  <ul>{% for p in passages %}<li>{{ p.slug }}{% if p.heading_path %} › {{ p.heading_path }}{% endif %}</li>{% endfor %}</ul>
+</details>
+{% endif %}

@@ -10,8 +10,8 @@ from paw.audit.log import record
 from paw.db.repos.articles import ArticleRepo
 from paw.graph.repo import GraphRepo
 from paw.harness.limits import Budget
-from paw.providers.base import ToolSpec
-from paw.providers.config import WikiConfig
+from paw.providers.base import EmbeddingProvider, ToolSpec
+from paw.providers.config import RetrievalConfig, WikiConfig
 from paw.storage.postgres import PostgresStorage
 
 
@@ -22,6 +22,8 @@ class ToolContext:
     user_id: uuid.UUID | None
     budget: Budget
     issues: list[dict[str, object]] | None = None
+    embedder: EmbeddingProvider | None = None
+    retrieval: RetrievalConfig | None = None
 
 
 @dataclass
@@ -51,6 +53,42 @@ async def _get_article(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
 async def _list_articles(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     arts = await ArticleRepo(ctx.session).list_by_domain(ctx.domain_id)
     return {"articles": [{"id": str(a.id), "slug": a.slug, "title": a.title} for a in arts]}
+
+
+async def _search_wiki(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    from paw.harness.retrieve import retrieve
+
+    if ctx.embedder is None or ctx.retrieval is None:
+        raise ValueError("search_wiki requires embedder + retrieval config in context")
+    cfg = ctx.retrieval
+    if args.get("top_k") is not None:
+        cfg = ctx.retrieval.model_copy(
+            update={"top_n": int(args["top_k"])}  # type: ignore[arg-type]
+        )
+    result = await retrieve(
+        ctx.session,
+        domain_id=ctx.domain_id,
+        query=str(args["query"]),
+        embedder=ctx.embedder,
+        cfg=cfg,
+        embed_model=getattr(ctx.embedder, "embedding_model", ""),
+    )
+    return {
+        "passages": [
+            {
+                "chunk_id": str(p.chunk_id),
+                "slug": p.slug,
+                "heading_path": p.heading_path,
+                "text": p.text,
+                "score": p.score,
+            }
+            for p in result.passages
+        ],
+        "refs": [
+            {"article_id": str(r.article_id), "slug": r.slug, "title": r.title}
+            for r in result.refs
+        ],
+    }
 
 
 async def _upsert_article(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
@@ -125,6 +163,16 @@ READ_TOOLS: dict[str, Tool] = {
         writes=False,
         run=_list_articles,
     ),
+    "search_wiki": Tool(
+        _spec(
+            "search_wiki",
+            "Hybrid search (vector + FTS + graph) over the domain wiki. Read-only.",
+            {"query": {"type": "string"}, "top_k": {"type": "integer"}},
+            ["query"],
+        ),
+        writes=False,
+        run=_search_wiki,
+    ),
 }
 
 WRITE_TOOLS: dict[str, Tool] = {
@@ -174,6 +222,11 @@ COLLECT_TOOLS: dict[str, Tool] = {
 
 _ALLOWLISTS: dict[str, dict[str, Tool]] = {
     "ingest": {**READ_TOOLS, **WRITE_TOOLS, **COLLECT_TOOLS},
+    "query": {
+        "search_wiki": READ_TOOLS["search_wiki"],
+        "get_article": READ_TOOLS["get_article"],
+        "list_articles": READ_TOOLS["list_articles"],
+    },
 }
 
 

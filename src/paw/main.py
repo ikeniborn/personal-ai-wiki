@@ -9,6 +9,7 @@ from paw.api.routers import articles as articles_router
 from paw.api.routers import auth as auth_router
 from paw.api.routers import domains as domains_router
 from paw.api.routers import jobs as jobs_router
+from paw.api.routers import query as query_router
 from paw.api.routers import settings as settings_router
 from paw.api.routers import setup as setup_router
 from paw.api.routers import sources as sources_router
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
         settings_router,
         users_router,
         jobs_router,
+        query_router,
     ):
         app.include_router(r.router, prefix="/api/v1")
     app.include_router(web_routes.router)

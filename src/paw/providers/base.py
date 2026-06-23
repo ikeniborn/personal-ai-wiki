@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -44,6 +45,10 @@ class ChatProvider(Protocol):
         model: str | None = None,
         json_mode: bool = False,
     ) -> ChatResult: ...
+
+    def stream(
+        self, messages: list[Message], *, model: str | None = None
+    ) -> AsyncIterator[str]: ...
 
 
 class EmbeddingProvider(Protocol):

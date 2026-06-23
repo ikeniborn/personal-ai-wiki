@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 
 from pydantic import BaseModel
 
@@ -14,9 +14,11 @@ class StubChatProvider:
         script: list[ChatResult] | None = None,
         *,
         responder: Callable[[list[Message], list[ToolSpec] | None], ChatResult] | None = None,
+        stream_tokens: list[str] | None = None,
     ) -> None:
         self._script = list(script or [])
         self._responder = responder
+        self._stream_tokens = list(stream_tokens or [])
         self.calls: list[list[Message]] = []
 
     @staticmethod
@@ -43,6 +45,13 @@ class StubChatProvider:
         if self._responder is not None:
             return self._responder(messages, tools)
         return self._script.pop(0)
+
+    async def stream(
+        self, messages: list[Message], *, model: str | None = None
+    ) -> AsyncIterator[str]:
+        self.calls.append(list(messages))
+        for tok in self._stream_tokens:
+            yield tok
 
     async def structured[M: BaseModel](
         self,

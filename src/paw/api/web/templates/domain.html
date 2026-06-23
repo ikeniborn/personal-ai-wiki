@@ -12,6 +12,7 @@
     <input type="hidden" name="source_id" value="{{ latest_source_id | default('') }}">
     <button type="submit" {% if not latest_source_id %}disabled{% endif %}>Ingest latest source</button>
   </form>
+  <a class="btn" href="/domains/{{ domain.id }}/query">🔍 Query</a>
 </div>
 <aside id="job-drawer" class="drawer"></aside>
 {% endblock %}

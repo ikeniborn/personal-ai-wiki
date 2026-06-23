@@ -24,6 +24,12 @@ class EntityRepo:
         await self._s.flush()
         return e
 
+    async def list_by_domain(self, domain_id: uuid.UUID) -> list[Entity]:
+        res = await self._s.execute(
+            select(Entity).where(Entity.domain_id == domain_id).order_by(Entity.name)
+        )
+        return list(res.scalars().all())
+
     async def tag_article(self, *, article_id: uuid.UUID, entity_id: uuid.UUID) -> None:
         exists = await self._s.get(ArticleEntity, (article_id, entity_id))
         if exists is None:
