@@ -66,3 +66,10 @@ async def enqueue_format(
 ) -> None:
     pool = redis or await get_arq_pool()
     await pool.enqueue_job("format_articles", str(job_id), str(domain_id))
+
+
+async def enqueue_reindex(
+    redis: Any | None = None, *, job_id: uuid.UUID, domain_id: uuid.UUID
+) -> None:
+    pool = redis or await get_arq_pool()
+    await pool.enqueue_job("reindex_domain", str(job_id), str(domain_id))

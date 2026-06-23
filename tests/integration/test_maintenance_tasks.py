@@ -73,6 +73,50 @@ async def test_fix_task_resolves_selected_issue(
     assert broken.id not in {i.id for i in after}
 
 
+async def test_reindex_task_flips_stale_chunks(
+    db_session, redis_client, wired_settings, monkeypatch
+):
+    from sqlalchemy import text
+    from tests.stubs import StubChatProvider, StubEmbeddingProvider
+
+    from paw.config import get_settings
+    from paw.db.managed import ensure_embedding_column
+    from paw.db.repos.articles import ArticleRepo
+    from paw.ingest.chunking import ChunkSpec
+    from paw.providers.config import WikiConfig
+    from paw.security.secrets import SecretBox
+    from paw.services.provider_settings import ProviderSettingsService
+    from paw.vector.embed import embed_and_write
+
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    art = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:1", summary="s"
+    )
+    await ensure_embedding_column(db_session, 8)
+    await embed_and_write(
+        db_session, article_id=art.id, domain_id=dom.id,
+        specs=[ChunkSpec(kind="summary", ord=0, heading_path=None, text="TCP")],
+        embedder=StubEmbeddingProvider(dim=8), embedding_version=1,
+    )
+    # bump current version to 2 -> the v1 chunk is now stale
+    box = SecretBox(get_settings().fernet_key)
+    await ProviderSettingsService(db_session, box=box).bump_embedding_version()
+    job = await JobRepo(db_session).create(domain_id=dom.id, kind="reindex")
+    await db_session.commit()
+
+    async def fake_build(session, box):
+        return StubChatProvider([]), StubEmbeddingProvider(dim=8), WikiConfig(), 8
+
+    monkeypatch.setattr(tasks_mod, "_build_providers", fake_build)
+    out = await tasks_mod.reindex_domain({"redis": redis_client}, str(job.id), str(dom.id))
+    assert out == "succeeded"
+    rows = await db_session.execute(
+        text("SELECT DISTINCT embedding_version FROM chunks WHERE domain_id = :d"),
+        {"d": str(dom.id)},
+    )
+    assert [r[0] for r in rows.all()] == [2]
+
+
 async def test_format_task_revises_articles(db_session, redis_client, wired_settings, monkeypatch):
     from tests.stubs import StubChatProvider, StubEmbeddingProvider
 

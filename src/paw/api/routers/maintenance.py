@@ -52,3 +52,15 @@ async def start_format(
 ) -> dict[str, str]:
     job = await MaintenanceService(session).start_format(domain_id=domain_id)
     return {"job_id": str(job.id)}
+
+
+@router.post(
+    "/domains/{domain_id}/reindex",
+    status_code=202,
+    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+)
+async def start_reindex(
+    domain_id: uuid.UUID, session: AsyncSession = Depends(db)
+) -> dict[str, str]:
+    job = await MaintenanceService(session).start_reindex(domain_id=domain_id)
+    return {"job_id": str(job.id)}

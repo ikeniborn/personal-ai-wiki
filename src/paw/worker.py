@@ -3,7 +3,14 @@ from typing import Any
 from arq.connections import RedisSettings
 
 from paw.config import get_settings
-from paw.jobs.tasks import fix_issues, format_articles, gc_housekeeping, ingest_domain, lint_domain
+from paw.jobs.tasks import (
+    fix_issues,
+    format_articles,
+    gc_housekeeping,
+    ingest_domain,
+    lint_domain,
+    reindex_domain,
+)
 
 
 async def heartbeat(ctx: dict[str, Any]) -> str:
@@ -30,7 +37,13 @@ async def reconcile_jobs(ctx: dict[str, Any]) -> str:
 
 class WorkerSettings:
     functions = [
-        heartbeat, ingest_domain, gc_housekeeping, lint_domain, fix_issues, format_articles
+        heartbeat,
+        ingest_domain,
+        gc_housekeeping,
+        lint_domain,
+        fix_issues,
+        format_articles,
+        reindex_domain,
     ]
     redis_settings = _LazyRedisSettings()
 

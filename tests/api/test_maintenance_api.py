@@ -55,3 +55,10 @@ async def test_format_endpoint_returns_job_id(ctx):
     r = await c.post(f"/api/v1/domains/{dom}/format", headers={"x-csrf-token": csrf})
     assert r.status_code == 202
     assert uuid.UUID(r.json()["job_id"])
+
+
+async def test_reindex_endpoint_returns_job_id(ctx):
+    c, csrf, dom = ctx
+    r = await c.post(f"/api/v1/domains/{dom}/reindex", headers={"x-csrf-token": csrf})
+    assert r.status_code == 202
+    assert uuid.UUID(r.json()["job_id"])
