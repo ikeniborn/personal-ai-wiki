@@ -19,6 +19,10 @@ class DomainRepo:
     async def get(self, domain_id: uuid.UUID) -> Domain | None:
         return await self._s.get(Domain, domain_id)
 
+    async def get_by_name(self, name: str) -> Domain | None:
+        res = await self._s.execute(select(Domain).where(Domain.name == name))
+        return res.scalar_one_or_none()
+
     async def list(self) -> list[Domain]:
         res = await self._s.execute(select(Domain).order_by(Domain.created_at))
         return list(res.scalars().all())
