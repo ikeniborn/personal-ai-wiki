@@ -56,4 +56,4 @@ async def _problem(send: Send, status: int, title: str) -> None:
             ],
         }
     )
-    await send({"type": "http.response.body", "body": body})
+    await send({"type": "http.response.body", "body": body, "more_body": False})
