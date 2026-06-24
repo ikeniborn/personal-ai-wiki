@@ -144,9 +144,11 @@ async def gc_housekeeping(ctx: dict[str, Any]) -> str:
     from datetime import datetime, timedelta
 
     from paw.db.repos.chat import ChatRepo
+    from paw.db.repos.domains import DomainRepo
     from paw.db.repos.query_cache import QueryCacheRepo
     from paw.db.repos.users import UserRepo
     from paw.services.provider_settings import ProviderSettingsService
+    from paw.services.query_cache import QueryCacheService
     from paw.services.retention import resolve_retention, select_sessions_to_prune
 
     box = SecretBox(get_settings().fernet_key)
@@ -168,10 +170,13 @@ async def gc_housekeeping(ctx: dict[str, Any]) -> str:
             if doomed:
                 await repo.delete_by_ids(doomed)
                 pruned += len(doomed)
-        # Phase 7: TTL sweep of the query cache (global ttl).
-        qc_cfg = await ProviderSettingsService(session, box=box).get_query_cache()
-        cutoff = now - timedelta(seconds=qc_cfg.ttl_seconds)
-        await QueryCacheRepo(session).delete_expired(cutoff=cutoff)
+        # Phase 7: TTL sweep of the query cache, honoring per-domain ttl overrides.
+        qc_repo = QueryCacheRepo(session)
+        qc_svc = QueryCacheService(session)
+        for domain in await DomainRepo(session).list():
+            qc_cfg = await qc_svc.config(domain.id)
+            cutoff = now - timedelta(seconds=qc_cfg.ttl_seconds)
+            await qc_repo.delete_expired(cutoff=cutoff, domain_id=domain.id)
         await session.commit()
     return f"gc:{pruned}"
 

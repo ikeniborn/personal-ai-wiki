@@ -40,6 +40,23 @@ async def test_exact_upsert_and_get_by_norm(db_session):
     assert row2.answer_md == "TCP v2 [tcp]" and row2.stale is False
 
 
+async def test_suggest_escapes_like_metacharacters(db_session):
+    # M2: a user typing % or _ must match them literally, not as LIKE wildcards.
+    dom = await _domain(db_session)
+    await ensure_query_cache_embedding_column(db_session, 4)
+    repo = QueryCacheRepo(db_session)
+    for norm in ["50% off coupon", "50x off coupon", "a_b literal", "axb literal"]:
+        await repo.upsert(
+            domain_id=dom.id, query_norm=norm, answer_md="A", refs=[], passages=[],
+            model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
+        )
+    await db_session.commit()
+    # '%' literal: only the '50% …' row, not '50x …' (which a wildcard would match).
+    assert await repo.suggest(domain_id=dom.id, q="50%", limit=10) == ["50% off coupon"]
+    # '_' literal: only the 'a_b …' row, not 'axb …'.
+    assert await repo.suggest(domain_id=dom.id, q="a_b", limit=10) == ["a_b literal"]
+
+
 async def test_ann_nearest_returns_distance(db_session):
     dom = await _domain(db_session)
     await ensure_query_cache_embedding_column(db_session, 4)

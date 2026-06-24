@@ -1,5 +1,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from tests.stubs import StubChatProvider
 
 import paw.services.query as query_mod
@@ -92,3 +93,19 @@ async def test_refresh_bypasses_and_recomputes(client, monkeypatch):
     assert refreshed.json()["cached"] is False
     again = await client.post(url, json={"q": "q?"}, headers=h)
     assert again.json()["answer_md"] == "second [tcp]"  # refreshed value now cached
+
+
+async def test_cached_answer_records_provider_chat_model(client, db_session, monkeypatch):
+    # M3: the stored cache row records the provider's chat model, not an empty string.
+    monkeypatch.setattr(
+        query_mod, "build_chat_provider",
+        lambda pc, b: StubChatProvider(script=[StubChatProvider.text("reliable [tcp]")]),
+    )
+    url = f"/api/v1/domains/{client._dom.id}/query"
+    h = {"x-csrf-token": client._csrf}
+    r = await client.post(url, json={"q": "what is reliable?"}, headers=h)
+    assert r.status_code == 200 and r.json()["cached"] is False
+    model = (
+        await db_session.execute(text("SELECT model FROM query_cache LIMIT 1"))
+    ).scalar_one()
+    assert model == "m"  # the fixture's provider chat_model

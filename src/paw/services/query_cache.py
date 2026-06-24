@@ -73,6 +73,7 @@ class QueryCacheService:
         self._box = SecretBox(fernet_key or get_settings().fernet_key)
         self._redis: object | None = None
         self._repo = QueryCacheRepo(session)
+        self._embed_memo: dict[str, tuple[list[float], int]] = {}
 
     def with_redis(self, redis: object | None) -> QueryCacheService:
         self._redis = redis
@@ -91,7 +92,14 @@ class QueryCacheService:
         return glob
 
     async def _embed(self, *, question: str) -> tuple[list[float], int] | None:
-        """Return (query_vector, embedding_dim) or None if no provider is configured."""
+        """Return (query_vector, embedding_dim) or None if no provider is configured.
+
+        Memoized per question for the service's lifetime: a cache miss both looks up
+        (ANN arm) and then upserts, so without this the same question is embedded twice
+        per miss (M1). One service instance is request-scoped, so the memo is safe.
+        """
+        if question in self._embed_memo:
+            return self._embed_memo[question]
         psvc = ProviderSettingsService(self._s, box=self._box)
         pc = await psvc.get_provider()
         if pc is None:
@@ -101,7 +109,9 @@ class QueryCacheService:
             self._redis, embedder, query=question, model=pc.embedding_model,
             embedding_version=await psvc.get_embedding_version(),
         )
-        return vec, pc.embedding_dim
+        result = (vec, pc.embedding_dim)
+        self._embed_memo[question] = result
+        return result
 
     async def lookup(
         self, *, domain_id: uuid.UUID, question: str, cfg: QueryCacheConfig
