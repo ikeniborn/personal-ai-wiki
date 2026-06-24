@@ -87,7 +87,7 @@ A few repos drop to `text()` SQL where ORM mapping is awkward — chiefly for co
 
 ## Query cache repo
 
-`db/repos/query_cache.py::QueryCacheRepo` handles all `query_cache` / `query_cache_articles` I/O. All reads and writes are scoped by `domain_id`; the global TTL sweep (`delete_expired`) is the only method without a domain filter. All methods use raw `text()` SQL because `query_embedding` is not ORM-mapped. Results are returned as frozen `CacheRow` dataclasses; `refs` and `passages` JSONB columns are deserialized with `json.loads` inside the `_row` helper.
+`db/repos/query_cache.py::QueryCacheRepo` handles all `query_cache` / `query_cache_articles` I/O. All reads and writes are scoped by `domain_id`; `delete_expired` takes an optional `domain_id` (the housekeeping job calls it once per domain). All methods use raw `text()` SQL because `query_embedding` is not ORM-mapped. Results are returned as frozen `CacheRow` dataclasses; `refs` and `passages` JSONB columns are deserialized with `json.loads` inside the `_row` helper.
 
 - `get_by_norm(domain_id, query_norm)` — exact-match lookup on the `UNIQUE(domain_id, query_norm)` index; returns `CacheRow | None`.
 - `ann_nearest(domain_id, query_vector)` — ANN lookup via `query_embedding <=> CAST(:q AS vector) ORDER BY … LIMIT 1`; returns `(CacheRow, dist) | None`. Only considers rows where `query_embedding IS NOT NULL`.
@@ -95,8 +95,8 @@ A few repos drop to `text()` SQL where ORM mapping is awkward — chiefly for co
 - `set_deps(cache_id, deps)` — replaces the `query_cache_articles` rows for a cache entry: deletes existing deps, then bulk-inserts `(cache_id, article_id, rev)` tuples.
 - `touch(cache_id)` — increments `hit_count` and sets `last_hit_at = now()` on a cache hit.
 - `mark_stale_for_articles(domain_id, article_ids)` — sets `stale = true` on every cache entry whose `query_cache_articles` row references any of the given article IDs; returns the affected row count. Called by [[services#cache_seam]] when articles are updated.
-- `suggest(domain_id, q, limit)` — `SELECT query_norm … WHERE query_norm ILIKE :pat% ORDER BY hit_count DESC`; used for autocomplete.
-- `delete_expired(cutoff)` — `DELETE … WHERE COALESCE(last_hit_at, created_at) < :cutoff`; run by the housekeeping job (see [[jobs#Worker jobs]]). Global scope — no `domain_id` filter.
+- `suggest(domain_id, q, limit)` — `SELECT query_norm … WHERE query_norm ILIKE :pat ESCAPE '\' ORDER BY hit_count DESC`; LIKE metacharacters (`% _ \`) in `q` are escaped so they match literally. Used for autocomplete.
+- `delete_expired(cutoff, domain_id=None)` — `DELETE … WHERE COALESCE(last_hit_at, created_at) < :cutoff` (plus `AND domain_id = :d` when given); the housekeeping job calls it once per domain so per-domain TTL overrides are honored (see [[jobs#Worker jobs]]).
 
 ## Alembic migrations
 

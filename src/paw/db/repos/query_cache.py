@@ -170,23 +170,30 @@ class QueryCacheRepo:
     async def suggest(
         self, *, domain_id: uuid.UUID, q: str, limit: int
     ) -> list[str]:
+        # Escape LIKE metacharacters so a user typing % or _ matches them literally
+        # (prefix-search semantics), not as wildcards.
+        needle = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         res = await self._s.execute(
             text(
                 "SELECT query_norm FROM query_cache "
-                "WHERE domain_id = :d AND query_norm ILIKE :pat "
+                "WHERE domain_id = :d AND query_norm ILIKE :pat ESCAPE '\\' "
                 "ORDER BY hit_count DESC, query_norm ASC LIMIT :k"
             ),
-            {"d": str(domain_id), "pat": f"{q}%", "k": limit},
+            {"d": str(domain_id), "pat": f"{needle}%", "k": limit},
         )
         return [r[0] for r in res.all()]
 
-    async def delete_expired(self, *, cutoff: datetime) -> int:
+    async def delete_expired(
+        self, *, cutoff: datetime, domain_id: uuid.UUID | None = None
+    ) -> int:
+        sql = "DELETE FROM query_cache WHERE COALESCE(last_hit_at, created_at) < :c"
+        params: dict[str, Any] = {"c": cutoff}
+        if domain_id is not None:
+            sql += " AND domain_id = :d"
+            params["d"] = str(domain_id)
         res = cast(
             "CursorResult[Any]",
-            await self._s.execute(
-                text("DELETE FROM query_cache WHERE COALESCE(last_hit_at, created_at) < :c"),
-                {"c": cutoff},
-            ),
+            await self._s.execute(text(sql), params),
         )
         await self._s.flush()
         return res.rowcount or 0

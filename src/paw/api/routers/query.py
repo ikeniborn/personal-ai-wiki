@@ -173,7 +173,7 @@ async def query_domain(
             return _cached_result(hit)
 
     prepared = await qsvc.prepare(domain_id=domain_id, question=body.q)  # raises 404/422
-    model = str(getattr(prepared.chat, "chat_model", ""))
+    model = prepared.chat_model
     if wants_sse:
         cache = csvc if cfg.enabled else None
         return StreamingResponse(

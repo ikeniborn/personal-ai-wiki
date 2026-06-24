@@ -275,11 +275,12 @@ async def web_query(
                 },
             )
 
-    answer = await qsvc.answer(domain_id=domain_id, question=q)
+    prepared = await qsvc.prepare(domain_id=domain_id, question=q)
+    answer = await qsvc.complete(prepared)
     if cfg.enabled and answer.refs:
         await csvc.upsert(
             domain_id=domain_id, question=q, answer_md=answer.answer_md,
-            refs=answer.refs, passages=answer.passages, model="",
+            refs=answer.refs, passages=answer.passages, model=prepared.chat_model,
         )
     return templates.TemplateResponse(
         request,

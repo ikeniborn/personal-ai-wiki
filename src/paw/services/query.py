@@ -22,6 +22,7 @@ class Prepared:
     chat: ChatProvider
     messages: list[Message] | None  # None -> empty context (don't-know)
     ctx: RetrievedContext
+    chat_model: str  # provider chat model name, stamped onto cached answers
 
 
 class QueryService:
@@ -69,7 +70,7 @@ class QueryService:
             embed_model=pc.embedding_model,
         )
         messages = build_messages(question, ctx, wiki) if ctx.passages else None
-        return Prepared(chat=chat, messages=messages, ctx=ctx)
+        return Prepared(chat=chat, messages=messages, ctx=ctx, chat_model=pc.chat_model)
 
     async def complete(self, prepared: Prepared) -> QueryAnswer:
         if prepared.messages is None:

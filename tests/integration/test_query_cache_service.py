@@ -121,6 +121,41 @@ async def test_upsert_records_article_deps(db_session, monkeypatch):
     assert (str(art.id), 1) in {(str(r[0]), r[1]) for r in rows}
 
 
+class CountingEmbed:
+    """Embedder that counts how many texts it embeds."""
+
+    def __init__(self, table: dict[str, list[float]], default: list[float]) -> None:
+        self.table = table
+        self.default = default
+        self.calls = 0
+
+    async def embed(self, texts, *, model=None):
+        self.calls += len(texts)
+        return [self.table.get(t, self.default) for t in texts]
+
+
+async def test_cache_embeds_question_once_per_miss(db_session, monkeypatch):
+    # M1: a miss runs lookup (ANN arm) then upsert; both embed the question. The
+    # service memoizes per-question, so a miss embeds the question exactly once.
+    embed = CountingEmbed({"far phrase": [0.0, 1.0, 0.0, 0.0]}, default=[1.0, 0.0, 0.0, 0.0])
+    dom, art = await _provision(db_session, monkeypatch, embed=embed)
+    csvc = QueryCacheService(db_session, fernet_key=_FERNET)
+    cfg = await csvc.config(dom.id)
+    # Seed one cached row so the ANN arm runs and the embedding column exists.
+    await csvc.upsert(
+        domain_id=dom.id, question="seed q", answer_md="S",
+        refs=[], passages=[], model="m",
+    )
+    embed.calls = 0  # measure only the next miss
+    # "far phrase" is orthogonal to the seed vector -> ANN below threshold -> miss.
+    assert await csvc.lookup(domain_id=dom.id, question="far phrase", cfg=cfg) is None
+    await csvc.upsert(
+        domain_id=dom.id, question="far phrase", answer_md="X",
+        refs=[], passages=[], model="m",
+    )
+    assert embed.calls == 1  # lookup embedded once; upsert reused the memoized vector
+
+
 async def test_lookup_disabled_when_no_embedding_column(db_session, monkeypatch):
     # exact path still works even before any ANN column exists for the domain
     embed = FixedEmbed({}, default=[1.0, 0.0, 0.0, 0.0])
