@@ -54,3 +54,11 @@ class LinkRepo:
             )
         )
         return [(r[0], r[1], r[2]) for r in res.all()]
+
+    async def domain_link_pairs(
+        self, domain_id: uuid.UUID
+    ) -> list[tuple[uuid.UUID, uuid.UUID]]:
+        res = await self._s.execute(
+            select(Link.src_article_id, Link.dst_article_id).where(Link.domain_id == domain_id)
+        )
+        return [(r[0], r[1]) for r in res.all()]

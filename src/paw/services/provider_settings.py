@@ -7,12 +7,16 @@ from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
 from paw.db.repos.settings import SettingsRepo
 from paw.providers.config import (
     CHAT_KEY,
+    EMBEDDING_KEY,
     GRAPH_KEY,
+    MAINTENANCE_KEY,
     PROVIDER_KEY,
     RETRIEVAL_KEY,
     WIKI_KEY,
     ChatConfig,
+    EmbeddingConfig,
     GraphConfig,
+    MaintenanceConfig,
     ProviderConfig,
     RetrievalConfig,
     WikiConfig,
@@ -106,6 +110,7 @@ class ProviderSettingsService:
         )
         if current is not None and current != embedding_dim:
             await rebuild_embedding_column(self._s, embedding_dim)
+            await self.bump_embedding_version()
         else:
             await ensure_embedding_column(self._s, embedding_dim)
         await self._s.commit()
@@ -126,6 +131,23 @@ class ProviderSettingsService:
     async def get_graph(self) -> GraphConfig:
         raw = (await self._all()).get(GRAPH_KEY)
         return GraphConfig.model_validate(raw) if raw else GraphConfig()
+
+    async def get_maintenance(self) -> MaintenanceConfig:
+        raw = (await self._all()).get(MAINTENANCE_KEY)
+        return MaintenanceConfig.model_validate(raw) if raw else MaintenanceConfig()
+
+    async def get_embedding_version(self) -> int:
+        raw = (await self._all()).get(EMBEDDING_KEY)
+        return EmbeddingConfig.model_validate(raw).version if raw else EmbeddingConfig().version
+
+    async def bump_embedding_version(self) -> int:
+        settings = await self._all()
+        raw = settings.get(EMBEDDING_KEY)
+        current = EmbeddingConfig.model_validate(raw).version if raw else EmbeddingConfig().version
+        nxt = current + 1
+        settings[EMBEDDING_KEY] = EmbeddingConfig(version=nxt).model_dump()
+        await self._repo.upsert(settings)
+        return nxt
 
     async def set_wiki(self, cfg: WikiConfig) -> WikiConfig:
         settings = await self._all()

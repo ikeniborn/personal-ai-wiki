@@ -11,6 +11,18 @@
   </form>
   <a class="btn" href="/domains/{{ domain.id }}/query">🔍 Query</a>
   <a class="btn" href="/domains/{{ domain.id }}/graph">🕸 Graph</a>
+  <form hx-post="/domains/{{ domain.id }}/lint"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-target="#job-drawer" hx-swap="innerHTML">
+    <button type="submit">🧹 Lint</button>
+  </form>
+  <form hx-post="/domains/{{ domain.id }}/format"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-target="#job-drawer" hx-swap="innerHTML">
+    <button type="submit">✨ Format</button>
+  </form>
+  <form hx-post="/domains/{{ domain.id }}/reindex"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-target="#job-drawer" hx-swap="innerHTML">
+    <button type="submit">♻ Reindex</button>
+  </form>
 </div>
 <aside id="job-drawer" class="drawer"></aside>
 {% endblock %}

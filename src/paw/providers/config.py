@@ -7,6 +7,8 @@ WIKI_KEY = "wiki"
 RETRIEVAL_KEY = "retrieval"
 CHAT_KEY = "chat"
 GRAPH_KEY = "graph"
+MAINTENANCE_KEY = "maintenance"
+EMBEDDING_KEY = "embedding"
 
 
 class ProviderConfig(BaseModel):
@@ -61,3 +63,15 @@ class GraphConfig(BaseModel):
     link_types: list[str] = Field(
         default_factory=lambda: ["related", "parent", "child", "references", "depends_on"]
     )
+
+
+class MaintenanceConfig(BaseModel):
+    enabled_ops: list[str] = Field(
+        default_factory=lambda: ["lint", "fix", "format", "reindex"]
+    )
+    reindex_batch_size: int = 128  # chunks re-embedded per batch
+    stale_days: int = 180  # an article older than this (no update) is flagged stale
+
+
+class EmbeddingConfig(BaseModel):
+    version: int = 1  # the embedding_version search filters on; bumped on a model/dim change

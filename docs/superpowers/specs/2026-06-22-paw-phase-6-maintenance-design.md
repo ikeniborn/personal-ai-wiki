@@ -4,6 +4,44 @@ phase: 6
 status: design
 date: 2026-06-22
 depends_on: [2, 3]
+chain:
+  intent: null
+review:
+  spec_hash: 641de51a9bd13d23
+  last_run: 2026-06-23
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: INFO
+      section: "In scope"
+      section_hash: 13d2af362b217df2
+      text: "Lint is specified as a harness op ('harness/ops/lint.py + prompt; read-only tools; the report_issue collect tool is now active'), but the implementation plan realises Lint as deterministic detectors with the LLM/report_issue off the critical path. The LLM-driven-lint sub-requirement maps to no task."
+      verdict: accepted
+      verdict_at: 2026-06-23
+      resolution: "Accepted (plan Scope decision 1). Every Lint acceptance criterion and every listed Lint unit test (broken-ref, orphan, duplicate-entity, stale) is deterministic; pure detectors satisfy them fully and reproducibly. The report_issue collect tool (wired in Phase 4) stays available and untouched — it is simply not on Lint's critical path. Same pure-builder choice Phase 5 made for the graph."
+    - id: F-002
+      phase: coverage
+      severity: INFO
+      section: "In scope"
+      section_hash: 13d2af362b217df2
+      text: "Lint lists 'duplicate entities (graph + db)' but the plan detects duplicates only in the entities (db) table; there is no separate graph-side entity dedup."
+      verdict: accepted
+      verdict_at: 2026-06-23
+      resolution: "Accepted (plan Scope decision 3). Entities live only in the db in this phase (the graph stores article links, not entity nodes), so 'graph + db' duplicate detection reduces to db detection. Lint reports the duplicate (acceptance criterion 1); the fix (entity merge) is deferred."
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "Config (LLD §10)"
+      section_hash: 1b02a994bb46d266
+      text: "'lint thresholds (orphan/stale definitions)' defers the precise definitions of 'stale' and 'orphan' to config without pinning a DoD in the spec body."
+      verdict: accepted
+      verdict_at: 2026-06-23
+      resolution: "Accepted. Acceptance criterion 1 stays verifiable (plant a stale/orphan article -> Lint reports it); the plan pins concrete defaults (stale_days=180, orphan = zero in/out links) in MaintenanceConfig, tunable per-domain by design."
 ---
 
 # Phase 6 — Maintenance (lint / fix / format / reindex)

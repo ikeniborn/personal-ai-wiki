@@ -1,0 +1,20 @@
+<form hx-post="/domains/{{ domain_id }}/fix"
+      hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+      hx-target="#job-drawer" hx-swap="innerHTML">
+  <ul class="lint-issues">
+    {% for issue in issues %}
+    <li>
+      <label>
+        <input type="checkbox" name="issue_ids" value="{{ issue.id }}"
+               {% if issue.kind == 'duplicate_entity' %}disabled{% endif %}>
+        <strong>{{ issue.kind }}</strong>
+        {% if issue.target_slug %}<code>{{ issue.target_slug }}</code>{% endif %}
+        — {{ issue.detail }}
+      </label>
+    </li>
+    {% else %}
+    <li>No issues found.</li>
+    {% endfor %}
+  </ul>
+  {% if issues %}<button type="submit">Fix selected</button>{% endif %}
+</form>

@@ -151,3 +151,26 @@ class ChunkRepo:
             select(func.count()).select_from(Chunk).where(Chunk.article_id == article_id)
         )
         return int(res.scalar_one())
+
+    async def count_stale(self, *, domain_id: uuid.UUID, target_version: int) -> int:
+        res = await self._s.execute(
+            text(
+                "SELECT count(*) FROM chunks "
+                "WHERE domain_id = :d AND embedding_version != :v"
+            ),
+            {"d": str(domain_id), "v": target_version},
+        )
+        return int(res.scalar_one())
+
+    async def fetch_stale_batch(
+        self, *, domain_id: uuid.UUID, target_version: int, limit: int
+    ) -> list[tuple[uuid.UUID, str]]:
+        res = await self._s.execute(
+            text(
+                "SELECT id, text FROM chunks "
+                "WHERE domain_id = :d AND embedding_version != :v "
+                "ORDER BY id LIMIT :k"
+            ),
+            {"d": str(domain_id), "v": target_version, "k": limit},
+        )
+        return [(uuid.UUID(str(r[0])), r[1]) for r in res.all()]
