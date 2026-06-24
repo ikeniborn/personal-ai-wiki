@@ -148,22 +148,6 @@ class QueryCacheRepo:
         )
         await self._s.flush()
 
-    async def set_stale(self, *, domain_id: uuid.UUID, ids: list[uuid.UUID]) -> int:
-        if not ids:
-            return 0
-        res = cast(
-            "CursorResult[Any]",
-            await self._s.execute(
-                text(
-                    "UPDATE query_cache SET stale = true "
-                    "WHERE domain_id = :d AND id = ANY(:ids)"
-                ),
-                {"d": str(domain_id), "ids": [str(i) for i in ids]},
-            ),
-        )
-        await self._s.flush()
-        return res.rowcount or 0
-
     async def mark_stale_for_articles(
         self, *, domain_id: uuid.UUID, article_ids: list[uuid.UUID]
     ) -> int:

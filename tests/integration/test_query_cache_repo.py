@@ -26,7 +26,10 @@ async def test_exact_upsert_and_get_by_norm(db_session):
     assert row.answer_md == "TCP [tcp]" and row.stale is False
     assert row.refs[0]["slug"] == "tcp" and row.passages[0]["chunk_id"] == "c"
     # re-upsert preserves hit_count and clears stale
-    await repo.set_stale(domain_id=dom.id, ids=[cid])  # helper from mark path (see Step 3)
+    from sqlalchemy import text
+    await db_session.execute(
+        text("UPDATE query_cache SET stale = true WHERE id = :i"), {"i": str(cid)}
+    )
     await repo.upsert(
         domain_id=dom.id, query_norm="what is tcp?", answer_md="TCP v2 [tcp]",
         refs=[], passages=[], model="m", prompt_version="1",
