@@ -1,8 +1,9 @@
 import asyncio
 
+import httpx
 import uvicorn
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 from tests.stubs import StubEmbeddingProvider
 
 import paw.mcp.server as mcp_server
@@ -73,38 +74,39 @@ async def test_mcp_round_trip(db_session, wired_settings, monkeypatch):
         url = f"http://127.0.0.1:{port}/mcp"
         headers = {"Authorization": f"Bearer {token}"}
 
-        async with streamablehttp_client(url, headers=headers) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True) as http_client:
+            async with streamable_http_client(url, http_client=http_client) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
 
-                tools = await session.list_tools()
-                assert {t.name for t in tools.tools} == {
-                    "search_wiki",
-                    "get_article",
-                    "list_links",
-                }
+                    tools = await session.list_tools()
+                    assert {t.name for t in tools.tools} == {
+                        "search_wiki",
+                        "get_article",
+                        "list_links",
+                    }
 
-                search = await session.call_tool(
-                    "search_wiki", {"query": "reliable", "domain": "net"}
-                )
-                assert search.structuredContent is not None
-                assert any(p["slug"] == "tcp" for p in search.structuredContent["passages"])
+                    search = await session.call_tool(
+                        "search_wiki", {"query": "reliable", "domain": "net"}
+                    )
+                    assert search.structuredContent is not None
+                    assert any(p["slug"] == "tcp" for p in search.structuredContent["passages"])
 
-                article = await session.call_tool(
-                    "get_article", {"ref": "tcp", "domain": "net"}
-                )
-                assert article.structuredContent is not None
-                assert article.structuredContent["slug"] == "tcp"
-                assert "reliable" in article.structuredContent["markdown"]
+                    article = await session.call_tool(
+                        "get_article", {"ref": "tcp", "domain": "net"}
+                    )
+                    assert article.structuredContent is not None
+                    assert article.structuredContent["slug"] == "tcp"
+                    assert "reliable" in article.structuredContent["markdown"]
 
-                links = await session.call_tool(
-                    "list_links", {"article": "tcp", "domain": "net"}
-                )
-                assert links.structuredContent is not None
-                assert any(
-                    e["type"] == "related" and e["slug"] == "udp"
-                    for e in links.structuredContent["outgoing"]
-                )
+                    links = await session.call_tool(
+                        "list_links", {"article": "tcp", "domain": "net"}
+                    )
+                    assert links.structuredContent is not None
+                    assert any(
+                        e["type"] == "related" and e["slug"] == "udp"
+                        for e in links.structuredContent["outgoing"]
+                    )
     finally:
         server.should_exit = True
         await serve_task
