@@ -10,6 +10,7 @@ from paw.api.deps import (
     CSRF_COOKIE,
     SESSION_COOKIE,
     db,
+    get_redis,
     get_session_store,
     require_csrf,
     require_role,
@@ -29,6 +30,7 @@ from paw.services.graph import GraphService
 from paw.services.jobs import JobService
 from paw.services.maintenance import MaintenanceService
 from paw.services.query import QueryService
+from paw.services.query_cache import QueryCacheService
 from paw.services.setup import SetupService
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -244,11 +246,41 @@ async def web_query(
     domain_id: uuid.UUID,
     request: Request,
     q: str = Form(...),
+    refresh: int = 0,
     session: AsyncSession = Depends(db),
     _: None = Depends(require_csrf),
     __: User = Depends(require_role("admin", "editor", "viewer")),
 ) -> Response:
-    answer = await QueryService(session).answer(domain_id=domain_id, question=q)
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    csvc = QueryCacheService(session).with_redis(get_redis())
+    qsvc = QueryService(session).with_redis(get_redis())
+    cfg = await csvc.config(domain_id)
+
+    if cfg.enabled and not refresh:
+        hit = await csvc.lookup(domain_id=domain_id, question=q, cfg=cfg)
+        if hit is not None:
+            await csvc.touch(hit.id)
+            return templates.TemplateResponse(
+                request,
+                "_query_result.html",
+                {
+                    "answer_html": render_markdown(hit.answer_md),
+                    "refs": hit.refs,
+                    "passages": hit.passages,
+                    "cached": True,
+                    "stale": hit.stale,
+                    "domain_id": domain_id,
+                    "question": q,
+                    "csrf": csrf,
+                },
+            )
+
+    answer = await qsvc.answer(domain_id=domain_id, question=q)
+    if cfg.enabled and answer.refs:
+        await csvc.upsert(
+            domain_id=domain_id, question=q, answer_md=answer.answer_md,
+            refs=answer.refs, passages=answer.passages, model="",
+        )
     return templates.TemplateResponse(
         request,
         "_query_result.html",
@@ -256,7 +288,34 @@ async def web_query(
             "answer_html": render_markdown(answer.answer_md),
             "refs": answer.refs,
             "passages": answer.passages,
+            "cached": False,
+            "stale": False,
+            "domain_id": domain_id,
+            "question": q,
+            "csrf": csrf,
         },
+    )
+
+
+@router.get("/domains/{domain_id}/suggest", response_class=HTMLResponse)
+async def web_suggest(
+    domain_id: uuid.UUID,
+    request: Request,
+    q: str = "",
+    session: AsyncSession = Depends(db),
+    store: SessionStore = Depends(get_session_store),
+) -> Response:
+    if not await _current_uid(request, store):
+        return HTMLResponse("")
+    domain = await DomainRepo(session).get(domain_id)
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    svc = QueryCacheService(session)
+    cfg = await svc.config(domain_id)
+    suggestions = await svc.suggest(domain_id=domain_id, q=q, top_k=cfg.suggest_top_k)
+    return templates.TemplateResponse(
+        request,
+        "_suggestions.html",
+        {"domain": domain, "suggestions": suggestions, "csrf": csrf},
     )
 
 

@@ -1,0 +1,14 @@
+{% if suggestions %}
+<ul class="suggestion-list">
+  {% for s in suggestions %}
+  <li>
+    <form hx-post="/domains/{{ domain.id }}/query"
+          hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+          hx-target="#query-result" hx-swap="innerHTML">
+      <input type="hidden" name="q" value="{{ s }}">
+      <button type="submit" class="suggestion">{{ s }}</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
