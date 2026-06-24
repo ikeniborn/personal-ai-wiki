@@ -1,7 +1,7 @@
 # Services
 
 ## Overview
-The `services/` layer holds request-scoped business logic between [[api#App wiring]] and [[db#Repo pattern]]. Each service takes an `AsyncSession`, instantiates its own repos + [[storage#Backends]], and is the **single commit boundary** — repos never commit. Services own articles, chat, query, sources, ingest writes, maintenance/jobs, graph, domains, users, settings/setup, provider-config resolution, retention and a cache seam.
+The `services/` layer holds request-scoped business logic between [[api#App wiring]] and [[db#Repo pattern]]. Each service takes an `AsyncSession`, instantiates its own repos + [[storage#Backends]], and is the **single commit boundary** — repos never commit. Services own articles, chat, query, sources, ingest writes, maintenance/jobs, graph, domains, users, settings/setup, provider-config resolution, retention, a query-answer cache (Phase 7), and a cache seam.
 
 ## The commit-boundary rule
 A service issues exactly one `session.commit()` per logical operation; repositories and `PostgresStorage` only stage writes. This keeps multi-write operations atomic — e.g. `ArticleService.update` puts a blob, mutates the `Article` row, and adds an `ArticleRevision`, then commits once. Helpers meant to compose into a larger transaction (`ingest_write.upsert_article`, `ProviderSettingsService.persist_provider`) deliberately do **not** commit, leaving the boundary to their caller. See [[architecture#Layered dependencies (no cycles)]].
@@ -22,7 +22,7 @@ Every service's `__init__(self, session)` stores the `AsyncSession` as `self._s`
 - `delete_owned`/`get_owned` enforce per-user ownership (404 otherwise).
 
 ## QueryService
-`query.py` — one-shot Q&A (no session). `prepare` resolves the provider, merges global + per-domain `RetrievalConfig`, builds chat + embedding providers, runs [[vector#Hybrid search]] retrieval, and returns `Prepared` (messages `None` when no passages). `complete`/`answer` invoke the LLM and map the result to a `QueryAnswer`, falling back to `DONT_KNOW`. Read-only — it never commits.
+`query.py` — one-shot Q&A (no session). `prepare` resolves the provider, merges global + per-domain `RetrievalConfig`, builds chat + embedding providers, runs [[vector#Hybrid search]] retrieval, and returns `Prepared` (messages `None` when no passages). `complete`/`answer` invoke the LLM and map the result to a `QueryAnswer`, falling back to `DONT_KNOW`. Read-only — it never commits. The `prepare`/`complete`/`answer` SSE path is **not** cached; callers that want cache-first lookup use `QueryCacheService.lookup` before calling `prepare`, and `QueryCacheService.upsert` after to store the result.
 
 ## SourceService
 `sources.py` — source-file uploads. `upload_text`/`upload` validate the upload (`validate_text_upload`/`validate_source_upload`), compute a SHA-256 checksum, store bytes via `PostgresStorage` (`large=` for >256 KiB), create the `Source` row, and commit. `list` returns sources for a domain. See [[security#Uploads]] and [[ingest#Loaders]].
@@ -45,11 +45,28 @@ Both enqueue background work via [[jobs#Queue]] after committing a `Job` row. `m
 ## ProviderSettingsService (config resolution)
 `provider_settings.py` — the typed accessor over the DB settings blob and the source of global LLM config used by chat, query, graph and maintenance. `get_*` methods deserialize each key (`PROVIDER_KEY`, `WIKI_KEY`, `RETRIEVAL_KEY`, `CHAT_KEY`, `GRAPH_KEY`, `MAINTENANCE_KEY`, `EMBEDDING_KEY`) into [[providers#Config models]], returning defaults when absent. Other services layer per-domain `domains.config` overrides on top of these globals.
 
-- `persist_provider` Fernet-encrypts the API key and stages the write **without** committing; `set_provider`/`update_provider` add the commit (and `update_provider` rebuilds the embedding column + bumps `bump_embedding_version` on a dimension change).
+- `persist_provider` Fernet-encrypts the API key and stages the write **without** committing; `set_provider`/`update_provider` add the commit. `update_provider` keeps **both** managed vector columns (`chunks.embedding` and `query_cache.embedding`) at the provider dim — a dim change rebuilds whichever column already exists at a stale width, clears stale cache entries, and bumps `bump_embedding_version`.
+- `get_query_cache()` deserializes `QUERY_CACHE_KEY` into a `QueryCacheConfig` (returning defaults when absent); see [[providers#Config models]].
 - `get_embedding_version` feeds retrieval cache keys.
 
 ## Retention (pure logic)
 `retention.py` — no DB, no session: pure functions over `ChatConfig` + per-user `chat_prefs`. `resolve_retention` layers null-aware user prefs onto global defaults to yield a `Retention` (`history_depth`, `max_sessions`, `max_age_days`); `select_sessions_to_prune` picks session ids beyond the recency cap or older than the age cutoff. Used by `ChatService` to window history and by GC to prune old sessions.
 
-## cache_seam (Phase 7 stub)
-`cache_seam.py` — `mark_domain_cache_stale(session, domain_id)` is a deliberate no-op seam. Article writers (Fix/Format) call it on every write so Phase 7 can implement query-answer cache invalidation against the `query_cache` table without touching the writer code paths.
+## cache_seam
+`cache_seam.py` — `mark_cache_stale(session, *, domain_id, article_ids)` marks every `query_cache` entry that depends on any of `article_ids` as stale, via `QueryCacheRepo.mark_stale_for_articles`. It runs **inside the caller's write transaction** and only flushes (no commit), so invalidation is atomic with the article write. Article writers (ingest/fix/format) call it after upserting an article; a later read will serve the cached answer with a "may be outdated" flag + Refresh prompt. See [[db#Repo pattern]] for QueryCacheRepo.
+
+## QueryCacheService
+`services/query_cache.py` — per-domain query-answer cache introduced in Phase 7. Holds `QueryCacheRepo` + a `SecretBox`; optionally wires Redis for query-embedding caching via `with_redis(redis)`.
+
+- `config(domain_id)` — resolves `QueryCacheConfig` (global ⊕ per-domain `config["query_cache"]`) via `ProviderSettingsService.get_query_cache()`.
+- `lookup(*, domain_id, question, cfg)` — checks cache before retrieval: first an exact-norm fast-path (`QueryCacheRepo.get_by_norm`), then semantic ANN (`ann_nearest`) if the embedding column exists, accepted when cosine similarity ≥ `cfg.sim_threshold` (`passes_threshold`). Returns a `CacheHit` (fields: `id`, `answer_md`, `refs`, `passages`, `stale`) or `None` on a miss.
+- `upsert(...)` — stores a new or refreshed answer: embeds the question, ensures the `query_cache.embedding` column at the current provider dim, upserts the cache row, then records per-article-revision dependencies via `QueryCacheRepo.set_deps`. Commits once.
+- `touch(cache_id)` — increments `hit_count` and sets `last_hit_at = now()` (via `QueryCacheRepo.touch`) then commits; called on a fresh hit to keep the TTL/recency window current.
+- `suggest(*, domain_id, q, top_k)` — prefix-based query suggestions from `QueryCacheRepo.suggest`.
+
+## query_cache helpers
+`services/query_cache.py` also exposes pure module-level helpers used by `QueryCacheService` and routers:
+
+- `normalize_query(q)` — lowercases, trims, and collapses internal whitespace; produces the exact-match key stored as `query_norm`.
+- `passes_threshold(distance, sim_threshold)` — converts pgvector cosine distance (`1 − similarity`) to a similarity float and returns `True` when it meets `sim_threshold`.
+- `dep_article_ids(refs)` — extracts deduplicated, order-preserving article UUIDs from an answer's `refs` list; used to build the dependency rows in `upsert`.

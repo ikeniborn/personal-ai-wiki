@@ -11,7 +11,7 @@ Long-running LLM work runs out-of-band in the `arq` worker. `worker.py::WorkerSe
 - `fix_issues` — re-lint, then `run_fix_issue` for each selected issue id.
 - `format_articles` — `run_format_article` over every article in the domain.
 - `reindex_domain` — re-embed chunks to the target embedding version in batches.
-- `gc_housekeeping` — prune chat sessions past each user's retention.
+- `gc_housekeeping` — prune chat sessions past each user's retention; Phase 7 adds a query-cache TTL sweep: `QueryCacheRepo(session).delete_expired(cutoff=now - timedelta(seconds=qc_cfg.ttl_seconds))` (see [[db#Repo pattern]]). Return value `"gc:{pruned}"` is unchanged.
 - `heartbeat` — write `paw:worker:heartbeat` to Redis (`ex=120`) as a liveness marker.
 - `reconcile_jobs` — `JobRepo.reconcile_stuck` to fail jobs with stale heartbeats.
 

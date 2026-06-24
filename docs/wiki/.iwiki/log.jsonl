@@ -11,3 +11,9 @@
 {"op":"init","source":"src/paw/jobs","page":"jobs.md","date":"2026-06-24"}
 {"op":"init","source":"src/paw/providers","page":"providers.md","date":"2026-06-24"}
 {"op":"init","source":"src/paw/audit","page":"audit.md","date":"2026-06-24"}
+{"op":"ingest","source":"src/paw/services","page":"services.md","date":"2026-06-24","note":"phase7 query-cache: cache_seam, QueryCacheService, helpers"}
+{"op":"ingest","source":"src/paw/db","page":"db.md","date":"2026-06-24","note":"phase7: query_cache schema, QueryCacheRepo, managed query_embedding, 0005"}
+{"op":"ingest","source":"src/paw/providers","page":"providers.md","date":"2026-06-24","note":"phase7: QueryCacheConfig"}
+{"op":"ingest","source":"src/paw/api","page":"api.md","date":"2026-06-24","note":"phase7: cache-aware query, ?refresh, stale/cached, /suggest, web dropdown+badge"}
+{"op":"ingest","source":"src/paw/jobs","page":"jobs.md","date":"2026-06-24","note":"phase7: gc_housekeeping TTL sweep of query_cache"}
+{"op":"ingest","source":"src/paw/harness","page":"harness.md","date":"2026-06-24","note":"phase7: ingest/fix/format call cache stale seam"}

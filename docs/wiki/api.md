@@ -2,7 +2,7 @@
 
 ## Overview
 
-`paw` exposes a thin async FastAPI layer: JSON routers mounted under `/api/v1` (auth, domains, sources, articles, setup, settings, users, jobs, query, chat, graph, maintenance) plus an HTMX web UI. Handlers stay thin — they validate, call a [[services#How services are wired]] method, and serialize. `deps.py` injects the DB session, current user/role, redis and CSRF guards; errors raise `ProblemError` rendered as RFC 9457 problem+json; cursor pagination is a tiny base64 helper.
+`paw` exposes a thin async FastAPI layer: JSON routers mounted under `/api/v1` (auth, domains, sources, articles, setup, settings, users, jobs, query, chat, graph, maintenance) plus an HTMX web UI. Handlers stay thin — they validate, call a [[services#How services are wired]] method, and serialize. `deps.py` injects the DB session, current user/role, redis and CSRF guards; errors raise `ProblemError` rendered as RFC 9457 problem+json; cursor pagination is a tiny base64 helper. The query router (Phase 7) adds a cache layer and a `suggest` endpoint for as-you-type completions.
 
 ## App wiring
 
@@ -84,7 +84,10 @@
 
 ## Query router
 
-`query.py` (`POST /domains/{domain_id}/query`) answers a single question over one domain via [[services#QueryService]] and the [[harness#Retrieve]] pipeline. When the request `Accept`s `text/event-stream` it streams tokens over SSE, then a final `done` event with refs+passages; otherwise it returns `QueryResult` (`answer_md`, `refs`, `passages`). `DONT_KNOW` is emitted when no context is found.
+`query.py` (`POST /domains/{domain_id}/query`) answers a single question over one domain via [[services#QueryService]] and the [[harness#Retrieve]] pipeline. The JSON path is now cache-aware (Phase 7): when a matching cache entry exists it is served immediately with no LLM call, and the response includes `stale: bool` and `cached: bool` fields. Pass `?refresh=1` to bypass the cache, recompute, and clear the stale flag. The SSE path (`Accept: text/event-stream`) streams tokens and a `done` event with refs+passages — it reads from the cache too but always writes back a fresh entry after streaming. `DONT_KNOW` is emitted when no context is found.
+
+- `POST /domains/{domain_id}/query` — JSON response: `{answer_md, refs, passages, stale, cached}`; `?refresh=1` forces recompute.
+- `GET /domains/{domain_id}/suggest?q=` — as-you-type suggestions ranked by `hit_count`; returns `{suggestions: [str]}`; top-k governed by `cfg.suggest_top_k`. See [[services#QueryService]].
 
 ## Chat router
 
@@ -105,5 +108,5 @@
 - Pages: `/` dashboard, `/domains/{id}` (article tree + sources), `/domains/{id}/graph` (Cytoscape page seeded with a root), `/articles/{id}`, `/settings`, `/login`, `/setup`.
 - Article tree comes from `ArticleService.domain_tree`; the article page renders body, metadata and history (rollback posts `HX-Refresh`).
 - Domain actions `POST /domains/{id}/ingest|lint|format|reindex|fix` start jobs and return the `_job_drawer.html` SSE-wired progress partial; `/lint/{job_id}/results` lists issues with a fix form.
-- Query: `/domains/{id}/query` page + `POST` returning a `_query_result.html` answer partial.
+- Query: `/domains/{id}/query` page + `POST` returning a `_query_result.html` answer partial. Phase 7 adds an as-you-type suggestions dropdown driven by `GET /domains/{id}/suggest?q=` via `hx-get` with ~300ms debounce (`_suggestions.html` partial). When the served answer is stale, the result partial renders a "may be outdated" badge and a Refresh form that re-posts with `refresh=1`. Cached markdown is sanitized at render via `render_markdown`.
 - Chat: `/chat` and `/chat/{session_id}` pages; `POST /chat` returns a `_chat_turn.html` partial with the new answer and refs.
