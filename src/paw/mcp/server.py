@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.config import get_settings
 from paw.db.models import Domain
@@ -15,7 +16,7 @@ from paw.security.secrets import SecretBox
 from paw.services.provider_settings import ProviderSettingsService
 
 
-async def _resolve_domain(session: Any, name: str) -> Domain:
+async def _resolve_domain(session: AsyncSession, name: str) -> Domain:
     dom = await DomainRepo(session).get_by_name(name)
     if dom is None:
         raise ValueError(f"unknown domain: {name}")
