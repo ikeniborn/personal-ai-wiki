@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.deps import current_user, db, require_csrf
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 
 class ApiKeyCreate(BaseModel):
-    scopes: list[str] = ["read"]
+    scopes: list[str] = Field(default_factory=lambda: ["read"])
 
 
 class ApiKeyIssued(BaseModel):

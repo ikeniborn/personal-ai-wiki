@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -66,8 +68,6 @@ async def test_issue_rejects_unknown_scope(client):
 
 
 async def test_revoke_unknown_returns_404(client):
-    import uuid
-
     csrf = await _login(client, "admin@example.com", "pw12345")
     r = await client.request(
         "DELETE", f"/api/v1/api-keys/{uuid.uuid4()}", headers={"x-csrf-token": csrf}
