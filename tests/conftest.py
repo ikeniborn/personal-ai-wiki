@@ -102,12 +102,15 @@ async def _clean_db(pg_async_url: str) -> AsyncIterator[None]:
             text(
                 "TRUNCATE users, api_keys, app_settings, domains, blobs, "
                 "sources, articles, article_revisions, audit_log, "
-                "chat_sessions, chat_messages RESTART IDENTITY CASCADE"
+                "chat_sessions, chat_messages, query_cache, query_cache_articles "
+                "RESTART IDENTITY CASCADE"
             )
         )
-        # Drop the managed embedding column/index so each test starts with a clean DDL state.
+        # Drop managed vector columns/indexes so each test starts with a clean DDL state.
         await conn.execute(text("DROP INDEX IF EXISTS ix_chunks_embedding_hnsw"))
         await conn.execute(text("ALTER TABLE chunks DROP COLUMN IF EXISTS embedding"))
+        await conn.execute(text("DROP INDEX IF EXISTS ix_query_cache_embedding_hnsw"))
+        await conn.execute(text("ALTER TABLE query_cache DROP COLUMN IF EXISTS query_embedding"))
     await engine.dispose()
 
 
