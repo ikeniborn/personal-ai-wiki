@@ -64,7 +64,10 @@ async def test_mcp_round_trip(db_session, wired_settings, monkeypatch):
     server = uvicorn.Server(config)
     serve_task = asyncio.create_task(server.serve())
     try:
+        deadline = asyncio.get_event_loop().time() + 10.0
         while not server.started:  # wait for the socket to bind
+            if asyncio.get_event_loop().time() > deadline:
+                raise RuntimeError("uvicorn failed to start within 10s")
             await asyncio.sleep(0.05)
         port = server.servers[0].sockets[0].getsockname()[1]
         url = f"http://127.0.0.1:{port}/mcp"
