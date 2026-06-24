@@ -1,6 +1,13 @@
 ---
+title: "Phase 7 — Query-cache + suggestions implementation plan"
+phase: 7
+status: design
+date: 2026-06-24
+chain:
+  intent: null
+  spec: docs/superpowers/specs/2026-06-22-paw-phase-7-query-cache-design.md
 review:
-  plan_hash: ef04f506c634931a
+  plan_hash: 22674f1a6e57b257
   spec_hash: 517ac36128dd837d
   last_run: 2026-06-24
   phases:
@@ -11,167 +18,161 @@ review:
     consistency:   { status: passed }
   findings:
     - id: F-001
-      phase: structure
+      phase: coverage
       severity: CRITICAL
-      section: "Task 8 / Task 9 — test URLs"
-      section_hash: a659b535f71b4123
-      text: "Reviewer flagged `client._REDACTED` in test URLs as un-runnable. VERIFIED FALSE POSITIVE: the file contains `client._dom.id` (grep count 9; literal `_REDACTED` count 0). The mismatch is a transcript redaction-layer artifact in the reviewer's Read output, not file content. No edit (editing would introduce the bug)."
-      verdict: wontfix
+      section: "Task 6: Stale-marking — repo method + article-aware seam + call sites"
+      section_hash: 42ebf2515820b6c4
+      text: >-
+        Spec lists ingest/fix/format for eager stale-marking (In scope + acceptance
+        criterion 3), but the plan wired only fix/format. Re-ingest of a cited article
+        (upsert_article bumps current_rev) would not invalidate dependents. Fixed: ingest.py
+        now calls mark_articles_cache_stale(session, [art.id]) after Stage C, and a re-ingest
+        integration test asserts the dependent entry goes stale.
+      verdict: fixed
       verdict_at: 2026-06-24
     - id: F-002
-      phase: consistency
+      phase: coverage
       severity: WARNING
-      section: "Task 8 — router model provenance"
-      section_hash: a659b535f71b4123
-      text: "Non-SSE upsert reads `model = getattr(prepared.chat, 'chat_model', '')`; the stub provider lacks `chat_model`, so the stored `model` column is empty in tests. Acceptance criteria do not assert on `model`; acceptable for v1."
-      verdict: wontfix
+      section: "Task 12: E2E — query → cached → edit cited article → stale → refresh → fresh"
+      section_hash: 122c9e6d390fde3f
+      text: >-
+        E2E exercised only the Format edit path, masking the ingest gap (F-001). Fixed: Task 6
+        now includes a re-ingest invalidation integration test covering criterion 3's ingest path.
+      verdict: fixed
       verdict_at: 2026-06-24
     - id: F-003
-      phase: dependencies
+      phase: consistency
       severity: WARNING
-      section: "Tasks 8/9 — API/web fixtures"
-      section_hash: a659b535f71b4123
-      text: "API/web routers build services without an explicit fernet_key, relying on `get_settings().fernet_key`. Satisfied by the `wired_settings` fixture present in every API/web test fixture; not a defect, flagged as an ordering/setup invariant the executor must keep."
-      verdict: wontfix
+      section: "Task 11: GC — TTL cleanup of expired cache entries"
+      section_hash: 0f4388bcbc77d3b8
+      text: >-
+        Plan's gc_housekeeping no-regression claim was not validated against the actual fixtures.
+        Verified: existing tests/integration/test_gc_housekeeping.py uses wired_settings, so
+        get_settings()/get_query_cache() resolve defaults and delete_expired touches only
+        query_cache rows (empty in those tests) — no regression. Task 11 Step 6 re-runs that test
+        as the gate.
+      verdict: accepted
       verdict_at: 2026-06-24
     - id: F-004
       phase: coverage
       severity: INFO
-      section: "Task 4 — suggest"
-      section_hash: 761ccf6be8322d0d
-      text: "`suggest` uses prefix ILIKE, not the spec's 'FTS/ANN'. Deliberate v1 simplification (noted in Task 4 + Self-Review); acceptance #5 only requires hit_count-ranked matches, which this satisfies."
-      verdict: wontfix
+      section: "Task 5: QueryCacheRepo (upsert + exact/ANN lookup + touch)"
+      section_hash: 87ff54f813a97e23
+      text: >-
+        Cache lookup is not filtered by embedding_version; after a model/version bump without a
+        dim change (the managed column is only truncated on a dim change), same-dim embeddings
+        from the old model could still ANN-match. Spec mandates only dim-change handling, so this
+        is within scope; noted as a freshness edge for a future phase.
+      verdict: accepted
       verdict_at: 2026-06-24
     - id: F-005
-      phase: coverage
+      phase: consistency
       severity: INFO
-      section: "Task 8 — refresh"
-      section_hash: a659b535f71b4123
-      text: "Background refresh not implemented (only synchronous ?refresh=1). Spec marks it 'optionally', so not a gap."
-      verdict: wontfix
+      section: "Task 8: API — cache-aware query JSON path + ?refresh"
+      section_hash: 8c16c54b625cf901
+      text: >-
+        Existing test_query_api.py::test_query_response_shape_valid asserts the exact response
+        key set; the plan correctly updates it to include stale/cached (Task 8 Step 5). Confirmed
+        accurate, no further action.
+      verdict: accepted
       verdict_at: 2026-06-24
-chain:
-  intent: null
-  spec: docs/superpowers/specs/2026-06-22-paw-phase-7-query-cache-design.md
 ---
 
 # Phase 7 — Query-cache + Suggestions Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Cut LLM + retrieval load by serving repeated/semantically-near queries from a per-domain answer cache; eagerly mark cache entries stale on article writes; serve stale hits with a flag + Refresh; surface team-popular queries as as-you-type suggestions.
+**Goal:** Cut LLM + retrieval load by serving repeated/semantically-near queries from a per-domain answer cache, eagerly invalidated when cited articles change, with as-you-type suggestions.
 
-**Architecture:** A new `query_cache` table (one row per `(domain, normalized-query)`) plus a `query_cache_articles` dependency table. The query path does an **exact-norm fast-path** then a **semantic ANN** lookup *before* retrieval; a fresh/stale hit short-circuits the LLM. Misses run the existing Phase 3 path then upsert the answer + its article dependencies. Article writes (ingest/fix/format) mark dependent cache rows stale **in the same transaction** via the existing `cache_seam`. The query embedding is a runtime-**managed** `vector(dim)` column (exactly like `chunks.embedding`), so a provider dim-change clears + rebuilds it alongside the chunk reindex. GC gains a TTL sweep. The web Query screen gains a suggestions dropdown and a stale badge + Refresh button.
+**Architecture:** A new `query_cache` table (per-domain, `UNIQUE(domain_id, query_norm)`, managed `query_embedding vector(dim)` like `chunks.embedding`) plus a `query_cache_articles` dependency table. `QueryService.answer_cached()` checks the cache before retrieval (exact-norm fast-path, then semantic ANN ≥ `sim_threshold`); a fresh hit returns `answer_md` + `refs` with **no LLM call**; a miss runs the full Phase 3 path then upserts the answer with its cited-article dependencies. Article writes (fix/format) mark dependent entries `stale=true` transactionally via the existing cache seam; stale hits are served flagged with a Refresh action. `gc_housekeeping` removes TTL-expired entries.
 
-**Tech Stack:** Python 3.12 · async SQLAlchemy 2.0 (raw `text()` for the vector column) · PostgreSQL 16 + `pgvector` (HNSW, `vector_cosine_ops`) · FastAPI · Jinja2 + HTMX · `arq` worker · pytest + testcontainers.
+**Tech Stack:** Python 3.12 · `uv` · FastAPI · async SQLAlchemy 2.0 · PostgreSQL 16 + `pgvector` (HNSW + cosine) · Redis · Jinja2 + HTMX · pytest + testcontainers.
+
+## Global Constraints
+
+- **Branch:** all work lands on `dev/paw-phase-7` (already exists on origin); open a PR into `master`. Never commit to `master`.
+- **Run everything through `uv`:** `uv run ruff check .` → `uv run mypy src` → `uv run pytest -q` must all pass (CI runs exactly this). Ruff pinned `0.15.18`; selects `E,F,I,UP,B`; line length 100. mypy is strict.
+- **Atomicity:** exactly one `session.commit()` per operation, at the **service layer**. Repos and storage **never commit**.
+- **Per-domain isolation:** cache is per-domain — every lookup/upsert/suggest is scoped by `domain_id`. No cross-domain leakage.
+- **Chat is never cached** (only the `query` op). Do not touch the chat path.
+- **Cached content is sanitized on render** like any answer (`render_markdown` in the web layer) — never store or emit raw HTML.
+- **`query_embedding` is dim-locked** like `chunks.embedding` — created/rebuilt at runtime in `db/managed.py`, never in an alembic migration. A dim change clears the cache.
+- **Stale-marking must be transactional** with the article upsert — reuse the seam (`services/cache_seam.py`), don't add a separate eventual path.
+- **Errors:** raise `ProblemError(status, title, detail)`; `IntegrityError` auto-maps to 409.
+- **Tests need Docker** for `integration`/`api`/`e2e` layers (testcontainers Postgres `pgvector/pgvector:pg16` + Redis). The alembic baseline (`head`, includes the new `0005`) is applied once per session.
 
 ---
-
-## Background: conventions this plan follows
-
-Read these before starting — they are load-bearing:
-
-- **Managed vector column.** `chunks.embedding vector(dim)` is **not** in any alembic migration; `db/managed.py::ensure_embedding_column` adds it (+ HNSW) at provider-config time, and `embedding_dim(session)` reads `pg_attribute.atttypmod`. The vector arm in `vector/search.py::hybrid_search` *skips* itself when `embedding_dim(session) is None`. We mirror **all** of this for `query_cache.query_embedding`.
-- **Single commit boundary.** Repos and storage **never** commit. The service layer issues exactly one `session.commit()` per operation. `db.repos.*` only `flush()`.
-- **Per-domain config merge.** `QueryService.prepare` resolves config as `global ⊕ domains.config["<key>"]`:
-  ```python
-  retr = (RetrievalConfig.model_validate({**global_retr.model_dump(), **domain_overrides})
-          if isinstance(domain_overrides, dict) else global_retr)
-  ```
-  We mirror this for `query_cache`.
-- **Vector literal.** `vector/search.py::_vector_literal(vec) -> str` turns `list[float]` into pgvector text `"[0.1,0.2,...]"` and raises on non-finite values. Reuse it; do not re-implement.
-- **JSONB over raw SQL.** asyncpg returns a JSONB column selected via `text()` as a **str**. Always `SELECT col::text` and `json.loads(...)` on read; write with `CAST(:p AS jsonb)` binding `json.dumps(...)`.
-- **Cosine.** With `vector_cosine_ops`, `a <=> b` is cosine **distance** = `1 - cosine_similarity`. So `similarity = 1 - distance`, and "cosine ≥ threshold" ⇔ `(1 - distance) >= sim_threshold`.
-- **Stub embedder.** `tests/stubs.py::StubEmbeddingProvider` hashes text → deterministic but uncontrollable vectors (good for exact-hit tests, useless for ANN-near tests). ANN tests in this plan use a small in-test `FixedEmbeddingProvider` mapping specific strings → specific vectors.
 
 ## File Structure
 
-### New files
+**Create:**
+- `alembic/versions/0005_phase7_query_cache.py` — `query_cache` + `query_cache_articles` tables (no vector column; HNSW added at runtime).
+- `src/paw/db/repos/query_cache.py` — `QueryCacheRepo` (raw-SQL vector ops + JSONB (de)serialization).
+- `src/paw/services/query_cache.py` — pure helpers: `normalize_query`, `is_similar_enough`, `extract_dependencies`.
+- `src/paw/api/web/templates/_suggestions.html` — suggestion-list partial.
+- Test files (one per task, see tasks below).
 
-| Path | Responsibility |
-|------|----------------|
-| `alembic/versions/0005_phase7_query_cache.py` | Creates `query_cache` (no vector col) + `query_cache_articles`, indexes. |
-| `src/paw/db/repos/query_cache.py` | `QueryCacheRepo` — raw-SQL persistence: exact/ANN lookup, upsert, deps, touch, mark-stale, suggest, TTL delete. Never commits. |
-| `src/paw/services/query_cache.py` | `QueryCacheService` (owns commit) + pure helpers `normalize_query`, `passes_threshold`, `dep_article_ids`, ref/passage serializers, `CacheHit`. |
-| `src/paw/api/web/templates/_suggestions.html` | HTMX dropdown fragment (one mini-form per suggestion). |
-| `tests/unit/test_query_cache_config.py` | `QueryCacheConfig` defaults + merge. |
-| `tests/unit/test_query_cache_helpers.py` | `normalize_query`, `passes_threshold`, `dep_article_ids`. |
-| `tests/unit/test_query_cache_models.py` | ORM tables registered; `query_embedding` NOT ORM-mapped. |
-| `tests/integration/test_query_cache_repo.py` | Repo CRUD: exact, ANN, upsert+deps, touch, mark-stale, suggest, TTL. |
-| `tests/integration/test_query_cache_service.py` | Service lookup/upsert/refresh + LLM-call-count hit vs miss. |
-| `tests/integration/test_cache_stale_seam.py` | Transactional mark-stale on ingest/fix/format. |
-| `tests/integration/test_query_cache_gc.py` | `gc_housekeeping` deletes expired cache rows. |
-| `tests/integration/test_query_cache_dim_change.py` | provider dim-change clears + rebuilds the query_cache embedding. |
-| `tests/api/test_query_cache_api.py` | hit/miss/`?refresh=1` over HTTP, call-count via stub. |
-| `tests/api/test_suggest_api.py` | `GET /suggest?q=` JSON ranked by hit_count. |
-| `tests/api/test_query_cache_web.py` | web stale badge + Refresh + suggestions dropdown. |
-| `tests/e2e/test_query_cache_e2e.py` | query → cached → edit cited article → stale → refresh → fresh. |
-
-### Modified files
-
-| Path | Change |
-|------|--------|
-| `src/paw/providers/config.py` | Add `QUERY_CACHE_KEY` + `QueryCacheConfig`. |
-| `src/paw/services/provider_settings.py` | Add `get_query_cache()`. |
-| `src/paw/db/models.py` | Add `QueryCache` + `QueryCacheArticle` ORM models (no vector col). |
-| `src/paw/db/managed.py` | Add `ensure_query_cache_embedding_column`, `rebuild_query_cache_embedding_column`, `query_cache_embedding_dim`. |
-| `src/paw/services/cache_seam.py` | Implement article-level `mark_cache_stale(session, *, domain_id, article_ids)`. |
-| `src/paw/harness/ops/ingest.py` | Call the seam after the write. |
-| `src/paw/harness/ops/fix.py` | Switch to `mark_cache_stale(..., article_ids=[art.id])`. |
-| `src/paw/harness/ops/format.py` | Switch to `mark_cache_stale(..., article_ids=[art.id])`. |
-| `src/paw/jobs/tasks.py` | `gc_housekeeping`: TTL sweep of `query_cache`. |
-| `src/paw/api/routers/query.py` | Cache lookup/upsert in `query_domain`, `?refresh=1`, `stale`/`cached` fields, `GET /suggest`. |
-| `src/paw/api/web/routes.py` | `web_query` through cache; new `GET /domains/{id}/suggest` web route. |
-| `src/paw/api/web/templates/query.html` | Suggestions dropdown wiring. |
-| `src/paw/api/web/templates/_query_result.html` | Stale badge + Refresh button. |
-| `src/paw/services/provider_settings.py::update_provider` | On dim-change, also rebuild the query_cache embedding column. |
-| `tests/conftest.py` | `_clean_db`: truncate new tables + drop managed `query_embedding`. |
-| `tests/unit/test_cache_seam.py` | Update to the new seam signature (empty-list no-op). |
-| `tests/api/test_query_api.py` | `test_query_response_shape_valid` now expects `stale`/`cached`. |
+**Modify:**
+- `src/paw/providers/config.py` — `QueryCacheConfig` + `QUERY_CACHE_KEY`.
+- `src/paw/services/provider_settings.py` — `get_query_cache()`.
+- `src/paw/db/models.py` — `QueryCache` + `QueryCacheArticle` ORM models.
+- `src/paw/db/managed.py` — extend `ensure_embedding_column` / `rebuild_embedding_column` to also manage `query_cache.query_embedding`.
+- `src/paw/services/cache_seam.py` — replace the domain no-op with article-aware stale-marking.
+- `src/paw/harness/ops/fix.py`, `src/paw/harness/ops/format.py` — update the seam call site (pass `art.id`).
+- `src/paw/services/query.py` — `_resolve()` refactor + `answer_cached()` + `CachedAnswer`.
+- `src/paw/api/routers/query.py` — cache-aware JSON path, `?refresh=1`, `stale`/`cached` fields, `GET .../suggest`.
+- `src/paw/api/web/routes.py` — cache-aware `web_query`, `web_suggest`.
+- `src/paw/api/web/templates/query.html` — suggestions dropdown.
+- `src/paw/api/web/templates/_query_result.html` — stale badge + Refresh button.
+- `src/paw/jobs/tasks.py` — `gc_housekeeping` TTL cleanup of `query_cache`.
+- `tests/conftest.py` — drop the managed `query_cache.query_embedding` column between tests.
 
 ---
 
-## Task 1: `QueryCacheConfig`
+### Task 1: QueryCacheConfig + get_query_cache
 
 **Files:**
 - Modify: `src/paw/providers/config.py`
-- Test: `tests/unit/test_query_cache_config.py` (create)
+- Modify: `src/paw/services/provider_settings.py`
+- Test: `tests/unit/test_query_cache_config.py`, `tests/integration/test_query_cache_config.py`
 
-- [ ] **Step 1: Write the failing test**
+**Interfaces:**
+- Consumes: nothing (leaf config).
+- Produces:
+  - `QUERY_CACHE_KEY = "query_cache"` (str constant in `providers/config.py`).
+  - `class QueryCacheConfig(BaseModel)` with fields `enabled: bool = True`, `sim_threshold: float = 0.85`, `ttl: int = 1209600`, `suggest_top_k: int = 5`.
+  - `ProviderSettingsService.get_query_cache() -> QueryCacheConfig`.
+
+- [ ] **Step 1: Write the failing unit test**
 
 Create `tests/unit/test_query_cache_config.py`:
 
 ```python
-from paw.providers.config import QUERY_CACHE_KEY, QueryCacheConfig
+from paw.providers.config import QueryCacheConfig
 
 
 def test_defaults():
     c = QueryCacheConfig()
     assert c.enabled is True
-    assert c.sim_threshold == 0.92
-    assert c.ttl_seconds == 30 * 24 * 3600
+    assert c.sim_threshold == 0.85
+    assert c.ttl == 1209600  # 14 days in seconds
     assert c.suggest_top_k == 5
 
 
-def test_key_constant():
-    assert QUERY_CACHE_KEY == "query_cache"
-
-
-def test_domain_override_merge():
+def test_override_merge_keeps_other_defaults():
     base = QueryCacheConfig()
-    merged = QueryCacheConfig.model_validate(
-        {**base.model_dump(), "enabled": False, "sim_threshold": 0.8}
-    )
-    assert merged.enabled is False and merged.sim_threshold == 0.8
-    assert merged.ttl_seconds == 30 * 24 * 3600  # untouched
+    merged = QueryCacheConfig.model_validate({**base.model_dump(), "sim_threshold": 0.9})
+    assert merged.sim_threshold == 0.9
+    assert merged.enabled is True
+    assert merged.ttl == 1209600
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run it to verify it fails**
 
 Run: `uv run pytest tests/unit/test_query_cache_config.py -q`
-Expected: FAIL — `ImportError: cannot import name 'QUERY_CACHE_KEY'`.
+Expected: FAIL with `ImportError: cannot import name 'QueryCacheConfig'`.
 
-- [ ] **Step 3: Add the config model**
+- [ ] **Step 3: Add the config model + key**
 
 In `src/paw/providers/config.py`, add the key constant next to the others (after `EMBEDDING_KEY = "embedding"`):
 
@@ -179,24 +180,57 @@ In `src/paw/providers/config.py`, add the key constant next to the others (after
 QUERY_CACHE_KEY = "query_cache"
 ```
 
-And add the model after `EmbeddingConfig`:
+Add the model after `EmbeddingConfig`:
 
 ```python
 class QueryCacheConfig(BaseModel):
     enabled: bool = True
-    sim_threshold: float = 0.92  # cosine similarity floor for an ANN hit
-    ttl_seconds: int = 30 * 24 * 3600  # GC deletes entries idle longer than this
-    suggest_top_k: int = 5  # max as-you-type suggestions returned
+    sim_threshold: float = 0.85  # cosine sim floor for a semantic (ANN) cache hit
+    ttl: int = 1_209_600  # seconds (14 days) an idle entry survives before GC removes it
+    suggest_top_k: int = 5  # max as-you-type suggestions returned per query
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run the unit test to verify it passes**
 
 Run: `uv run pytest tests/unit/test_query_cache_config.py -q`
-Expected: PASS (3 passed).
+Expected: PASS (2 passed).
 
-- [ ] **Step 5: Add the service getter (no test yet — exercised in Task 5)**
+- [ ] **Step 5: Write the failing integration test**
 
-In `src/paw/services/provider_settings.py`, add `QUERY_CACHE_KEY`/`QueryCacheConfig` to the import block from `paw.providers.config`, then add this method after `get_maintenance`:
+Create `tests/integration/test_query_cache_config.py`:
+
+```python
+from paw.config import get_settings
+from paw.db.repos.settings import SettingsRepo
+from paw.providers.config import QUERY_CACHE_KEY
+from paw.security.secrets import SecretBox
+from paw.services.provider_settings import ProviderSettingsService
+
+
+async def test_get_query_cache_default(db_session, wired_settings):
+    svc = ProviderSettingsService(db_session, box=SecretBox(get_settings().fernet_key))
+    cfg = await svc.get_query_cache()
+    assert cfg.sim_threshold == 0.85
+    assert cfg.enabled is True
+
+
+async def test_get_query_cache_global_override(db_session, wired_settings):
+    await SettingsRepo(db_session).upsert({QUERY_CACHE_KEY: {"sim_threshold": 0.7, "enabled": False}})
+    svc = ProviderSettingsService(db_session, box=SecretBox(get_settings().fernet_key))
+    cfg = await svc.get_query_cache()
+    assert cfg.sim_threshold == 0.7
+    assert cfg.enabled is False
+    assert cfg.suggest_top_k == 5  # untouched default
+```
+
+- [ ] **Step 6: Run it to verify it fails**
+
+Run: `uv run pytest tests/integration/test_query_cache_config.py -q`
+Expected: FAIL with `AttributeError: 'ProviderSettingsService' object has no attribute 'get_query_cache'`.
+
+- [ ] **Step 7: Add get_query_cache**
+
+In `src/paw/services/provider_settings.py`, extend the import block from `paw.providers.config` to include `QUERY_CACHE_KEY` and `QueryCacheConfig`, then add the method after `get_maintenance`:
 
 ```python
     async def get_query_cache(self) -> QueryCacheConfig:
@@ -204,69 +238,150 @@ In `src/paw/services/provider_settings.py`, add `QUERY_CACHE_KEY`/`QueryCacheCon
         return QueryCacheConfig.model_validate(raw) if raw else QueryCacheConfig()
 ```
 
-- [ ] **Step 6: Lint + typecheck**
+- [ ] **Step 8: Run both test files + lint/type**
 
-Run: `uv run ruff check src tests/unit/test_query_cache_config.py && uv run mypy src`
+Run: `uv run pytest tests/unit/test_query_cache_config.py tests/integration/test_query_cache_config.py -q`
+Expected: PASS (4 passed).
+Run: `uv run ruff check src tests && uv run mypy src`
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/paw/providers/config.py src/paw/services/provider_settings.py tests/unit/test_query_cache_config.py
-git commit -m "feat(config): QueryCacheConfig + per-domain getter (phase 7)"
+git add src/paw/providers/config.py src/paw/services/provider_settings.py tests/unit/test_query_cache_config.py tests/integration/test_query_cache_config.py
+git commit -m "feat(config): QueryCacheConfig + get_query_cache (Phase 7)"
 ```
 
 ---
 
-## Task 2: Migration, ORM models, managed vector column, test isolation
+### Task 2: Migration + ORM models
 
 **Files:**
 - Create: `alembic/versions/0005_phase7_query_cache.py`
-- Modify: `src/paw/db/models.py`, `src/paw/db/managed.py`, `tests/conftest.py`
-- Test: `tests/unit/test_query_cache_models.py` (create), `tests/integration/test_migration.py` (reuse — see Step 8)
+- Modify: `src/paw/db/models.py`
+- Test: `tests/integration/test_query_cache_migration.py`
 
-- [ ] **Step 1: Write the failing model test**
+**Interfaces:**
+- Consumes: nothing.
+- Produces:
+  - Tables `query_cache` (cols `id, domain_id, query_norm, answer_md, refs, passages, model, prompt_version, stale, hit_count, last_hit_at, created_at`; `UNIQUE(domain_id, query_norm)`; index `ix_query_cache_domain_stale` on `(domain_id, stale)`) and `query_cache_articles` (cols `cache_id, article_id, rev`; PK `(cache_id, article_id)`; index `ix_query_cache_articles_article_id`).
+  - ORM models `QueryCache`, `QueryCacheArticle` in `db/models.py`. `query_embedding` is **not** mapped (managed column, like `chunks.embedding`).
 
-Create `tests/unit/test_query_cache_models.py`:
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/integration/test_query_cache_migration.py`:
 
 ```python
-from paw.db.base import Base
-from paw.db.models import QueryCache, QueryCacheArticle  # noqa: F401
+from sqlalchemy import text
 
 
-def test_query_cache_tables_registered():
-    tables = set(Base.metadata.tables)
-    assert {"query_cache", "query_cache_articles"} <= tables
+async def test_query_cache_columns_exist(db_session):
+    cols = set(
+        (
+            await db_session.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name='query_cache'")
+            )
+        ).scalars()
+    )
+    assert {
+        "id", "domain_id", "query_norm", "answer_md", "refs", "passages",
+        "model", "prompt_version", "stale", "hit_count", "last_hit_at", "created_at",
+    } <= cols
 
 
-def test_query_embedding_not_orm_mapped():
-    # query_embedding is a runtime-managed vector(dim) column, like chunks.embedding.
-    cols = set(QueryCache.__table__.columns.keys())
-    assert "query_embedding" not in cols
-    assert {"domain_id", "query_norm", "answer_md", "refs", "passages", "stale",
-            "hit_count", "last_hit_at"} <= cols
-
-
-def test_query_cache_articles_shape():
-    cols = set(QueryCacheArticle.__table__.columns.keys())
+async def test_query_cache_articles_columns_exist(db_session):
+    cols = set(
+        (
+            await db_session.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='query_cache_articles'"
+                )
+            )
+        ).scalars()
+    )
     assert {"cache_id", "article_id", "rev"} <= cols
+
+
+async def test_unique_domain_query_norm(db_session):
+    rows = (
+        await db_session.execute(
+            text(
+                "SELECT constraint_type FROM information_schema.table_constraints "
+                "WHERE table_name='query_cache' AND constraint_type='UNIQUE'"
+            )
+        )
+    ).scalars().all()
+    assert "UNIQUE" in rows
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run it to verify it fails**
 
-Run: `uv run pytest tests/unit/test_query_cache_models.py -q`
-Expected: FAIL — `ImportError: cannot import name 'QueryCache'`.
+Run: `uv run pytest tests/integration/test_query_cache_migration.py -q`
+Expected: FAIL — assertions fail (table `query_cache` does not exist, so column sets are empty).
 
-- [ ] **Step 3: Add the ORM models**
+- [ ] **Step 3: Write the migration**
 
-In `src/paw/db/models.py`, append after `ChatMessage` (before the `_biginteger`/`_string` lines):
+Create `alembic/versions/0005_phase7_query_cache.py`:
+
+```python
+from alembic import op
+
+revision = "0005_phase7_query_cache"
+down_revision = "0004_phase5_backlink_index"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # query_cache: per-domain answer cache. The `query_embedding vector(dim)` column
+    # + its HNSW index are NOT created here — db/managed.py adds them at runtime
+    # because dim depends on the configured provider (same pattern as chunks.embedding).
+    op.execute("""
+    CREATE TABLE query_cache (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+      query_norm text NOT NULL,
+      answer_md text NOT NULL,
+      refs jsonb NOT NULL DEFAULT '[]',
+      passages jsonb NOT NULL DEFAULT '[]',
+      model text NOT NULL DEFAULT '',
+      prompt_version text NOT NULL DEFAULT '',
+      stale boolean NOT NULL DEFAULT false,
+      hit_count int NOT NULL DEFAULT 0,
+      last_hit_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (domain_id, query_norm))
+    """)
+    op.execute("CREATE INDEX ix_query_cache_domain_stale ON query_cache(domain_id, stale)")
+
+    op.execute("""
+    CREATE TABLE query_cache_articles (
+      cache_id uuid NOT NULL REFERENCES query_cache(id) ON DELETE CASCADE,
+      article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      rev int NOT NULL DEFAULT 0,
+      PRIMARY KEY (cache_id, article_id))
+    """)
+    op.execute(
+        "CREATE INDEX ix_query_cache_articles_article_id ON query_cache_articles(article_id)"
+    )
+
+
+def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS query_cache_articles CASCADE")
+    op.execute("DROP TABLE IF EXISTS query_cache CASCADE")
+```
+
+- [ ] **Step 4: Add the ORM models**
+
+In `src/paw/db/models.py`, add after the `ChatMessage` class (and before the trailing `_biginteger` / `_string` lines):
 
 ```python
 class QueryCache(Base):
     __tablename__ = "query_cache"
+    # NOTE: `query_embedding vector(dim)` is a managed/raw column (db/managed.py +
+    # QueryCacheRepo raw SQL); intentionally NOT ORM-mapped, like chunks.embedding.
     __table_args__ = (UniqueConstraint("domain_id", "query_norm"),)
-    # NOTE: `query_embedding vector(dim)` is a runtime-managed column
-    # (see db/managed.py + QueryCacheRepo raw SQL); intentionally NOT ORM-mapped.
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
@@ -279,8 +394,8 @@ class QueryCache(Base):
     passages: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
-    model: Mapped[str | None] = mapped_column(Text)
-    prompt_version: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    prompt_version: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     stale: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     hit_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     last_hit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -297,81 +412,111 @@ class QueryCacheArticle(Base):
     article_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True
     )
-    rev: Mapped[int] = mapped_column(Integer, nullable=False)
+    rev: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 ```
 
-(`UniqueConstraint`, `Boolean`, `Integer`, `Text`, `JSONB`, `func`, `ForeignKey`, `DateTime`, `Mapped`, `mapped_column`, `Any`, `datetime`, `uuid` are all already imported in this module.)
+(All referenced symbols — `UniqueConstraint`, `Text`, `JSONB`, `Boolean`, `Integer`, `DateTime`, `UUID`, `ForeignKey`, `func`, `Mapped`, `mapped_column`, `Any`, `datetime`, `uuid` — are already imported at the top of `models.py`.)
 
-- [ ] **Step 4: Run the model test**
+- [ ] **Step 5: Run the test to verify it passes**
 
-Run: `uv run pytest tests/unit/test_query_cache_models.py -q`
+The baseline is applied once per session via `tests/conftest.py::_migrate` (`alembic upgrade head`), which now includes `0005`.
+
+Run: `uv run pytest tests/integration/test_query_cache_migration.py -q`
 Expected: PASS (3 passed).
 
-- [ ] **Step 5: Write the migration**
+- [ ] **Step 6: Verify mypy sees the models + lint**
 
-Create `alembic/versions/0005_phase7_query_cache.py`:
+Run: `uv run ruff check src tests && uv run mypy src`
+Expected: clean.
 
-```python
-from alembic import op
+- [ ] **Step 7: Commit**
 
-revision = "0005_phase7_query_cache"
-down_revision = "0004_phase5_backlink_index"
-branch_labels = None
-depends_on = None
-
-
-def upgrade() -> None:
-    # query_cache: NO query_embedding column here (managed migration adds vector(dim) + HNSW).
-    op.execute("""
-    CREATE TABLE query_cache (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      domain_id uuid NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
-      query_norm text NOT NULL,
-      answer_md text NOT NULL,
-      refs jsonb NOT NULL DEFAULT '[]',
-      passages jsonb NOT NULL DEFAULT '[]',
-      model text,
-      prompt_version text,
-      stale boolean NOT NULL DEFAULT false,
-      hit_count int NOT NULL DEFAULT 0,
-      last_hit_at timestamptz,
-      created_at timestamptz NOT NULL DEFAULT now(),
-      UNIQUE (domain_id, query_norm))
-    """)
-    op.execute("CREATE INDEX ix_query_cache_domain_stale ON query_cache(domain_id, stale)")
-
-    op.execute("""
-    CREATE TABLE query_cache_articles (
-      cache_id uuid NOT NULL REFERENCES query_cache(id) ON DELETE CASCADE,
-      article_id uuid NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-      rev int NOT NULL,
-      PRIMARY KEY (cache_id, article_id))
-    """)
-    op.execute(
-        "CREATE INDEX ix_query_cache_articles_article_id "
-        "ON query_cache_articles(article_id)"
-    )
-
-
-def downgrade() -> None:
-    for t in ("query_cache_articles", "query_cache"):
-        op.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
+```bash
+git add alembic/versions/0005_phase7_query_cache.py src/paw/db/models.py tests/integration/test_query_cache_migration.py
+git commit -m "feat(db): query_cache + query_cache_articles tables + ORM models (Phase 7)"
 ```
 
-- [ ] **Step 6: Add the managed vector helpers**
+---
 
-In `src/paw/db/managed.py`, after the existing `_HNSW_INDEX = "ix_chunks_embedding_hnsw"` add:
+### Task 3: Managed query_embedding column (dim-locked + dim-change clears cache)
+
+**Files:**
+- Modify: `src/paw/db/managed.py`
+- Modify: `tests/conftest.py`
+- Test: `tests/integration/test_query_cache_managed.py`
+
+**Interfaces:**
+- Consumes: `query_cache` table (Task 2).
+- Produces (behavioural, same public signatures):
+  - `ensure_embedding_column(session, dim)` now ALSO adds `query_cache.query_embedding vector(dim)` + HNSW index `ix_query_cache_embedding_hnsw` (idempotent).
+  - `rebuild_embedding_column(session, dim)` now ALSO drops that index/column, `TRUNCATE query_cache CASCADE` (clears recomputable cache on a dim change), re-adds the column at the new dim, recreates the index.
+  - The chunks↔query_cache embedding dim invariant always holds (they are ensured/rebuilt together in one transaction).
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/integration/test_query_cache_managed.py`:
+
+```python
+from sqlalchemy import text
+
+from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
+from paw.db.repos.domains import DomainRepo
+
+
+async def _qc_typmod(session):
+    return (
+        await session.execute(
+            text(
+                "SELECT a.atttypmod FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid "
+                "WHERE c.relname='query_cache' AND a.attname='query_embedding' "
+                "AND NOT a.attisdropped"
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def test_ensure_creates_query_cache_embedding(db_session):
+    await ensure_embedding_column(db_session, 8)
+    assert await _qc_typmod(db_session) == 8
+
+
+async def test_rebuild_changes_dim_and_clears_cache(db_session):
+    await ensure_embedding_column(db_session, 8)
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    await db_session.execute(
+        text(
+            "INSERT INTO query_cache (domain_id, query_norm, answer_md, query_embedding) "
+            "VALUES (:d, 'q', 'a', CAST(:v AS vector))"
+        ),
+        {"d": str(dom.id), "v": "[" + ",".join(["0.1"] * 8) + "]"},
+    )
+    await db_session.flush()
+
+    await rebuild_embedding_column(db_session, 16)
+
+    assert await _qc_typmod(db_session) == 16
+    remaining = (await db_session.execute(text("SELECT count(*) FROM query_cache"))).scalar_one()
+    assert remaining == 0  # dim change clears the recomputable cache
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `uv run pytest tests/integration/test_query_cache_managed.py -q`
+Expected: FAIL — `test_ensure_creates_query_cache_embedding` asserts `None == 8` (column not created yet).
+
+- [ ] **Step 3: Extend managed.py**
+
+In `src/paw/db/managed.py`, add the index constant near `_HNSW_INDEX`:
 
 ```python
 _QC_HNSW_INDEX = "ix_query_cache_embedding_hnsw"
 ```
 
-Then append these three functions at the end of the module:
+Add two private helpers at the bottom of the module:
 
 ```python
-async def ensure_query_cache_embedding_column(session: AsyncSession, dim: int) -> None:
-    if isinstance(dim, bool) or not isinstance(dim, int) or dim <= 0:
-        raise ValueError(f"embedding dim must be a positive int, got {dim!r}")
+async def _ensure_query_cache_embedding(session: AsyncSession, dim: int) -> None:
+    # dim validated by the caller; safe to interpolate (DDL type modifiers cannot bind).
     await session.execute(
         text(f"ALTER TABLE query_cache ADD COLUMN IF NOT EXISTS query_embedding vector({dim})")
     )
@@ -381,18 +526,14 @@ async def ensure_query_cache_embedding_column(session: AsyncSession, dim: int) -
             "ON query_cache USING hnsw (query_embedding vector_cosine_ops)"
         )
     )
-    await session.flush()
 
 
-async def rebuild_query_cache_embedding_column(session: AsyncSession, dim: int) -> None:
-    """Change query_cache.query_embedding dim. DESTRUCTIVE: truncates the cache
-    (a dim change invalidates every stored answer embedding — they must be
-    recomputed on the next miss). Mirrors rebuild_embedding_column for chunks."""
-    if isinstance(dim, bool) or not isinstance(dim, int) or dim <= 0:
-        raise ValueError(f"embedding dim must be a positive int, got {dim!r}")
-    await session.execute(text("TRUNCATE query_cache CASCADE"))
+async def _rebuild_query_cache_embedding(session: AsyncSession, dim: int) -> None:
+    # Cached answers are recomputable; a dim change drops the column AND clears the
+    # cache (old query_embeddings are at the wrong dim). CASCADE clears query_cache_articles.
     await session.execute(text(f"DROP INDEX IF EXISTS {_QC_HNSW_INDEX}"))
     await session.execute(text("ALTER TABLE query_cache DROP COLUMN IF EXISTS query_embedding"))
+    await session.execute(text("TRUNCATE query_cache CASCADE"))
     await session.execute(text(f"ALTER TABLE query_cache ADD COLUMN query_embedding vector({dim})"))
     await session.execute(
         text(
@@ -400,148 +541,331 @@ async def rebuild_query_cache_embedding_column(session: AsyncSession, dim: int) 
             "ON query_cache USING hnsw (query_embedding vector_cosine_ops)"
         )
     )
-    await session.flush()
-
-
-async def query_cache_embedding_dim(session: AsyncSession) -> int | None:
-    row = await session.execute(
-        text(
-            "SELECT a.atttypmod FROM pg_attribute a "
-            "JOIN pg_class c ON c.oid = a.attrelid "
-            "WHERE c.relname = 'query_cache' AND a.attname = 'query_embedding' "
-            "AND NOT a.attisdropped"
-        )
-    )
-    val = row.scalar_one_or_none()
-    return int(val) if val is not None and val > 0 else None
 ```
 
-- [ ] **Step 7: Update test isolation in conftest**
+Then call them inside the two public functions, just before their final `await session.flush()`:
 
-In `tests/conftest.py`, the `_clean_db` fixture: extend the `TRUNCATE` list and drop the managed query-cache column. Replace the existing `TRUNCATE ...` statement and the two DDL-cleanup lines with:
+In `ensure_embedding_column`, after the `CREATE INDEX ... {_HNSW_INDEX}` execute and before `await session.flush()`:
 
 ```python
-        await conn.execute(
-            text(
-                "TRUNCATE users, api_keys, app_settings, domains, blobs, "
-                "sources, articles, article_revisions, audit_log, "
-                "chat_sessions, chat_messages, query_cache, query_cache_articles "
-                "RESTART IDENTITY CASCADE"
-            )
-        )
-        # Drop managed vector columns/indexes so each test starts with a clean DDL state.
-        await conn.execute(text("DROP INDEX IF EXISTS ix_chunks_embedding_hnsw"))
-        await conn.execute(text("ALTER TABLE chunks DROP COLUMN IF EXISTS embedding"))
+    await _ensure_query_cache_embedding(session, dim)
+    await session.flush()
+```
+
+In `rebuild_embedding_column`, after the chunks `CREATE INDEX ... {_HNSW_INDEX}` execute and before `await session.flush()`:
+
+```python
+    await _rebuild_query_cache_embedding(session, dim)
+    await session.flush()
+```
+
+- [ ] **Step 4: Update conftest cleanup**
+
+In `tests/conftest.py`, inside the `_clean_db` fixture, after the two existing chunks-column drop lines, add the query_cache equivalents:
+
+```python
         await conn.execute(text("DROP INDEX IF EXISTS ix_query_cache_embedding_hnsw"))
         await conn.execute(text("ALTER TABLE query_cache DROP COLUMN IF EXISTS query_embedding"))
 ```
 
-- [ ] **Step 8: Verify the migration applies against the container**
+(The existing `TRUNCATE ... domains ... CASCADE` already clears `query_cache`/`query_cache_articles` rows via the `domain_id` FK, so the row list needs no change.)
 
-The session-scoped `_migrate` fixture runs `alembic upgrade head`, so `0005` applies automatically. Confirm with the existing migration smoke test:
+- [ ] **Step 5: Run the test to verify it passes**
 
-Run: `uv run pytest tests/integration/test_migration.py -q`
-Expected: PASS (the schema upgrades to head including `query_cache`).
+Run: `uv run pytest tests/integration/test_query_cache_managed.py -q`
+Expected: PASS (2 passed).
 
-- [ ] **Step 9: Lint + typecheck**
+- [ ] **Step 6: Run the existing managed/embedding tests (no regression)**
 
+Run: `uv run pytest tests/integration/test_managed_migration.py tests/integration/test_embedding_version.py -q`
+Expected: PASS (existing chunks behaviour unchanged).
 Run: `uv run ruff check src tests && uv run mypy src`
 Expected: clean.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add alembic/versions/0005_phase7_query_cache.py src/paw/db/models.py src/paw/db/managed.py tests/conftest.py tests/unit/test_query_cache_models.py
-git commit -m "feat(db): query_cache schema + managed query_embedding column (phase 7)"
+git add src/paw/db/managed.py tests/conftest.py tests/integration/test_query_cache_managed.py
+git commit -m "feat(db): manage query_cache.query_embedding alongside chunks (dim-locked, cleared on dim change)"
 ```
 
 ---
 
-## Task 3: Pure helpers — normalize / threshold / dep extraction
+### Task 4: Pure cache helpers
 
 **Files:**
-- Create: `src/paw/services/query_cache.py` (helpers only in this task)
-- Test: `tests/unit/test_query_cache_helpers.py` (create)
+- Create: `src/paw/services/query_cache.py`
+- Test: `tests/unit/test_query_norm.py`
+
+**Interfaces:**
+- Consumes: `Ref` from `paw.harness.retrieve`.
+- Produces:
+  - `normalize_query(q: str) -> str` — lower + trim + collapse internal whitespace.
+  - `is_similar_enough(sim: float, threshold: float) -> bool` — `sim >= threshold`.
+  - `extract_dependencies(refs: list[Ref]) -> list[uuid.UUID]` — deduped cited `article_id`s, first-seen order.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/unit/test_query_cache_helpers.py`:
+Create `tests/unit/test_query_norm.py`:
 
 ```python
 import uuid
 
 from paw.harness.retrieve import Ref
-from paw.services.query_cache import dep_article_ids, normalize_query, passes_threshold
+from paw.services.query_cache import extract_dependencies, is_similar_enough, normalize_query
 
 
-def test_normalize_lowercases_trims_collapses_ws():
-    assert normalize_query("  What   IS  TCP?\n") == "what is tcp?"
-    assert normalize_query("A\tB") == "a b"
+def test_normalize_lowercases_trims_and_collapses_ws():
+    assert normalize_query("  Hello   World ") == "hello world"
+    assert normalize_query("TCP\tReliable\n delivery") == "tcp reliable delivery"
+    assert normalize_query("Same") == normalize_query("  same ")
 
 
-def test_passes_threshold_uses_cosine_distance():
-    # similarity = 1 - distance
-    assert passes_threshold(0.05, 0.92) is True   # sim 0.95 >= 0.92
-    assert passes_threshold(0.10, 0.92) is False  # sim 0.90 <  0.92
-    assert passes_threshold(0.08, 0.92) is True   # sim 0.92 == 0.92 (boundary)
+def test_is_similar_enough_boundary():
+    assert is_similar_enough(0.9, 0.85) is True
+    assert is_similar_enough(0.85, 0.85) is True
+    assert is_similar_enough(0.8499, 0.85) is False
 
 
-def test_dep_article_ids_dedups_preserving_order():
+def test_extract_dependencies_dedupes_preserving_order():
     a, b = uuid.uuid4(), uuid.uuid4()
     refs = [
         Ref(article_id=a, slug="x", title="X"),
-        Ref(article_id=b, slug="y", title="Y"),
         Ref(article_id=a, slug="x", title="X"),
+        Ref(article_id=b, slug="y", title="Y"),
     ]
-    assert dep_article_ids(refs) == [a, b]
+    assert extract_dependencies(refs) == [a, b]
 
 
-def test_dep_article_ids_empty():
-    assert dep_article_ids([]) == []
+def test_extract_dependencies_empty():
+    assert extract_dependencies([]) == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run it to verify it fails**
 
-Run: `uv run pytest tests/unit/test_query_cache_helpers.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'paw.services.query_cache'`.
+Run: `uv run pytest tests/unit/test_query_norm.py -q`
+Expected: FAIL with `ModuleNotFoundError: No module named 'paw.services.query_cache'`.
 
-- [ ] **Step 3: Create the module with the pure helpers**
+- [ ] **Step 3: Write the helpers**
 
 Create `src/paw/services/query_cache.py`:
 
 ```python
 from __future__ import annotations
 
-import re
 import uuid
 
-from paw.harness.retrieve import Passage, Ref
-
-_WS = re.compile(r"\s+")
-
-PROMPT_VERSION = "1"  # bump if the query system prompt changes materially
+from paw.harness.retrieve import Ref
 
 
 def normalize_query(q: str) -> str:
-    """Lower, trim, collapse internal whitespace — the exact-match key."""
-    return _WS.sub(" ", q.strip().lower())
+    """Canonical form for the exact-norm cache key: lowercase, trimmed, ws-collapsed."""
+    return " ".join(q.lower().split())
 
 
-def passes_threshold(distance: float, sim_threshold: float) -> bool:
-    """pgvector <=> is cosine distance (1 - similarity); compare similarity."""
-    return (1.0 - distance) >= sim_threshold
+def is_similar_enough(sim: float, threshold: float) -> bool:
+    """A semantic (ANN) hit counts only when cosine similarity clears the threshold."""
+    return sim >= threshold
 
 
-def dep_article_ids(refs: list[Ref]) -> list[uuid.UUID]:
-    """Dependency article ids from the answer's refs, deduped, order-preserving."""
-    return list(dict.fromkeys(r.article_id for r in refs))
+def extract_dependencies(refs: list[Ref]) -> list[uuid.UUID]:
+    """The cited article_ids a cached answer depends on (deduped, first-seen order)."""
+    seen: dict[uuid.UUID, None] = {}
+    for r in refs:
+        seen.setdefault(r.article_id, None)
+    return list(seen)
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_query_norm.py -q`
+Expected: PASS (4 passed).
+Run: `uv run ruff check src tests && uv run mypy src`
+Expected: clean.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/paw/services/query_cache.py tests/unit/test_query_norm.py
+git commit -m "feat(cache): pure query-cache helpers (normalize, sim-threshold, deps)"
+```
+
+---
+
+### Task 5: QueryCacheRepo (upsert + exact/ANN lookup + touch)
+
+**Files:**
+- Create: `src/paw/db/repos/query_cache.py`
+- Test: `tests/integration/test_query_cache_repo.py`
+
+**Interfaces:**
+- Consumes: `query_cache` table + managed `query_embedding` column (Tasks 2–3); `Ref`, `Passage` from `paw.harness.retrieve`.
+- Produces:
+  - `@dataclass(frozen=True) CacheEntry(id: uuid.UUID, answer_md: str, refs: list[Ref], passages: list[Passage], stale: bool)`.
+  - `@dataclass(frozen=True) AnnHit(entry: CacheEntry, sim: float)`.
+  - `class QueryCacheRepo(session)` with:
+    - `upsert(*, domain_id, query_norm, query_vector: list[float], answer_md, refs: list[Ref], passages: list[Passage], model: str, prompt_version: str, article_deps: list[uuid.UUID]) -> uuid.UUID`
+    - `get_exact(domain_id, query_norm) -> CacheEntry | None`
+    - `get_ann(domain_id, query_vector: list[float]) -> AnnHit | None`
+    - `touch_hit(cache_id) -> None`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/integration/test_query_cache_repo.py`:
+
+```python
+import uuid
+
+from sqlalchemy import text
+
+from paw.db.managed import ensure_embedding_column
+from paw.db.repos.articles import ArticleRepo
+from paw.db.repos.domains import DomainRepo
+from paw.db.repos.query_cache import QueryCacheRepo
+from paw.harness.retrieve import Passage, Ref
 
 
-def ref_to_json(r: Ref) -> dict[str, str]:
+async def _setup(db_session):
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    art = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:a", summary="s"
+    )
+    await ensure_embedding_column(db_session, 8)
+    return dom, art
+
+
+async def test_upsert_then_exact_and_ann(db_session):
+    dom, art = await _setup(db_session)
+    repo = QueryCacheRepo(db_session)
+    vec = [0.1] * 8
+    refs = [Ref(article_id=art.id, slug="tcp", title="TCP")]
+    passages = [
+        Passage(chunk_id=uuid.uuid4(), article_id=art.id, slug="tcp", heading_path="R", text="t", score=1.0)
+    ]
+    cid = await repo.upsert(
+        domain_id=dom.id, query_norm="what is tcp", query_vector=vec, answer_md="A",
+        refs=refs, passages=passages, model="m", prompt_version="v1", article_deps=[art.id],
+    )
+    await db_session.commit()
+
+    exact = await repo.get_exact(dom.id, "what is tcp")
+    assert exact is not None
+    assert exact.answer_md == "A"
+    assert exact.refs[0].slug == "tcp"
+    assert exact.passages[0].article_id == art.id
+    assert exact.stale is False
+
+    ann = await repo.get_ann(dom.id, vec)
+    assert ann is not None
+    assert ann.sim > 0.99  # identical vector -> cosine sim ~1.0
+
+    dep = (
+        await db_session.execute(
+            text("SELECT article_id FROM query_cache_articles WHERE cache_id=:c"), {"c": str(cid)}
+        )
+    ).scalar_one()
+    assert uuid.UUID(str(dep)) == art.id
+
+
+async def test_exact_miss_returns_none(db_session):
+    dom, _ = await _setup(db_session)
+    assert await QueryCacheRepo(db_session).get_exact(dom.id, "nope") is None
+
+
+async def test_upsert_conflict_updates_in_place(db_session):
+    dom, art = await _setup(db_session)
+    repo = QueryCacheRepo(db_session)
+    vec = [0.2] * 8
+    c1 = await repo.upsert(
+        domain_id=dom.id, query_norm="q", query_vector=vec, answer_md="first",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
+    c2 = await repo.upsert(
+        domain_id=dom.id, query_norm="q", query_vector=vec, answer_md="second",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[art.id],
+    )
+    await db_session.commit()
+    assert c1 == c2  # same (domain_id, query_norm) row
+    exact = await repo.get_exact(dom.id, "q")
+    assert exact is not None and exact.answer_md == "second"
+
+
+async def test_touch_hit_increments(db_session):
+    dom, _ = await _setup(db_session)
+    repo = QueryCacheRepo(db_session)
+    cid = await repo.upsert(
+        domain_id=dom.id, query_norm="q", query_vector=[0.3] * 8, answer_md="A",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
+    await repo.touch_hit(cid)
+    await db_session.commit()
+    hc = (
+        await db_session.execute(text("SELECT hit_count FROM query_cache WHERE id=:i"), {"i": str(cid)})
+    ).scalar_one()
+    assert hc == 1
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `uv run pytest tests/integration/test_query_cache_repo.py -q`
+Expected: FAIL with `ModuleNotFoundError: No module named 'paw.db.repos.query_cache'`.
+
+- [ ] **Step 3: Write the repo**
+
+Create `src/paw/db/repos/query_cache.py`:
+
+```python
+from __future__ import annotations
+
+import json
+import math
+import uuid
+from dataclasses import dataclass
+from typing import Any
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from paw.harness.retrieve import Passage, Ref
+
+
+@dataclass(frozen=True)
+class CacheEntry:
+    id: uuid.UUID
+    answer_md: str
+    refs: list[Ref]
+    passages: list[Passage]
+    stale: bool
+
+
+@dataclass(frozen=True)
+class AnnHit:
+    entry: CacheEntry
+    sim: float
+
+
+def _vec_literal(vec: list[float]) -> str:
+    parts: list[str] = []
+    for x in vec:
+        f = float(x)
+        if not math.isfinite(f):
+            raise ValueError(f"query embedding contains non-finite value: {f!r}")
+        parts.append(repr(f))
+    return "[" + ",".join(parts) + "]"
+
+
+def _as_list(v: Any) -> list[dict[str, Any]]:
+    # asyncpg may return a JSONB column as an already-parsed list or as raw JSON text.
+    if isinstance(v, list):
+        return v
+    return list(json.loads(v)) if v else []
+
+
+def _ref_dict(r: Ref) -> dict[str, Any]:
     return {"article_id": str(r.article_id), "slug": r.slug, "title": r.title}
 
 
-def passage_to_json(p: Passage) -> dict[str, object]:
+def _passage_dict(p: Passage) -> dict[str, Any]:
     return {
         "chunk_id": str(p.chunk_id),
         "article_id": str(p.article_id),
@@ -550,325 +874,119 @@ def passage_to_json(p: Passage) -> dict[str, object]:
         "text": p.text,
         "score": p.score,
     }
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `uv run pytest tests/unit/test_query_cache_helpers.py -q`
-Expected: PASS (4 passed).
-
-- [ ] **Step 5: Lint + typecheck**
-
-Run: `uv run ruff check src tests/unit/test_query_cache_helpers.py && uv run mypy src`
-Expected: clean.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/paw/services/query_cache.py tests/unit/test_query_cache_helpers.py
-git commit -m "feat(cache): pure query-cache helpers (normalize, threshold, deps)"
-```
-
----
-
-## Task 4: `QueryCacheRepo`
-
-**Files:**
-- Create: `src/paw/db/repos/query_cache.py`
-- Test: `tests/integration/test_query_cache_repo.py` (create)
-
-**Note on `CacheRow`:** a frozen dataclass the repo returns from lookups; deliberately omits the embedding (we never read it back).
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/integration/test_query_cache_repo.py`:
-
-```python
-import uuid
-from datetime import UTC, datetime, timedelta
-
-from paw.db.managed import ensure_query_cache_embedding_column
-from paw.db.repos.articles import ArticleRepo
-from paw.db.repos.domains import DomainRepo
-from paw.db.repos.query_cache import QueryCacheRepo
 
 
-async def _domain(db_session, name="d"):
-    return await DomainRepo(db_session).create(name=name, source_prefix="s", wiki_prefix="w")
+def _ref(d: dict[str, Any]) -> Ref:
+    return Ref(article_id=uuid.UUID(d["article_id"]), slug=d["slug"], title=d["title"])
 
 
-async def test_exact_upsert_and_get_by_norm(db_session):
-    dom = await _domain(db_session)
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    cid = await repo.upsert(
-        domain_id=dom.id, query_norm="what is tcp?", answer_md="TCP [tcp]",
-        refs=[{"article_id": "a", "slug": "tcp", "title": "TCP"}],
-        passages=[{"chunk_id": "c", "slug": "tcp"}],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
+def _passage(d: dict[str, Any]) -> Passage:
+    return Passage(
+        chunk_id=uuid.UUID(d["chunk_id"]),
+        article_id=uuid.UUID(d["article_id"]),
+        slug=d["slug"],
+        heading_path=d["heading_path"],
+        text=d["text"],
+        score=d["score"],
     )
-    await db_session.commit()
-    row = await repo.get_by_norm(domain_id=dom.id, query_norm="what is tcp?")
-    assert row is not None and row.id == cid
-    assert row.answer_md == "TCP [tcp]" and row.stale is False
-    assert row.refs[0]["slug"] == "tcp" and row.passages[0]["chunk_id"] == "c"
-    # re-upsert preserves hit_count and clears stale
-    await repo.set_stale(domain_id=dom.id, ids=[cid])  # helper from mark path (see Step 3)
-    await repo.upsert(
-        domain_id=dom.id, query_norm="what is tcp?", answer_md="TCP v2 [tcp]",
-        refs=[], passages=[], model="m", prompt_version="1",
-        query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await db_session.commit()
-    row2 = await repo.get_by_norm(domain_id=dom.id, query_norm="what is tcp?")
-    assert row2.answer_md == "TCP v2 [tcp]" and row2.stale is False
-
-
-async def test_ann_nearest_returns_distance(db_session):
-    dom = await _domain(db_session)
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    await repo.upsert(
-        domain_id=dom.id, query_norm="q1", answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await db_session.commit()
-    near = await repo.ann_nearest(domain_id=dom.id, query_vector=[0.96, 0.28, 0.0, 0.0])
-    assert near is not None
-    row, dist = near
-    assert row.query_norm == "q1"
-    assert 0.0 <= dist < 0.1  # cosine distance to a near-parallel vector is small
-
-
-async def test_touch_increments_hit_count(db_session):
-    dom = await _domain(db_session)
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    cid = await repo.upsert(
-        domain_id=dom.id, query_norm="q", answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await db_session.commit()
-    await repo.touch(cache_id=cid)
-    await repo.touch(cache_id=cid)
-    await db_session.commit()
-    row = await repo.get_by_norm(domain_id=dom.id, query_norm="q")
-    assert row.hit_count == 2 and row.last_hit_at is not None
-
-
-async def test_set_deps_and_mark_stale_for_articles(db_session):
-    dom = await _domain(db_session)
-    arts = ArticleRepo(db_session)
-    a1 = await arts.create(domain_id=dom.id, slug="a1", title="A1", storage_ref="b:1")
-    a2 = await arts.create(domain_id=dom.id, slug="a2", title="A2", storage_ref="b:2")
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    c1 = await repo.upsert(
-        domain_id=dom.id, query_norm="dep1", answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    c2 = await repo.upsert(
-        domain_id=dom.id, query_norm="dep2", answer_md="B", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[0.0, 1.0, 0.0, 0.0],
-    )
-    await repo.set_deps(cache_id=c1, deps=[(a1.id, 1)])
-    await repo.set_deps(cache_id=c2, deps=[(a2.id, 1)])
-    await db_session.commit()
-    n = await repo.mark_stale_for_articles(domain_id=dom.id, article_ids=[a1.id])
-    await db_session.commit()
-    assert n == 1
-    assert (await repo.get_by_norm(domain_id=dom.id, query_norm="dep1")).stale is True
-    assert (await repo.get_by_norm(domain_id=dom.id, query_norm="dep2")).stale is False
-
-
-async def test_suggest_ranks_by_hit_count(db_session):
-    dom = await _domain(db_session)
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    for norm, hits in [("tcp basics", 1), ("tcp handshake", 5), ("udp facts", 9)]:
-        cid = await repo.upsert(
-            domain_id=dom.id, query_norm=norm, answer_md="A", refs=[], passages=[],
-            model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-        )
-        for _ in range(hits):
-            await repo.touch(cache_id=cid)
-    await db_session.commit()
-    out = await repo.suggest(domain_id=dom.id, q="tcp", limit=5)
-    assert out == ["tcp handshake", "tcp basics"]  # only 'tcp%' matches, hit-count order
-
-
-async def test_delete_expired(db_session):
-    dom = await _domain(db_session)
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    cid = await repo.upsert(
-        domain_id=dom.id, query_norm="old", answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await db_session.commit()
-    # backdate last_hit_at far into the past
-    from sqlalchemy import text
-    await db_session.execute(
-        text("UPDATE query_cache SET last_hit_at = :w WHERE id = :i"),
-        {"w": datetime.now(UTC) - timedelta(days=400), "i": str(cid)},
-    )
-    await db_session.commit()
-    n = await repo.delete_expired(cutoff=datetime.now(UTC) - timedelta(days=30))
-    await db_session.commit()
-    assert n == 1
-    assert await repo.get_by_norm(domain_id=dom.id, query_norm="old") is None
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `uv run pytest tests/integration/test_query_cache_repo.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'paw.db.repos.query_cache'`.
-
-- [ ] **Step 3: Implement the repo**
-
-Create `src/paw/db/repos/query_cache.py`:
-
-```python
-from __future__ import annotations
-
-import json
-import uuid
-from dataclasses import dataclass
-from datetime import datetime
-
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from paw.vector.search import _vector_literal
-
-
-@dataclass(frozen=True)
-class CacheRow:
-    id: uuid.UUID
-    query_norm: str
-    answer_md: str
-    refs: list[dict[str, object]]
-    passages: list[dict[str, object]]
-    stale: bool
-    hit_count: int
-    last_hit_at: datetime | None
-
-
-def _row(r: object) -> CacheRow:
-    # r is a Row: (id, query_norm, answer_md, refs::text, passages::text, stale, hit_count, last_hit_at)
-    return CacheRow(
-        id=uuid.UUID(str(r[0])),
-        query_norm=r[1],
-        answer_md=r[2],
-        refs=json.loads(r[3]),
-        passages=json.loads(r[4]),
-        stale=bool(r[5]),
-        hit_count=int(r[6]),
-        last_hit_at=r[7],
-    )
-
-
-_SELECT = (
-    "id, query_norm, answer_md, refs::text, passages::text, stale, hit_count, last_hit_at"
-)
 
 
 class QueryCacheRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._s = session
 
-    async def get_by_norm(
-        self, *, domain_id: uuid.UUID, query_norm: str
-    ) -> CacheRow | None:
-        res = await self._s.execute(
-            text(
-                f"SELECT {_SELECT} FROM query_cache "
-                "WHERE domain_id = :d AND query_norm = :n"
-            ),
-            {"d": str(domain_id), "n": query_norm},
+    def _entry(self, row: Any) -> CacheEntry:
+        return CacheEntry(
+            id=uuid.UUID(str(row.id)),
+            answer_md=row.answer_md,
+            refs=[_ref(d) for d in _as_list(row.refs)],
+            passages=[_passage(d) for d in _as_list(row.passages)],
+            stale=bool(row.stale),
         )
-        row = res.first()
-        return _row(row) if row else None
-
-    async def ann_nearest(
-        self, *, domain_id: uuid.UUID, query_vector: list[float]
-    ) -> tuple[CacheRow, float] | None:
-        res = await self._s.execute(
-            text(
-                f"SELECT {_SELECT}, (query_embedding <=> CAST(:q AS vector)) AS dist "
-                "FROM query_cache "
-                "WHERE domain_id = :d AND query_embedding IS NOT NULL "
-                "ORDER BY query_embedding <=> CAST(:q AS vector) LIMIT 1"
-            ),
-            {"d": str(domain_id), "q": _vector_literal(query_vector)},
-        )
-        row = res.first()
-        if row is None:
-            return None
-        return _row(row), float(row[8])
 
     async def upsert(
         self,
         *,
         domain_id: uuid.UUID,
         query_norm: str,
-        answer_md: str,
-        refs: list[dict[str, object]],
-        passages: list[dict[str, object]],
-        model: str | None,
-        prompt_version: str,
         query_vector: list[float],
+        answer_md: str,
+        refs: list[Ref],
+        passages: list[Passage],
+        model: str,
+        prompt_version: str,
+        article_deps: list[uuid.UUID],
     ) -> uuid.UUID:
         res = await self._s.execute(
             text(
                 "INSERT INTO query_cache "
-                "(domain_id, query_norm, answer_md, refs, passages, model, prompt_version, "
-                " stale, hit_count, last_hit_at) "
-                "VALUES (:d, :n, :a, CAST(:refs AS jsonb), CAST(:ps AS jsonb), :m, :pv, "
-                " false, 0, now()) "
+                "(domain_id, query_norm, query_embedding, answer_md, refs, passages, "
+                " model, prompt_version, stale, hit_count) "
+                "VALUES (:d, :qn, CAST(:v AS vector), :a, CAST(:r AS jsonb), CAST(:p AS jsonb), "
+                " :m, :pv, false, 0) "
                 "ON CONFLICT (domain_id, query_norm) DO UPDATE SET "
-                " answer_md = EXCLUDED.answer_md, refs = EXCLUDED.refs, "
-                " passages = EXCLUDED.passages, model = EXCLUDED.model, "
-                " prompt_version = EXCLUDED.prompt_version, stale = false, "
-                " last_hit_at = now() "
+                " query_embedding = EXCLUDED.query_embedding, answer_md = EXCLUDED.answer_md, "
+                " refs = EXCLUDED.refs, passages = EXCLUDED.passages, model = EXCLUDED.model, "
+                " prompt_version = EXCLUDED.prompt_version, stale = false "
                 "RETURNING id"
             ),
             {
                 "d": str(domain_id),
-                "n": query_norm,
+                "qn": query_norm,
+                "v": _vec_literal(query_vector),
                 "a": answer_md,
-                "refs": json.dumps(refs),
-                "ps": json.dumps(passages),
+                "r": json.dumps([_ref_dict(r) for r in refs]),
+                "p": json.dumps([_passage_dict(p) for p in passages]),
                 "m": model,
                 "pv": prompt_version,
             },
         )
         cid = uuid.UUID(str(res.scalar_one()))
+        # Replace dependency rows; capture each cited article's current_rev.
         await self._s.execute(
-            text("UPDATE query_cache SET query_embedding = CAST(:v AS vector) WHERE id = :i"),
-            {"v": _vector_literal(query_vector), "i": str(cid)},
+            text("DELETE FROM query_cache_articles WHERE cache_id = :c"), {"c": str(cid)}
         )
-        await self._s.flush()
-        return cid
-
-    async def set_deps(
-        self, *, cache_id: uuid.UUID, deps: list[tuple[uuid.UUID, int]]
-    ) -> None:
-        await self._s.execute(
-            text("DELETE FROM query_cache_articles WHERE cache_id = :c"),
-            {"c": str(cache_id)},
-        )
-        for article_id, rev in deps:
+        for aid in article_deps:
             await self._s.execute(
                 text(
                     "INSERT INTO query_cache_articles (cache_id, article_id, rev) "
-                    "VALUES (:c, :a, :r)"
+                    "SELECT :c, a.id, a.current_rev FROM articles a WHERE a.id = :a "
+                    "ON CONFLICT (cache_id, article_id) DO NOTHING"
                 ),
-                {"c": str(cache_id), "a": str(article_id), "r": rev},
+                {"c": str(cid), "a": str(aid)},
             )
         await self._s.flush()
+        return cid
 
-    async def touch(self, *, cache_id: uuid.UUID) -> None:
+    async def get_exact(self, domain_id: uuid.UUID, query_norm: str) -> CacheEntry | None:
+        res = await self._s.execute(
+            text(
+                "SELECT id, answer_md, refs, passages, stale FROM query_cache "
+                "WHERE domain_id = :d AND query_norm = :qn"
+            ),
+            {"d": str(domain_id), "qn": query_norm},
+        )
+        row = res.first()
+        return self._entry(row) if row is not None else None
+
+    async def get_ann(self, domain_id: uuid.UUID, query_vector: list[float]) -> AnnHit | None:
+        lit = _vec_literal(query_vector)
+        res = await self._s.execute(
+            text(
+                "SELECT id, answer_md, refs, passages, stale, "
+                " 1 - (query_embedding <=> CAST(:v AS vector)) AS sim "
+                "FROM query_cache "
+                "WHERE domain_id = :d AND query_embedding IS NOT NULL "
+                "ORDER BY query_embedding <=> CAST(:v AS vector) LIMIT 1"
+            ),
+            {"d": str(domain_id), "v": lit},
+        )
+        row = res.first()
+        if row is None:
+            return None
+        return AnnHit(entry=self._entry(row), sim=float(row.sim))
+
+    async def touch_hit(self, cache_id: uuid.UUID) -> None:
         await self._s.execute(
             text(
                 "UPDATE query_cache SET hit_count = hit_count + 1, last_hit_at = now() "
@@ -877,422 +995,162 @@ class QueryCacheRepo:
             {"i": str(cache_id)},
         )
         await self._s.flush()
-
-    async def set_stale(self, *, domain_id: uuid.UUID, ids: list[uuid.UUID]) -> int:
-        if not ids:
-            return 0
-        res = await self._s.execute(
-            text(
-                "UPDATE query_cache SET stale = true "
-                "WHERE domain_id = :d AND id = ANY(:ids)"
-            ),
-            {"d": str(domain_id), "ids": [str(i) for i in ids]},
-        )
-        await self._s.flush()
-        return res.rowcount or 0
-
-    async def mark_stale_for_articles(
-        self, *, domain_id: uuid.UUID, article_ids: list[uuid.UUID]
-    ) -> int:
-        if not article_ids:
-            return 0
-        res = await self._s.execute(
-            text(
-                "UPDATE query_cache SET stale = true "
-                "WHERE domain_id = :d AND id IN ("
-                "  SELECT cache_id FROM query_cache_articles WHERE article_id = ANY(:aids))"
-            ),
-            {"d": str(domain_id), "aids": [str(a) for a in article_ids]},
-        )
-        await self._s.flush()
-        return res.rowcount or 0
-
-    async def suggest(
-        self, *, domain_id: uuid.UUID, q: str, limit: int
-    ) -> list[str]:
-        res = await self._s.execute(
-            text(
-                "SELECT query_norm FROM query_cache "
-                "WHERE domain_id = :d AND query_norm ILIKE :pat "
-                "ORDER BY hit_count DESC, query_norm ASC LIMIT :k"
-            ),
-            {"d": str(domain_id), "pat": f"{q}%", "k": limit},
-        )
-        return [r[0] for r in res.all()]
-
-    async def delete_expired(self, *, cutoff: datetime) -> int:
-        res = await self._s.execute(
-            text("DELETE FROM query_cache WHERE COALESCE(last_hit_at, created_at) < :c"),
-            {"c": cutoff},
-        )
-        await self._s.flush()
-        return res.rowcount or 0
 ```
 
-> Note: `suggest` uses a **prefix** match (`q%`) — the as-you-type case. The repo test feeds already-normalized `q`; the service normalizes before calling.
-
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run the test to verify it passes**
 
 Run: `uv run pytest tests/integration/test_query_cache_repo.py -q`
-Expected: PASS (6 passed).
+Expected: PASS (4 passed).
+Run: `uv run ruff check src tests && uv run mypy src`
+Expected: clean.
 
-- [ ] **Step 5: Lint + typecheck**
-
-Run: `uv run ruff check src tests/integration/test_query_cache_repo.py && uv run mypy src`
-Expected: clean. (If mypy flags `_vector_literal` as private-import, that's fine — it is already module-public in `vector/search.py` and imported the same way elsewhere is not done; if mypy objects, add `# noqa`-free: it won't, the name resolves.)
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/paw/db/repos/query_cache.py tests/integration/test_query_cache_repo.py
-git commit -m "feat(db): QueryCacheRepo (exact/ANN/upsert/deps/stale/suggest/ttl)"
+git commit -m "feat(cache): QueryCacheRepo upsert + exact/ANN lookup + touch (Phase 7)"
 ```
 
 ---
 
-## Task 5: `QueryCacheService` (lookup / upsert / refresh / suggest) + call-count proof
+### Task 6: Stale-marking — repo method + article-aware seam + call sites
 
 **Files:**
-- Modify: `src/paw/services/query_cache.py` (add the service + `CacheHit`)
-- Test: `tests/integration/test_query_cache_service.py` (create)
+- Modify: `src/paw/db/repos/query_cache.py`
+- Modify: `src/paw/services/cache_seam.py`
+- Modify: `src/paw/harness/ops/fix.py`
+- Modify: `src/paw/harness/ops/format.py`
+- Modify: `src/paw/harness/ops/ingest.py`
+- Delete: `tests/unit/test_cache_seam.py` (the Phase 6 no-op test)
+- Test: `tests/integration/test_cache_seam.py`
+
+**Interfaces:**
+- Consumes: `QueryCacheRepo` (Task 5), `query_cache_articles`.
+- Produces:
+  - `QueryCacheRepo.mark_stale_for_articles(article_ids: list[uuid.UUID]) -> int` — sets `stale=true` on every entry depending on any given article; returns count.
+  - `mark_articles_cache_stale(session, article_ids: list[uuid.UUID]) -> int` in `services/cache_seam.py` (replaces `mark_domain_cache_stale`).
+  - All three write ops call `await mark_articles_cache_stale(session, [art.id])` after the article upsert: `fix.py`, `format.py`, and `ingest.py` (the spec names **ingest/fix/format**; re-ingest updates an existing cited article via `upsert_article`, bumping `current_rev`, so it must invalidate too).
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/integration/test_query_cache_service.py`:
-
-```python
-import pytest
-from tests.stubs import StubChatProvider
-
-import paw.services.query as query_mod
-import paw.services.query_cache as cache_mod
-from paw.db.managed import ensure_embedding_column
-from paw.db.repos.articles import ArticleRepo
-from paw.db.repos.domains import DomainRepo
-from paw.ingest.chunking import ChunkSpec
-from paw.security.secrets import SecretBox
-from paw.services.provider_settings import ProviderSettingsService
-from paw.services.query import QueryService
-from paw.services.query_cache import QueryCacheService
-from paw.vector.embed import embed_and_write
-
-_FERNET = "k" * 43 + "="
-
-
-class FixedEmbed:
-    """Deterministic, controllable embedder: maps text -> a fixed unit-ish vector."""
-
-    def __init__(self, table: dict[str, list[float]], default: list[float]) -> None:
-        self.table = table
-        self.default = default
-
-    async def embed(self, texts, *, model=None):
-        return [self.table.get(t, self.default) for t in texts]
-
-
-async def _provision(db_session, monkeypatch, *, embed):
-    box = SecretBox(_FERNET)
-    await ProviderSettingsService(db_session, box=box).persist_provider(
-        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=4, api_key="k"
-    )
-    dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
-    art = await ArticleRepo(db_session).create(
-        domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:a", summary="s"
-    )
-    await ensure_embedding_column(db_session, 4)
-    await embed_and_write(
-        db_session, article_id=art.id, domain_id=dom.id,
-        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable")],
-        embedder=embed,
-    )
-    await db_session.commit()
-    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: embed)
-    monkeypatch.setattr(cache_mod, "build_embedding_provider", lambda pc, b: embed)
-    return dom, art
-
-
-async def test_miss_then_exact_hit_skips_llm(db_session, monkeypatch):
-    embed = FixedEmbed({}, default=[1.0, 0.0, 0.0, 0.0])
-    dom, art = await _provision(db_session, monkeypatch, embed=embed)
-    chat = StubChatProvider(script=[StubChatProvider.text("reliable means [tcp]")])
-    monkeypatch.setattr(query_mod, "build_chat_provider", lambda pc, b: chat)
-
-    qsvc = QueryService(db_session, fernet_key=_FERNET)
-    csvc = QueryCacheService(db_session, fernet_key=_FERNET)
-    cfg = await csvc.config(dom.id)
-
-    # MISS -> compute + upsert
-    assert await csvc.lookup(domain_id=dom.id, question="what is reliable?", cfg=cfg) is None
-    answer = await qsvc.answer(domain_id=dom.id, question="what is reliable?")
-    await csvc.upsert(
-        domain_id=dom.id, question="what is reliable?", answer_md=answer.answer_md,
-        refs=answer.refs, passages=answer.passages, model="m",
-    )
-    assert len(chat.calls) == 1
-
-    # HIT (exact norm, different casing/space) -> no further LLM call
-    hit = await csvc.lookup(domain_id=dom.id, question="  WHAT is   reliable? ", cfg=cfg)
-    assert hit is not None and hit.answer_md == "reliable means [tcp]"
-    assert hit.stale is False
-    assert len(chat.calls) == 1  # acceptance #1: zero LLM calls on the second request
-
-
-async def test_ann_hit_within_threshold_else_miss(db_session, monkeypatch):
-    embed = FixedEmbed(
-        {
-            "tcp explained": [0.96, 0.28, 0.0, 0.0],   # cos ~0.96 to the stored vector -> HIT
-            "banana bread": [0.0, 0.0, 1.0, 0.0],      # cos 0 -> MISS
-        },
-        default=[1.0, 0.0, 0.0, 0.0],                  # the cached query embeds here
-    )
-    dom, art = await _provision(db_session, monkeypatch, embed=embed)
-    chat = StubChatProvider(script=[StubChatProvider.text("answer [tcp]")])
-    monkeypatch.setattr(query_mod, "build_chat_provider", lambda pc, b: chat)
-
-    qsvc = QueryService(db_session, fernet_key=_FERNET)
-    csvc = QueryCacheService(db_session, fernet_key=_FERNET)
-    cfg = await csvc.config(dom.id)
-    answer = await qsvc.answer(domain_id=dom.id, question="what is tcp")  # default vec
-    await csvc.upsert(
-        domain_id=dom.id, question="what is tcp", answer_md=answer.answer_md,
-        refs=answer.refs, passages=answer.passages, model="m",
-    )
-
-    near = await csvc.lookup(domain_id=dom.id, question="tcp explained", cfg=cfg)
-    assert near is not None and near.answer_md == "answer [tcp]"
-    far = await csvc.lookup(domain_id=dom.id, question="banana bread", cfg=cfg)
-    assert far is None
-
-
-async def test_upsert_records_article_deps(db_session, monkeypatch):
-    from sqlalchemy import text
-    embed = FixedEmbed({}, default=[1.0, 0.0, 0.0, 0.0])
-    dom, art = await _provision(db_session, monkeypatch, embed=embed)
-    monkeypatch.setattr(
-        query_mod, "build_chat_provider",
-        lambda pc, b: StubChatProvider(script=[StubChatProvider.text("a [tcp]")]),
-    )
-    qsvc = QueryService(db_session, fernet_key=_FERNET)
-    csvc = QueryCacheService(db_session, fernet_key=_FERNET)
-    answer = await qsvc.answer(domain_id=dom.id, question="q")
-    await csvc.upsert(
-        domain_id=dom.id, question="q", answer_md=answer.answer_md,
-        refs=answer.refs, passages=answer.passages, model="m",
-    )
-    rows = (await db_session.execute(
-        text("SELECT article_id, rev FROM query_cache_articles")
-    )).all()
-    assert (str(art.id), 1) in {(str(r[0]), r[1]) for r in rows}
-
-
-async def test_lookup_disabled_when_no_embedding_column(db_session, monkeypatch):
-    # exact path still works even before any ANN column exists for the domain
-    embed = FixedEmbed({}, default=[1.0, 0.0, 0.0, 0.0])
-    dom, art = await _provision(db_session, monkeypatch, embed=embed)
-    csvc = QueryCacheService(db_session, fernet_key=_FERNET)
-    cfg = await csvc.config(dom.id)
-    # nothing cached yet, no query_cache embedding column -> clean miss, no error
-    assert await csvc.lookup(domain_id=dom.id, question="anything", cfg=cfg) is None
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `uv run pytest tests/integration/test_query_cache_service.py -q`
-Expected: FAIL — `ImportError: cannot import name 'QueryCacheService'`.
-
-- [ ] **Step 3: Implement the service**
-
-Append to `src/paw/services/query_cache.py` (add the imports at the top of the file alongside the existing ones):
-
-```python
-from dataclasses import dataclass
-
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from paw.api.errors import ProblemError
-from paw.config import get_settings
-from paw.db.managed import (
-    ensure_query_cache_embedding_column,
-    query_cache_embedding_dim,
-)
-from paw.db.repos.domains import DomainRepo
-from paw.db.repos.query_cache import QueryCacheRepo
-from paw.providers.config import QueryCacheConfig
-from paw.providers.factory import build_embedding_provider
-from paw.security.secrets import SecretBox
-from paw.services.provider_settings import ProviderSettingsService
-from paw.vector.embed_cache import embed_query_cached
-```
-
-Then add the `CacheHit` dataclass and the service class at the end:
-
-```python
-@dataclass(frozen=True)
-class CacheHit:
-    id: uuid.UUID
-    answer_md: str
-    refs: list[dict[str, object]]
-    passages: list[dict[str, object]]
-    stale: bool
-
-
-class QueryCacheService:
-    def __init__(self, session: AsyncSession, *, fernet_key: str | None = None) -> None:
-        self._s = session
-        self._box = SecretBox(fernet_key or get_settings().fernet_key)
-        self._redis: object | None = None
-        self._repo = QueryCacheRepo(session)
-
-    def with_redis(self, redis: object | None) -> QueryCacheService:
-        self._redis = redis
-        return self
-
-    async def config(self, domain_id: uuid.UUID) -> QueryCacheConfig:
-        psvc = ProviderSettingsService(self._s, box=self._box)
-        glob = await psvc.get_query_cache()
-        dom = await DomainRepo(self._s).get(domain_id)
-        overrides = (
-            dom.config.get("query_cache") if dom is not None and isinstance(dom.config, dict)
-            else None
-        )
-        if isinstance(overrides, dict):
-            return QueryCacheConfig.model_validate({**glob.model_dump(), **overrides})
-        return glob
-
-    async def _embed(self, *, question: str) -> tuple[list[float], int] | None:
-        """Return (query_vector, embedding_dim) or None if no provider is configured."""
-        psvc = ProviderSettingsService(self._s, box=self._box)
-        pc = await psvc.get_provider()
-        if pc is None:
-            return None
-        embedder = build_embedding_provider(pc, self._box)
-        vec = await embed_query_cached(
-            self._redis, embedder, query=question, model=pc.embedding_model,
-            embedding_version=await psvc.get_embedding_version(),
-        )
-        return vec, pc.embedding_dim
-
-    async def lookup(
-        self, *, domain_id: uuid.UUID, question: str, cfg: QueryCacheConfig
-    ) -> CacheHit | None:
-        norm = normalize_query(question)
-        exact = await self._repo.get_by_norm(domain_id=domain_id, query_norm=norm)
-        if exact is not None:
-            return CacheHit(exact.id, exact.answer_md, exact.refs, exact.passages, exact.stale)
-        if await query_cache_embedding_dim(self._s) is None:
-            return None  # no ANN column yet -> exact-only
-        embedded = await self._embed(question=question)
-        if embedded is None:
-            return None
-        vec, _dim = embedded
-        near = await self._repo.ann_nearest(domain_id=domain_id, query_vector=vec)
-        if near is None:
-            return None
-        row, dist = near
-        if not passes_threshold(dist, cfg.sim_threshold):
-            return None
-        return CacheHit(row.id, row.answer_md, row.refs, row.passages, row.stale)
-
-    async def touch(self, cache_id: uuid.UUID) -> None:
-        await self._repo.touch(cache_id=cache_id)
-        await self._s.commit()
-
-    async def upsert(
-        self,
-        *,
-        domain_id: uuid.UUID,
-        question: str,
-        answer_md: str,
-        refs: list[Ref],
-        passages: list[Passage],
-        model: str,
-    ) -> None:
-        embedded = await self._embed(question=question)
-        if embedded is None:
-            raise ProblemError(status=422, title="Provider not configured")
-        vec, dim = embedded
-        await ensure_query_cache_embedding_column(self._s, dim)
-        cache_id = await self._repo.upsert(
-            domain_id=domain_id,
-            query_norm=normalize_query(question),
-            answer_md=answer_md,
-            refs=[ref_to_json(r) for r in refs],
-            passages=[passage_to_json(p) for p in passages],
-            model=model,
-            prompt_version=PROMPT_VERSION,
-            query_vector=vec,
-        )
-        ids = dep_article_ids(refs)
-        deps: list[tuple[uuid.UUID, int]] = []
-        if ids:
-            res = await self._s.execute(
-                text("SELECT id, current_rev FROM articles WHERE id = ANY(:ids)"),
-                {"ids": [str(i) for i in ids]},
-            )
-            rev_of = {uuid.UUID(str(r[0])): int(r[1]) for r in res.all()}
-            deps = [(aid, rev_of[aid]) for aid in ids if aid in rev_of]
-        await self._repo.set_deps(cache_id=cache_id, deps=deps)
-        await self._s.commit()
-
-    async def suggest(
-        self, *, domain_id: uuid.UUID, q: str, top_k: int
-    ) -> list[str]:
-        norm = normalize_query(q)
-        if not norm:
-            return []
-        return await self._repo.suggest(domain_id=domain_id, q=norm, limit=top_k)
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `uv run pytest tests/integration/test_query_cache_service.py -q`
-Expected: PASS (4 passed). The first test proves acceptance #1 (zero LLM calls on the second request); the second proves acceptance #2 (ANN within threshold hits, below misses).
-
-- [ ] **Step 5: Lint + typecheck**
-
-Run: `uv run ruff check src tests/integration/test_query_cache_service.py && uv run mypy src`
-Expected: clean.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/paw/services/query_cache.py tests/integration/test_query_cache_service.py
-git commit -m "feat(cache): QueryCacheService lookup/upsert/suggest (+ call-count proof)"
-```
-
----
-
-## Task 6: Article-level stale seam, wired into ingest/fix/format
-
-**Files:**
-- Modify: `src/paw/services/cache_seam.py`, `src/paw/harness/ops/ingest.py`, `src/paw/harness/ops/fix.py`, `src/paw/harness/ops/format.py`, `tests/unit/test_cache_seam.py`
-- Test: `tests/integration/test_cache_stale_seam.py` (create)
-
-- [ ] **Step 1: Update the unit test for the new seam signature**
-
-Replace `tests/unit/test_cache_seam.py` entirely with:
+Create `tests/integration/test_cache_seam.py`:
 
 ```python
 import uuid
 
-from paw.services.cache_seam import mark_cache_stale
+from sqlalchemy import text
+
+from paw.db.managed import ensure_embedding_column
+from paw.db.repos.articles import ArticleRepo
+from paw.db.repos.domains import DomainRepo
+from paw.db.repos.query_cache import QueryCacheRepo
+from paw.harness.retrieve import Ref
+from paw.services.cache_seam import mark_articles_cache_stale
 
 
-async def test_empty_article_ids_is_a_noop():
-    # No article ids -> early return, never touches the session.
-    result = await mark_cache_stale(None, domain_id=uuid.uuid4(), article_ids=[])  # type: ignore[arg-type]
-    assert result is None
+async def _entry_depending_on(db_session, *, article_id, domain_id):
+    repo = QueryCacheRepo(db_session)
+    return await repo.upsert(
+        domain_id=domain_id, query_norm=f"q-{uuid.uuid4()}", query_vector=[0.1] * 8,
+        answer_md="A", refs=[Ref(article_id=article_id, slug="s", title="T")],
+        passages=[], model="m", prompt_version="v1", article_deps=[article_id],
+    )
+
+
+async def test_mark_stale_only_dependent_entries(db_session):
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    a1 = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="a1", title="A1", storage_ref="b:1", summary="s"
+    )
+    a2 = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="a2", title="A2", storage_ref="b:2", summary="s"
+    )
+    await ensure_embedding_column(db_session, 8)
+    c1 = await _entry_depending_on(db_session, article_id=a1.id, domain_id=dom.id)
+    c2 = await _entry_depending_on(db_session, article_id=a2.id, domain_id=dom.id)
+    await db_session.commit()
+
+    n = await mark_articles_cache_stale(db_session, [a1.id])
+    await db_session.commit()
+    assert n == 1
+
+    rows = dict(
+        (uuid.UUID(str(i)), bool(s))
+        for i, s in (
+            await db_session.execute(text("SELECT id, stale FROM query_cache"))
+        ).all()
+    )
+    assert rows[c1] is True  # depended on a1 -> stale
+    assert rows[c2] is False  # untouched
+
+
+async def test_mark_stale_empty_is_noop(db_session):
+    assert await mark_articles_cache_stale(db_session, []) == 0
+
+
+async def test_reingest_marks_cited_entry_stale(db_session):
+    # Acceptance criterion 3: an INGEST write of a cited article marks dependents stale.
+    from paw.harness.ops.ingest import run_ingest
+    from paw.providers.config import WikiConfig
+    from tests.stubs import StubChatProvider, StubEmbeddingProvider
+
+    dom = await DomainRepo(db_session).create(name="ni", source_prefix="s", wiki_prefix="w")
+    art = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="quic", title="QUIC", storage_ref="b:q", summary="s"
+    )
+    await ensure_embedding_column(db_session, 8)
+    cid = await _entry_depending_on(db_session, article_id=art.id, domain_id=dom.id)
+    await db_session.commit()
+
+    extraction = StubChatProvider.tool("emit_result", {"entities": ["QUIC"], "key_points": ["fast"]})
+    draft = StubChatProvider.tool(
+        "emit_result",
+        {
+            "slug": "quic", "title": "QUIC", "summary": "QUIC transport.",
+            "markdown": "## Overview\n\nQUIC runs over UDP. It is fast.",
+            "entities": ["QUIC"], "citations": [{"quote": "QUIC runs over UDP", "locator": "p1"}],
+        },
+    )
+    await run_ingest(
+        db_session, domain_id=dom.id, source_md="QUIC runs over UDP.",
+        chat=StubChatProvider([extraction, draft]), embedder=StubEmbeddingProvider(dim=8),
+        cfg=WikiConfig(chunk_target_size=60), dim=8,
+    )
+    await db_session.commit()
+
+    stale = (
+        await db_session.execute(text("SELECT stale FROM query_cache WHERE id=:i"), {"i": str(cid)})
+    ).scalar_one()
+    assert stale is True  # re-ingest of the cited article invalidated the cached answer
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `uv run pytest tests/unit/test_cache_seam.py -q`
-Expected: FAIL — `ImportError: cannot import name 'mark_cache_stale'`.
+Run: `uv run pytest tests/integration/test_cache_seam.py -q`
+Expected: FAIL with `ImportError: cannot import name 'mark_articles_cache_stale'` (and, once the import resolves, `test_reingest_marks_cited_entry_stale` fails because `ingest.py` does not yet call the seam).
 
-- [ ] **Step 3: Implement the article-level seam**
+- [ ] **Step 3: Add the repo method**
 
-Replace `src/paw/services/cache_seam.py` entirely with:
+In `src/paw/db/repos/query_cache.py`, add to `QueryCacheRepo` (after `touch_hit`):
+
+```python
+    async def mark_stale_for_articles(self, article_ids: list[uuid.UUID]) -> int:
+        if not article_ids:
+            return 0
+        res = await self._s.execute(
+            text(
+                "UPDATE query_cache SET stale = true WHERE id IN "
+                "(SELECT cache_id FROM query_cache_articles WHERE article_id = ANY(:aids))"
+            ),
+            {"aids": [str(a) for a in article_ids]},
+        )
+        await self._s.flush()
+        return res.rowcount or 0
+```
+
+- [ ] **Step 4: Rewrite the seam**
+
+Replace the entire body of `src/paw/services/cache_seam.py`:
 
 ```python
 from __future__ import annotations
@@ -1301,273 +1159,450 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paw.db.repos.query_cache import QueryCacheRepo
 
+async def mark_articles_cache_stale(
+    session: AsyncSession, article_ids: list[uuid.UUID]
+) -> int:
+    """Invalidate cached query answers whose cited articles just changed.
 
-async def mark_cache_stale(
-    session: AsyncSession, *, domain_id: uuid.UUID, article_ids: list[uuid.UUID]
-) -> None:
-    """Mark query_cache entries that depend on any of ``article_ids`` as stale.
-
-    Runs in the SAME transaction as the article write (no eventual path).
-    Article writers (ingest/fix/format) call this after upserting an article so a
-    later read serves the cached answer with a "may be outdated" flag + Refresh.
+    Called inside the article-write transaction (fix/format) so invalidation is
+    atomic with the write — no separate eventual path. Marks every ``query_cache``
+    entry depending on any of ``article_ids`` (via ``query_cache_articles``).
+    Returns the number of entries marked stale.
     """
-    if not article_ids:
-        return None
-    await QueryCacheRepo(session).mark_stale_for_articles(
-        domain_id=domain_id, article_ids=article_ids
-    )
-    return None
+    from paw.db.repos.query_cache import QueryCacheRepo
+
+    return await QueryCacheRepo(session).mark_stale_for_articles(article_ids)
 ```
 
-- [ ] **Step 4: Run the unit test**
+- [ ] **Step 5: Update the call sites**
 
-Run: `uv run pytest tests/unit/test_cache_seam.py -q`
-Expected: PASS (1 passed).
-
-- [ ] **Step 5: Rewire the three writers**
-
-In `src/paw/harness/ops/fix.py`: change the import `from paw.services.cache_seam import mark_domain_cache_stale` to `from paw.services.cache_seam import mark_cache_stale`, and change line 98 from:
+In `src/paw/harness/ops/fix.py`:
+- Change the import `from paw.services.cache_seam import mark_domain_cache_stale` → `from paw.services.cache_seam import mark_articles_cache_stale`.
+- Change the call (currently `await mark_domain_cache_stale(session, domain_id)`, just before `return True` in `apply_fix`) to:
 
 ```python
-    await mark_domain_cache_stale(session, domain_id)
-```
-to:
-```python
-    await mark_cache_stale(session, domain_id=domain_id, article_ids=[art.id])
+    await mark_articles_cache_stale(session, [art.id])
 ```
 
-In `src/paw/harness/ops/format.py`: same import change, and change line 74 from:
+In `src/paw/harness/ops/format.py`:
+- Change the import the same way.
+- Change the call (currently `await mark_domain_cache_stale(session, domain_id)` in `run_format_article`) to:
 
 ```python
-    await mark_domain_cache_stale(session, domain_id)
-```
-to:
-```python
-    await mark_cache_stale(session, domain_id=domain_id, article_ids=[art.id])
+    await mark_articles_cache_stale(session, [art.id])
 ```
 
-In `src/paw/harness/ops/ingest.py`: add the import near the other service imports:
+In `src/paw/harness/ops/ingest.py` (no seam call exists yet — add one):
+- Add the import after the existing `from paw.services.ingest_write import upsert_article` line:
 
 ```python
-from paw.services.cache_seam import mark_cache_stale
+from paw.services.cache_seam import mark_articles_cache_stale
 ```
-and add this line just before `return IngestResult(...)` (after the chunk/entity tagging loop):
+
+- In `run_ingest`, immediately after the Stage C citations loop (the `for c in draft.citations:` block, before the `# Stage D — links` comment), add:
 
 ```python
-    await mark_cache_stale(session, domain_id=domain_id, article_ids=[art.id])
+    # Phase 7: a re-ingested cited article invalidates cached answers depending on it.
+    await mark_articles_cache_stale(session, [art.id])
 ```
 
-- [ ] **Step 6: Write the transactional integration test**
+- [ ] **Step 6: Delete the obsolete no-op unit test**
 
-Create `tests/integration/test_cache_stale_seam.py`:
-
-```python
-from sqlalchemy import text
-
-from paw.db.managed import ensure_query_cache_embedding_column
-from paw.db.repos.articles import ArticleRepo
-from paw.db.repos.domains import DomainRepo
-from paw.db.repos.query_cache import QueryCacheRepo
-from paw.services.cache_seam import mark_cache_stale
-
-
-async def _cache_entry(db_session, *, domain_id, query_norm, dep_article_id):
-    repo = QueryCacheRepo(db_session)
-    cid = await repo.upsert(
-        domain_id=domain_id, query_norm=query_norm, answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await repo.set_deps(cache_id=cid, deps=[(dep_article_id, 1)])
-    return cid
-
-
-async def test_seam_marks_only_dependent_entries(db_session):
-    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
-    arts = ArticleRepo(db_session)
-    a1 = await arts.create(domain_id=dom.id, slug="a1", title="A1", storage_ref="b:1")
-    a2 = await arts.create(domain_id=dom.id, slug="a2", title="A2", storage_ref="b:2")
-    await ensure_query_cache_embedding_column(db_session, 4)
-    await _cache_entry(db_session, domain_id=dom.id, query_norm="dep-a1", dep_article_id=a1.id)
-    await _cache_entry(db_session, domain_id=dom.id, query_norm="dep-a2", dep_article_id=a2.id)
-    await db_session.commit()
-
-    # editing a1 marks only the a1-dependent entry stale, same transaction
-    await mark_cache_stale(db_session, domain_id=dom.id, article_ids=[a1.id])
-    await db_session.commit()
-
-    repo = QueryCacheRepo(db_session)
-    assert (await repo.get_by_norm(domain_id=dom.id, query_norm="dep-a1")).stale is True
-    assert (await repo.get_by_norm(domain_id=dom.id, query_norm="dep-a2")).stale is False
-
-
-async def test_seam_rolls_back_with_the_write(db_session):
-    # the stale mark is part of the caller's transaction: a rollback un-marks it
-    dom = await DomainRepo(db_session).create(name="d2", source_prefix="s", wiki_prefix="w")
-    art = await ArticleRepo(db_session).create(
-        domain_id=dom.id, slug="a", title="A", storage_ref="b:1"
-    )
-    await ensure_query_cache_embedding_column(db_session, 4)
-    cid = await _cache_entry(db_session, domain_id=dom.id, query_norm="q", dep_article_id=art.id)
-    await db_session.commit()
-
-    await mark_cache_stale(db_session, domain_id=dom.id, article_ids=[art.id])
-    await db_session.rollback()  # caller aborts the write
-
-    row = (await db_session.execute(
-        text("SELECT stale FROM query_cache WHERE id = :i"), {"i": str(cid)}
-    )).scalar_one()
-    assert row is False  # un-marked along with the rolled-back write
+```bash
+git rm tests/unit/test_cache_seam.py
 ```
 
-- [ ] **Step 7: Run the seam tests**
+- [ ] **Step 7: Run the new test + the fix/format/ingest op tests (no regression)**
 
-Run: `uv run pytest tests/unit/test_cache_seam.py tests/integration/test_cache_stale_seam.py -q`
-Expected: PASS (3 passed). This proves acceptance #3.
-
-- [ ] **Step 8: Run the existing fix/format/ingest op tests to confirm no regression**
-
-Run: `uv run pytest tests/integration/test_fix_op.py tests/integration/test_format_op.py tests/integration/test_ingest_op.py -q`
-Expected: PASS (the seam now touches `query_cache`, which exists post-migration; with no cache rows it is a harmless no-op UPDATE).
-
-- [ ] **Step 9: Lint + typecheck**
-
+Run: `uv run pytest tests/integration/test_cache_seam.py tests/integration/test_fix_op.py tests/integration/test_format_op.py tests/integration/test_ingest_op.py tests/integration/test_ingest_task.py -q`
+Expected: PASS (the fix/format/ingest ops still succeed; the seam now performs a real, harmless UPDATE on an empty/dependent cache, and re-ingest invalidates dependents).
 Run: `uv run ruff check src tests && uv run mypy src`
 Expected: clean.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/paw/services/cache_seam.py src/paw/harness/ops/ingest.py src/paw/harness/ops/fix.py src/paw/harness/ops/format.py tests/unit/test_cache_seam.py tests/integration/test_cache_stale_seam.py
-git commit -m "feat(cache): article-level stale seam wired into ingest/fix/format"
+git add src/paw/db/repos/query_cache.py src/paw/services/cache_seam.py src/paw/harness/ops/fix.py src/paw/harness/ops/format.py src/paw/harness/ops/ingest.py tests/integration/test_cache_seam.py tests/unit/test_cache_seam.py
+git commit -m "feat(cache): article-aware stale seam marks dependent entries (ingest/fix/format)"
 ```
 
 ---
 
-## Task 7: GC TTL cleanup
+### Task 7: QueryService.answer_cached (lookup-before-retrieval + upsert-on-miss)
 
 **Files:**
-- Modify: `src/paw/jobs/tasks.py` (`gc_housekeeping`)
-- Test: `tests/integration/test_query_cache_gc.py` (create)
+- Modify: `src/paw/services/query.py`
+- Test: `tests/integration/test_query_cache_service.py`
+
+**Interfaces:**
+- Consumes: `QueryCacheRepo` (Tasks 5–6); `normalize_query`, `is_similar_enough`, `extract_dependencies` (Task 4); `QueryCacheConfig`, `get_query_cache` (Task 1); `embed_query_cached`; `embedding_dim`; `PROMPT_VERSION`.
+- Produces:
+  - `@dataclass CachedAnswer(answer_md: str, refs: list[Ref], passages: list[Passage], stale: bool, cached: bool)`.
+  - `QueryService.answer_cached(*, domain_id, question, refresh: bool = False) -> CachedAnswer`.
+  - Internal `_resolve(domain_id) -> _Resolved` (shared by `prepare`); `prepare`/`complete`/`answer` keep their current signatures and behaviour (SSE path unaffected).
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/integration/test_query_cache_gc.py`:
+Create `tests/integration/test_query_cache_service.py`:
 
 ```python
-from datetime import UTC, datetime, timedelta
+import paw.services.query as query_mod
+from paw.db.managed import ensure_embedding_column
+from paw.db.repos.articles import ArticleRepo
+from paw.db.repos.domains import DomainRepo
+from paw.ingest.chunking import ChunkSpec
+from paw.security.secrets import SecretBox
+from paw.services.provider_settings import ProviderSettingsService
+from paw.services.query import QueryService
+from paw.vector.embed import embed_and_write
+from tests.stubs import StubChatProvider
 
-from sqlalchemy import text
+_FERNET = "k" * 43 + "="
 
-from paw.db.managed import ensure_query_cache_embedding_column
+
+class _FixedEmbedder:
+    """Deterministic embedder: maps chosen texts to chosen vectors for ANN control."""
+
+    def __init__(self, mapping: dict[str, list[float]], default: list[float]) -> None:
+        self._mapping = mapping
+        self._default = default
+
+    async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
+        return [self._mapping.get(t, self._default) for t in texts]
+
+
+async def _provision(db_session, monkeypatch, *, embedder, answer="reliable means [tcp]"):
+    box = SecretBox(_FERNET)
+    psvc = ProviderSettingsService(db_session, box=box)
+    await psvc.persist_provider(
+        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=8, api_key="secret"
+    )
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    art = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:a", summary="s"
+    )
+    await ensure_embedding_column(db_session, 8)
+    await embed_and_write(
+        db_session, article_id=art.id, domain_id=dom.id,
+        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable delivery")],
+        embedder=embedder,
+    )
+    await db_session.commit()
+    stub = StubChatProvider(responder=lambda msgs, tools: StubChatProvider.text(answer))
+    monkeypatch.setattr(query_mod, "build_chat_provider", lambda pc, b: stub)
+    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: embedder)
+    return dom, stub
+
+
+async def test_miss_then_exact_hit_skips_llm(db_session, monkeypatch):
+    emb = _FixedEmbedder({}, default=[0.2] * 8)
+    dom, stub = await _provision(db_session, monkeypatch, embedder=emb)
+    svc = QueryService(db_session, fernet_key=_FERNET).with_redis(None)
+
+    first = await svc.answer_cached(domain_id=dom.id, question="What is reliable?")
+    assert first.cached is False
+    assert first.answer_md == "reliable means [tcp]"
+    calls_after_first = len(stub.calls)
+    assert calls_after_first == 1
+
+    # Same question (normalizes identically) -> exact hit, no further LLM call.
+    second = await svc.answer_cached(domain_id=dom.id, question="  what is   RELIABLE? ")
+    assert second.cached is True
+    assert second.answer_md == "reliable means [tcp]"
+    assert len(stub.calls) == calls_after_first  # LLM not called again
+
+
+async def test_ann_hit_within_threshold(db_session, monkeypatch):
+    # Two distinct question strings share an embedding -> cosine sim 1.0 >= 0.85.
+    same = [0.5] * 8
+    emb = _FixedEmbedder({"what is reliable?": same, "tell me about reliability": same}, default=[0.0] * 8)
+    dom, stub = await _provision(db_session, monkeypatch, embedder=emb)
+    svc = QueryService(db_session, fernet_key=_FERNET).with_redis(None)
+
+    await svc.answer_cached(domain_id=dom.id, question="what is reliable?")
+    n = len(stub.calls)
+    hit = await svc.answer_cached(domain_id=dom.id, question="tell me about reliability")
+    assert hit.cached is True
+    assert len(stub.calls) == n  # served via ANN, no LLM
+
+
+async def test_below_threshold_misses_and_recomputes(db_session, monkeypatch):
+    a = [1.0] + [0.0] * 7
+    b = [0.0, 1.0] + [0.0] * 6  # orthogonal -> cosine sim 0 < 0.85
+    emb = _FixedEmbedder({"alpha question": a, "beta question": b}, default=[0.0] * 8)
+    dom, stub = await _provision(db_session, monkeypatch, embedder=emb)
+    svc = QueryService(db_session, fernet_key=_FERNET).with_redis(None)
+
+    await svc.answer_cached(domain_id=dom.id, question="alpha question")
+    n = len(stub.calls)
+    miss = await svc.answer_cached(domain_id=dom.id, question="beta question")
+    assert miss.cached is False
+    assert len(stub.calls) == n + 1  # recomputed
+
+
+async def test_disabled_bypasses_cache(db_session, monkeypatch):
+    from paw.db.repos.settings import SettingsRepo
+    from paw.providers.config import QUERY_CACHE_KEY
+
+    emb = _FixedEmbedder({}, default=[0.2] * 8)
+    dom, stub = await _provision(db_session, monkeypatch, embedder=emb)
+    await SettingsRepo(db_session).upsert({QUERY_CACHE_KEY: {"enabled": False}})
+    await db_session.commit()
+    svc = QueryService(db_session, fernet_key=_FERNET).with_redis(None)
+
+    await svc.answer_cached(domain_id=dom.id, question="q")
+    await svc.answer_cached(domain_id=dom.id, question="q")
+    assert len(stub.calls) == 2  # no caching -> LLM called each time
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `uv run pytest tests/integration/test_query_cache_service.py -q`
+Expected: FAIL with `AttributeError: 'QueryService' object has no attribute 'answer_cached'`.
+
+- [ ] **Step 3: Refactor QueryService + add answer_cached**
+
+Replace the contents of `src/paw/services/query.py` with:
+
+```python
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from paw.api.errors import ProblemError
+from paw.config import get_settings
+from paw.db.managed import embedding_dim
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.query_cache import QueryCacheRepo
-from paw.jobs.tasks import gc_housekeeping
+from paw.harness.ops.query import DONT_KNOW, QueryAnswer, build_messages, dont_know, to_answer
+from paw.harness.prompts import PROMPT_VERSION
+from paw.harness.retrieve import Passage, Ref, RetrievedContext, retrieve
+from paw.providers.base import ChatProvider, EmbeddingProvider, Message
+from paw.providers.config import ProviderConfig, QueryCacheConfig, RetrievalConfig, WikiConfig
+from paw.providers.factory import build_chat_provider, build_embedding_provider
+from paw.security.secrets import SecretBox
+from paw.services.provider_settings import ProviderSettingsService
+from paw.services.query_cache import extract_dependencies, is_similar_enough, normalize_query
+from paw.vector.embed_cache import embed_query_cached
 
 
-async def test_gc_deletes_expired_cache_entries(db_session, wired_settings):
-    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    fresh = await repo.upsert(
-        domain_id=dom.id, query_norm="fresh", answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    expired = await repo.upsert(
-        domain_id=dom.id, query_norm="expired", answer_md="B", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await db_session.commit()
-    # default ttl is 30 days; backdate the expired entry past it
-    await db_session.execute(
-        text("UPDATE query_cache SET last_hit_at = :w WHERE id = :i"),
-        {"w": datetime.now(UTC) - timedelta(days=40), "i": str(expired)},
-    )
-    await db_session.commit()
+@dataclass
+class Prepared:
+    chat: ChatProvider
+    messages: list[Message] | None  # None -> empty context (don't-know)
+    ctx: RetrievedContext
 
-    await gc_housekeeping({})
 
-    assert await repo.get_by_norm(domain_id=dom.id, query_norm="fresh") is not None
-    assert await repo.get_by_norm(domain_id=dom.id, query_norm="expired") is None
+@dataclass
+class _Resolved:
+    pc: ProviderConfig
+    chat: ChatProvider
+    embedder: EmbeddingProvider
+    wiki: WikiConfig
+    retr: RetrievalConfig
+    qc: QueryCacheConfig
+    embedding_version: int
+
+
+@dataclass
+class CachedAnswer:
+    answer_md: str
+    refs: list[Ref]
+    passages: list[Passage]
+    stale: bool
+    cached: bool
+
+
+class QueryService:
+    def __init__(self, session: AsyncSession, *, fernet_key: str | None = None) -> None:
+        self._s = session
+        self._box = SecretBox(fernet_key or get_settings().fernet_key)
+        self._redis: object | None = None
+
+    def with_redis(self, redis: object | None) -> QueryService:
+        self._redis = redis
+        return self
+
+    async def _resolve(self, domain_id: uuid.UUID) -> _Resolved:
+        psvc = ProviderSettingsService(self._s, box=self._box)
+        pc = await psvc.get_provider()
+        if pc is None:
+            raise ProblemError(
+                status=422,
+                title="Provider not configured",
+                detail="Configure an LLM provider before querying.",
+            )
+        dom = await DomainRepo(self._s).get(domain_id)
+        if dom is None:
+            raise ProblemError(status=404, title="Domain not found")
+
+        wiki = await psvc.get_wiki()
+        global_retr = await psvc.get_retrieval()
+        global_qc = await psvc.get_query_cache()
+        dom_cfg = dom.config if isinstance(dom.config, dict) else {}
+        retr_ov = dom_cfg.get("retrieval")
+        retr = (
+            RetrievalConfig.model_validate({**global_retr.model_dump(), **retr_ov})
+            if isinstance(retr_ov, dict)
+            else global_retr
+        )
+        qc_ov = dom_cfg.get("query_cache")
+        qc = (
+            QueryCacheConfig.model_validate({**global_qc.model_dump(), **qc_ov})
+            if isinstance(qc_ov, dict)
+            else global_qc
+        )
+        return _Resolved(
+            pc=pc,
+            chat=build_chat_provider(pc, self._box),
+            embedder=build_embedding_provider(pc, self._box),
+            wiki=wiki,
+            retr=retr,
+            qc=qc,
+            embedding_version=await psvc.get_embedding_version(),
+        )
+
+    async def _retrieve_ctx(self, res: _Resolved, *, domain_id: uuid.UUID, question: str) -> RetrievedContext:
+        return await retrieve(
+            self._s,
+            domain_id=domain_id,
+            query=question,
+            embedder=res.embedder,
+            cfg=res.retr,
+            embedding_version=res.embedding_version,
+            redis=self._redis,
+            embed_model=res.pc.embedding_model,
+        )
+
+    async def prepare(self, *, domain_id: uuid.UUID, question: str) -> Prepared:
+        res = await self._resolve(domain_id)
+        ctx = await self._retrieve_ctx(res, domain_id=domain_id, question=question)
+        messages = build_messages(question, ctx, res.wiki) if ctx.passages else None
+        return Prepared(chat=res.chat, messages=messages, ctx=ctx)
+
+    async def complete(self, prepared: Prepared) -> QueryAnswer:
+        if prepared.messages is None:
+            return dont_know()
+        result = await prepared.chat.chat(prepared.messages)
+        return to_answer(result.content or DONT_KNOW, prepared.ctx)
+
+    async def answer(self, *, domain_id: uuid.UUID, question: str) -> QueryAnswer:
+        prepared = await self.prepare(domain_id=domain_id, question=question)
+        return await self.complete(prepared)
+
+    async def _embed(self, res: _Resolved, question: str) -> list[float]:
+        return await embed_query_cached(
+            self._redis,
+            res.embedder,
+            query=question,
+            model=res.pc.embedding_model,
+            embedding_version=res.embedding_version,
+        )
+
+    async def _recompute(self, res: _Resolved, *, domain_id: uuid.UUID, question: str) -> QueryAnswer:
+        ctx = await self._retrieve_ctx(res, domain_id=domain_id, question=question)
+        if not ctx.passages:
+            return dont_know()
+        result = await res.chat.chat(build_messages(question, ctx, res.wiki))
+        return to_answer(result.content or DONT_KNOW, ctx)
+
+    async def answer_cached(
+        self, *, domain_id: uuid.UUID, question: str, refresh: bool = False
+    ) -> CachedAnswer:
+        res = await self._resolve(domain_id)  # raises 404/422
+        if not res.qc.enabled:
+            ans = await self._recompute(res, domain_id=domain_id, question=question)
+            return CachedAnswer(ans.answer_md, ans.refs, ans.passages, stale=False, cached=False)
+
+        repo = QueryCacheRepo(self._s)
+        norm = normalize_query(question)
+        has_embedding = await embedding_dim(self._s) is not None
+        qvec: list[float] | None = None
+
+        if not refresh:
+            hit = await repo.get_exact(domain_id, norm)
+            if hit is None and has_embedding:
+                qvec = await self._embed(res, question)
+                ann = await repo.get_ann(domain_id, qvec)
+                if ann is not None and is_similar_enough(ann.sim, res.qc.sim_threshold):
+                    hit = ann.entry
+            if hit is not None:
+                await repo.touch_hit(hit.id)
+                await self._s.commit()
+                return CachedAnswer(
+                    hit.answer_md, hit.refs, hit.passages, stale=hit.stale, cached=True
+                )
+
+        # Miss or forced refresh: full Phase 3 path, then upsert (clears stale).
+        ans = await self._recompute(res, domain_id=domain_id, question=question)
+        if has_embedding:
+            if qvec is None:
+                qvec = await self._embed(res, question)
+            await repo.upsert(
+                domain_id=domain_id,
+                query_norm=norm,
+                query_vector=qvec,
+                answer_md=ans.answer_md,
+                refs=ans.refs,
+                passages=ans.passages,
+                model=res.pc.chat_model,
+                prompt_version=PROMPT_VERSION,
+                article_deps=extract_dependencies(ans.refs),
+            )
+        await self._s.commit()
+        return CachedAnswer(ans.answer_md, ans.refs, ans.passages, stale=False, cached=False)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+(Note: `retrieve` and the retrieve dataclasses are now imported from `paw.harness.retrieve`; the previous `from paw.harness.retrieve import RetrievedContext, retrieve` is folded into the single import line above.)
 
-Run: `uv run pytest tests/integration/test_query_cache_gc.py -q`
-Expected: FAIL — the expired entry is still present (no TTL sweep yet).
+- [ ] **Step 4: Run the new test to verify it passes**
 
-- [ ] **Step 3: Extend `gc_housekeeping`**
+Run: `uv run pytest tests/integration/test_query_cache_service.py -q`
+Expected: PASS (4 passed).
 
-In `src/paw/jobs/tasks.py`, edit the `gc_housekeeping` function. Keep the chat-session pruning unchanged and the return string `f"gc:{pruned}"` unchanged (existing gc tests assert that exact format). Add the cache sweep inside the same `async with` session block, after the chat-pruning loop and before `await session.commit()`:
+- [ ] **Step 5: Run the existing query-service tests (no regression)**
 
-```python
-        # Phase 7: TTL sweep of the query cache (global ttl).
-        from datetime import timedelta
-
-        from paw.db.repos.query_cache import QueryCacheRepo
-
-        qc_cfg = await ProviderSettingsService(session, box=box).get_query_cache()
-        cutoff = now - timedelta(seconds=qc_cfg.ttl_seconds)
-        await QueryCacheRepo(session).delete_expired(cutoff=cutoff)
-```
-
-(`now = datetime.now(UTC)` is already defined earlier in the function; `ProviderSettingsService` and `box` are already in scope.)
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `uv run pytest tests/integration/test_query_cache_gc.py -q`
-Expected: PASS. This proves acceptance #6.
-
-- [ ] **Step 5: Confirm existing gc tests still pass (return-string unchanged)**
-
-Run: `uv run pytest tests/integration/test_gc_housekeeping.py -q`
-Expected: PASS (3 passed) — `out == "gc:N"` still holds.
-
-- [ ] **Step 6: Lint + typecheck**
-
-Run: `uv run ruff check src tests/integration/test_query_cache_gc.py && uv run mypy src`
+Run: `uv run pytest tests/integration/test_query_service.py -q`
+Expected: PASS (3 passed — `prepare`/`complete`/`answer` behaviour unchanged).
+Run: `uv run ruff check src tests && uv run mypy src`
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/paw/jobs/tasks.py tests/integration/test_query_cache_gc.py
-git commit -m "feat(jobs): gc_housekeeping TTL sweep of query_cache"
+git add src/paw/services/query.py tests/integration/test_query_cache_service.py
+git commit -m "feat(cache): QueryService.answer_cached — cache lookup before retrieval + upsert on miss"
 ```
 
 ---
 
-## Task 8: API — cache in the query router, `?refresh=1`, `/suggest`
+### Task 8: API — cache-aware query JSON path + ?refresh
 
 **Files:**
 - Modify: `src/paw/api/routers/query.py`
-- Test: `tests/api/test_query_cache_api.py` (create), `tests/api/test_suggest_api.py` (create), `tests/api/test_query_api.py` (update shape test)
+- Test: `tests/api/test_query_cache_api.py`
 
-- [ ] **Step 1: Update the existing response-shape test**
+**Interfaces:**
+- Consumes: `QueryService.answer_cached`, `CachedAnswer` (Task 7).
+- Produces:
+  - `POST /api/v1/domains/{id}/query` (JSON, non-SSE) now serves from cache; response gains `stale: bool` and `cached: bool`.
+  - `?refresh=1` query param bypasses the cache, recomputes, and clears `stale`.
+  - SSE path (when `accept: text/event-stream`) unchanged (no caching).
 
-In `tests/api/test_query_api.py`, replace `test_query_response_shape_valid`'s final assertion:
-
-```python
-    assert set(body) == {"answer_md", "refs", "passages"}
-```
-with:
-```python
-    assert set(body) == {"answer_md", "refs", "passages", "stale", "cached"}
-    assert body["stale"] is False and body["cached"] is False
-```
-
-- [ ] **Step 2: Write the failing cache API test**
+- [ ] **Step 1: Write the failing test**
 
 Create `tests/api/test_query_cache_api.py`:
 
 ```python
 import pytest
 from httpx import ASGITransport, AsyncClient
-from tests.stubs import StubChatProvider
+from sqlalchemy import text
 
 import paw.services.query as query_mod
-import paw.services.query_cache as cache_mod
 from paw.db.managed import ensure_embedding_column
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.domains import DomainRepo
@@ -1578,87 +1613,192 @@ from paw.security.passwords import hash_password
 from paw.security.secrets import SecretBox
 from paw.services.provider_settings import ProviderSettingsService
 from paw.vector.embed import embed_and_write
+from tests.stubs import StubChatProvider, StubEmbeddingProvider
 
 _FERNET = "k" * 43 + "="
-
-
-class FixedEmbed:
-    def __init__(self, default): self.default = default
-    async def embed(self, texts, *, model=None): return [self.default for _ in texts]
 
 
 @pytest.fixture
 async def client(db_session, wired_settings, monkeypatch):
     await UserRepo(db_session).create(
-        email="a@b.c", pw_hash=hash_password("pw12345"), role="admin"
+        email="admin@example.com", pw_hash=hash_password("pw12345"), role="admin"
     )
     box = SecretBox(_FERNET)
     await ProviderSettingsService(db_session, box=box).persist_provider(
-        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=4, api_key="k"
+        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=8, api_key="k"
     )
     dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
     art = await ArticleRepo(db_session).create(
         domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:a", summary="s"
     )
-    await ensure_embedding_column(db_session, 4)
-    emb = FixedEmbed([1.0, 0.0, 0.0, 0.0])
+    await ensure_embedding_column(db_session, 8)
+    emb = StubEmbeddingProvider(dim=8)
     await embed_and_write(
         db_session, article_id=art.id, domain_id=dom.id,
-        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable")],
+        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable delivery")],
         embedder=emb,
     )
     await db_session.commit()
+    calls = {"n": 0}
+
+    def _responder(msgs, tools):
+        calls["n"] += 1
+        return StubChatProvider.text("reliable means [tcp]")
+
+    monkeypatch.setattr(
+        query_mod, "build_chat_provider", lambda pc, b: StubChatProvider(responder=_responder)
+    )
     monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
-    monkeypatch.setattr(cache_mod, "build_embedding_provider", lambda pc, b: emb)
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
-        await c.post("/api/v1/auth/login", json={"email": "a@b.c", "password": "pw12345"})
+        await c.post("/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"})
         c._dom = dom  # type: ignore[attr-defined]
         c._csrf = c.cookies.get("paw_csrf", "")  # type: ignore[attr-defined]
+        c._calls = calls  # type: ignore[attr-defined]
         yield c
 
 
-async def test_second_identical_query_served_from_cache(client, monkeypatch):
-    calls = {"n": 0}
-
-    def make_chat(pc, b):
-        calls["n"] += 1
-        return StubChatProvider(script=[StubChatProvider.text("reliable means [tcp]")])
-
-    monkeypatch.setattr(query_mod, "build_chat_provider", make_chat)
+async def test_repeat_query_served_from_cache_without_llm(client):
     url = f"/api/v1/domains/{client._dom.id}/query"
     h = {"x-csrf-token": client._csrf}
+    first = await client.post(url, json={"q": "what is reliable?"}, headers=h)
+    assert first.status_code == 200
+    assert first.json()["cached"] is False
+    assert client._calls["n"] == 1
 
-    r1 = await client.post(url, json={"q": "what is reliable?"}, headers=h)
-    assert r1.status_code == 200 and r1.json()["cached"] is False
-    r2 = await client.post(url, json={"q": "WHAT is   reliable? "}, headers=h)
-    body = r2.json()
-    assert body["cached"] is True and body["stale"] is False
-    assert body["answer_md"] == "reliable means [tcp]"
-    assert calls["n"] == 1  # the LLM provider was built/called exactly once
+    second = await client.post(url, json={"q": "what is reliable?"}, headers=h)
+    assert second.json()["cached"] is True
+    assert second.json()["answer_md"] == "reliable means [tcp]"
+    assert client._calls["n"] == 1  # no second LLM call
 
 
-async def test_refresh_bypasses_and_recomputes(client, monkeypatch):
-    answers = iter(["first [tcp]", "second [tcp]"])
-
-    monkeypatch.setattr(
-        query_mod, "build_chat_provider",
-        lambda pc, b: StubChatProvider(script=[StubChatProvider.text(next(answers))]),
-    )
+async def test_refresh_recomputes_and_clears_stale(client, db_session):
     url = f"/api/v1/domains/{client._dom.id}/query"
     h = {"x-csrf-token": client._csrf}
+    await client.post(url, json={"q": "what is reliable?"}, headers=h)
+    # Force the entry stale directly.
+    await db_session.execute(text("UPDATE query_cache SET stale = true"))
+    await db_session.commit()
 
-    await client.post(url, json={"q": "q?"}, headers=h)                 # caches "first"
-    cached = await client.post(url, json={"q": "q?"}, headers=h)
-    assert cached.json()["answer_md"] == "first [tcp]"
-    refreshed = await client.post(url + "?refresh=1", json={"q": "q?"}, headers=h)
-    assert refreshed.json()["answer_md"] == "second [tcp]"
+    stale_hit = await client.post(url, json={"q": "what is reliable?"}, headers=h)
+    assert stale_hit.json()["cached"] is True
+    assert stale_hit.json()["stale"] is True
+    calls_before_refresh = client._calls["n"]
+
+    refreshed = await client.post(f"{url}?refresh=1", json={"q": "what is reliable?"}, headers=h)
     assert refreshed.json()["cached"] is False
-    again = await client.post(url, json={"q": "q?"}, headers=h)
-    assert again.json()["answer_md"] == "second [tcp]"  # refreshed value now cached
+    assert refreshed.json()["stale"] is False
+    assert client._calls["n"] == calls_before_refresh + 1
+    remaining_stale = (
+        await db_session.execute(text("SELECT bool_or(stale) FROM query_cache"))
+    ).scalar_one()
+    assert remaining_stale is False
 ```
 
-- [ ] **Step 3: Write the failing suggest API test**
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `uv run pytest tests/api/test_query_cache_api.py -q`
+Expected: FAIL — response JSON has no `cached` key (`KeyError`).
+
+- [ ] **Step 3: Make the JSON path cache-aware**
+
+In `src/paw/api/routers/query.py`:
+
+Add `stale`/`cached` to the response model:
+
+```python
+class QueryResult(BaseModel):
+    answer_md: str
+    refs: list[RefOut]
+    passages: list[PassageOut]
+    stale: bool = False
+    cached: bool = False
+```
+
+Add a builder next to `_to_result` (import `CachedAnswer` from `paw.services.query`):
+
+```python
+def _cached_to_result(res: CachedAnswer) -> QueryResult:
+    return QueryResult(
+        answer_md=res.answer_md,
+        refs=[RefOut(**r) for r in _refs_json(res.refs)],
+        passages=[PassageOut(**p) for p in _passages_json(res.passages)],  # type: ignore[arg-type]
+        stale=res.stale,
+        cached=res.cached,
+    )
+```
+
+Update the import line `from paw.services.query import Prepared, QueryService` → `from paw.services.query import CachedAnswer, Prepared, QueryService`.
+
+Replace `query_domain` so the non-SSE branch uses the cache and accepts `refresh`:
+
+```python
+@router.post(
+    "/domains/{domain_id}/query",
+    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor", "viewer"))],
+)
+async def query_domain(
+    domain_id: uuid.UUID,
+    body: QueryRequest,
+    request: Request,
+    refresh: int = 0,
+    session: AsyncSession = Depends(db),
+) -> object:
+    svc = QueryService(session).with_redis(get_redis())
+    if "text/event-stream" in request.headers.get("accept", ""):
+        prepared = await svc.prepare(domain_id=domain_id, question=body.q)  # raises 404/422
+        return StreamingResponse(_sse(prepared), media_type="text/event-stream")
+    res = await svc.answer_cached(
+        domain_id=domain_id, question=body.q, refresh=bool(refresh)
+    )  # raises 404/422
+    return _cached_to_result(res)
+```
+
+- [ ] **Step 4: Run the new test to verify it passes**
+
+Run: `uv run pytest tests/api/test_query_cache_api.py -q`
+Expected: PASS (2 passed).
+
+- [ ] **Step 5: Run the existing query API tests (no regression)**
+
+Run: `uv run pytest tests/api/test_query_api.py -q`
+Expected: PASS — but note `test_query_response_shape_valid` asserts `set(body) == {"answer_md", "refs", "passages"}`. The response now also has `stale`/`cached`, so this assertion must be updated. In `tests/api/test_query_api.py`, change that assertion to:
+
+```python
+    assert set(body) == {"answer_md", "refs", "passages", "stale", "cached"}
+```
+
+Re-run: `uv run pytest tests/api/test_query_api.py tests/api/test_query_cache_api.py -q`
+Expected: PASS.
+Run: `uv run ruff check src tests && uv run mypy src`
+Expected: clean.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/paw/api/routers/query.py tests/api/test_query_cache_api.py tests/api/test_query_api.py
+git commit -m "feat(api): cache-aware query JSON path + ?refresh; stale/cached fields"
+```
+
+---
+
+### Task 9: Suggestions — repo.suggest + API + web endpoint + partial
+
+**Files:**
+- Modify: `src/paw/db/repos/query_cache.py`
+- Modify: `src/paw/api/routers/query.py`
+- Modify: `src/paw/api/web/routes.py`
+- Create: `src/paw/api/web/templates/_suggestions.html`
+- Test: `tests/api/test_suggest_api.py`, `tests/api/test_suggest_web.py`
+
+**Interfaces:**
+- Consumes: `query_cache` rows + `get_query_cache().suggest_top_k`.
+- Produces:
+  - `QueryCacheRepo.suggest(domain_id, q: str, limit: int) -> list[tuple[str, int]]` — `query_norm` ILIKE-contains `q`, ranked by `hit_count` desc then `query_norm`.
+  - `GET /api/v1/domains/{id}/suggest?q=` → `list[{query: str, hit_count: int}]`.
+  - `GET /domains/{id}/suggest?q=` (web) → `_suggestions.html` `<li>` list.
+
+- [ ] **Step 1: Write the failing API test**
 
 Create `tests/api/test_suggest_api.py`:
 
@@ -1666,7 +1806,131 @@ Create `tests/api/test_suggest_api.py`:
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from paw.db.managed import ensure_query_cache_embedding_column
+from paw.db.managed import ensure_embedding_column
+from paw.db.repos.domains import DomainRepo
+from paw.db.repos.query_cache import QueryCacheRepo
+from paw.db.repos.users import UserRepo
+from paw.main import create_app
+from paw.security.passwords import hash_password
+
+_FERNET = "k" * 43 + "="
+
+
+async def _seed(db_session, dom_id, norm, hits):
+    repo = QueryCacheRepo(db_session)
+    cid = await repo.upsert(
+        domain_id=dom_id, query_norm=norm, query_vector=[0.1] * 8, answer_md="A",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
+    for _ in range(hits):
+        await repo.touch_hit(cid)
+
+
+@pytest.fixture
+async def client(db_session, wired_settings):
+    await UserRepo(db_session).create(
+        email="admin@example.com", pw_hash=hash_password("pw12345"), role="admin"
+    )
+    dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
+    await ensure_embedding_column(db_session, 8)
+    await _seed(db_session, dom.id, "popular tcp question", hits=5)
+    await _seed(db_session, dom.id, "rare tcp question", hits=1)
+    await _seed(db_session, dom.id, "unrelated udp question", hits=9)
+    await db_session.commit()
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
+        await c.post("/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"})
+        c._dom = dom  # type: ignore[attr-defined]
+        yield c
+
+
+async def test_suggest_ranks_matching_by_hit_count(client):
+    r = await client.get(f"/api/v1/domains/{client._dom.id}/suggest?q=tcp")
+    assert r.status_code == 200
+    queries = [i["query"] for i in r.json()]
+    assert queries == ["popular tcp question", "rare tcp question"]  # 'udp' excluded by match
+
+
+async def test_suggest_empty_q_returns_empty(client):
+    r = await client.get(f"/api/v1/domains/{client._dom.id}/suggest?q=")
+    assert r.json() == []
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `uv run pytest tests/api/test_suggest_api.py -q`
+Expected: FAIL with 404 (route not defined) → `KeyError`/assertion.
+
+- [ ] **Step 3: Add the repo.suggest method**
+
+In `src/paw/db/repos/query_cache.py`, add to `QueryCacheRepo`:
+
+```python
+    async def suggest(self, domain_id: uuid.UUID, q: str, limit: int) -> list[tuple[str, int]]:
+        needle = q.lower().strip()
+        if not needle:
+            return []
+        res = await self._s.execute(
+            text(
+                "SELECT query_norm, hit_count FROM query_cache "
+                "WHERE domain_id = :d AND query_norm ILIKE :pat "
+                "ORDER BY hit_count DESC, query_norm ASC LIMIT :k"
+            ),
+            {"d": str(domain_id), "pat": f"%{needle}%", "k": limit},
+        )
+        return [(r[0], int(r[1])) for r in res.all()]
+```
+
+- [ ] **Step 4: Add the API suggest endpoint**
+
+In `src/paw/api/routers/query.py`, add imports near the top:
+
+```python
+from paw.api.deps import db, get_redis, require_csrf, require_role
+from paw.db.repos.query_cache import QueryCacheRepo
+from paw.services.provider_settings import ProviderSettingsService
+```
+
+(`db`, `get_redis`, `require_csrf`, `require_role` are already imported together — extend that line rather than duplicating.)
+
+Add the model + endpoint at the end of the module:
+
+```python
+class SuggestItem(BaseModel):
+    query: str
+    hit_count: int
+
+
+@router.get(
+    "/domains/{domain_id}/suggest",
+    dependencies=[Depends(require_role("admin", "editor", "viewer"))],
+)
+async def suggest_domain(
+    domain_id: uuid.UUID,
+    q: str = "",
+    session: AsyncSession = Depends(db),
+) -> list[SuggestItem]:
+    if not q.strip():
+        return []
+    cfg = await ProviderSettingsService(session).get_query_cache()
+    rows = await QueryCacheRepo(session).suggest(domain_id, q, cfg.suggest_top_k)
+    return [SuggestItem(query=norm, hit_count=hc) for norm, hc in rows]
+```
+
+- [ ] **Step 5: Run the API test to verify it passes**
+
+Run: `uv run pytest tests/api/test_suggest_api.py -q`
+Expected: PASS (2 passed).
+
+- [ ] **Step 6: Write the failing web test**
+
+Create `tests/api/test_suggest_web.py`:
+
+```python
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from paw.db.managed import ensure_embedding_column
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.query_cache import QueryCacheRepo
 from paw.db.repos.users import UserRepo
@@ -1679,527 +1943,61 @@ _FERNET = "k" * 43 + "="
 @pytest.fixture
 async def client(db_session, wired_settings):
     await UserRepo(db_session).create(
-        email="a@b.c", pw_hash=hash_password("pw12345"), role="viewer"
+        email="admin@example.com", pw_hash=hash_password("pw12345"), role="admin"
     )
     dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
-    await ensure_query_cache_embedding_column(db_session, 4)
-    repo = QueryCacheRepo(db_session)
-    for norm, hits in [("tcp basics", 1), ("tcp handshake", 5), ("udp facts", 9)]:
-        cid = await repo.upsert(
-            domain_id=dom.id, query_norm=norm, answer_md="A", refs=[], passages=[],
-            model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-        )
-        for _ in range(hits):
-            await repo.touch(cache_id=cid)
+    await ensure_embedding_column(db_session, 8)
+    await QueryCacheRepo(db_session).upsert(
+        domain_id=dom.id, query_norm="what is tcp", query_vector=[0.1] * 8, answer_md="A",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
     await db_session.commit()
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
-        await c.post("/api/v1/auth/login", json={"email": "a@b.c", "password": "pw12345"})
+        await c.post("/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"})
         c._dom = dom  # type: ignore[attr-defined]
         yield c
 
 
-async def test_suggest_ranks_by_hit_count(client):
-    r = await client.get(f"/api/v1/domains/{client._dom.id}/suggest", params={"q": "tcp"})
+async def test_web_suggest_renders_list(client):
+    r = await client.get(f"/domains/{client._dom.id}/suggest?q=tcp")
     assert r.status_code == 200
-    assert r.json()["suggestions"] == ["tcp handshake", "tcp basics"]
+    assert "what is tcp" in r.text
 
 
-async def test_suggest_empty_query_returns_empty(client):
-    r = await client.get(f"/api/v1/domains/{client._dom.id}/suggest", params={"q": ""})
-    assert r.status_code == 200 and r.json()["suggestions"] == []
+async def test_web_suggest_empty_when_no_match(client):
+    r = await client.get(f"/domains/{client._dom.id}/suggest?q=zzz")
+    assert "what is tcp" not in r.text
 ```
 
-- [ ] **Step 4: Run the new API tests to verify they fail**
+- [ ] **Step 7: Run it to verify it fails**
 
-Run: `uv run pytest tests/api/test_query_cache_api.py tests/api/test_suggest_api.py -q`
-Expected: FAIL — responses lack `cached`/`stale`; `/suggest` 404.
+Run: `uv run pytest tests/api/test_suggest_web.py -q`
+Expected: FAIL with 404 (web route not defined).
 
-- [ ] **Step 5: Rewrite the query router**
-
-Replace `src/paw/api/routers/query.py` entirely with:
-
-```python
-from __future__ import annotations
-
-import json
-import uuid
-from collections.abc import AsyncIterator
-
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from paw.api.deps import db, get_redis, require_csrf, require_role
-from paw.harness.ops.query import DONT_KNOW
-from paw.harness.retrieve import Passage, Ref, RetrievedContext
-from paw.services.query import Prepared, QueryService
-from paw.services.query_cache import CacheHit, QueryCacheService
-
-router = APIRouter(tags=["query"])
-
-
-class QueryRequest(BaseModel):
-    q: str
-
-
-class RefOut(BaseModel):
-    article_id: str
-    slug: str
-    title: str
-
-
-class PassageOut(BaseModel):
-    chunk_id: str
-    article_id: str
-    slug: str
-    heading_path: str | None
-    text: str
-    score: float
-
-
-class QueryResult(BaseModel):
-    answer_md: str
-    refs: list[RefOut]
-    passages: list[PassageOut]
-    stale: bool = False
-    cached: bool = False
-
-
-class SuggestResult(BaseModel):
-    suggestions: list[str]
-
-
-def _refs_json(refs: list[Ref]) -> list[dict[str, str]]:
-    return [{"article_id": str(r.article_id), "slug": r.slug, "title": r.title} for r in refs]
-
-
-def _passages_json(ps: list[Passage]) -> list[dict[str, object]]:
-    return [
-        {
-            "chunk_id": str(p.chunk_id),
-            "article_id": str(p.article_id),
-            "slug": p.slug,
-            "heading_path": p.heading_path,
-            "text": p.text,
-            "score": p.score,
-        }
-        for p in ps
-    ]
-
-
-def _to_result(answer_md: str, ctx: RetrievedContext) -> QueryResult:
-    return QueryResult(
-        answer_md=answer_md,
-        refs=[RefOut(**r) for r in _refs_json(ctx.refs)],
-        passages=[PassageOut(**p) for p in _passages_json(ctx.passages)],  # type: ignore[arg-type]
-    )
-
-
-def _cached_result(hit: CacheHit) -> QueryResult:
-    return QueryResult(
-        answer_md=hit.answer_md,
-        refs=[RefOut(**r) for r in hit.refs],  # type: ignore[arg-type]
-        passages=[PassageOut(**p) for p in hit.passages],  # type: ignore[arg-type]
-        stale=hit.stale,
-        cached=True,
-    )
-
-
-def _sse_cached(hit: CacheHit) -> AsyncIterator[str]:
-    async def gen() -> AsyncIterator[str]:
-        yield f"data: {json.dumps({'token': hit.answer_md}, ensure_ascii=False)}\n\n"
-        done = {
-            "status": "done",
-            "refs": hit.refs,
-            "passages": hit.passages,
-            "stale": hit.stale,
-            "cached": True,
-        }
-        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
-
-    return gen()
-
-
-def _sse_compute(
-    prepared: Prepared,
-    cache: QueryCacheService | None,
-    *,
-    domain_id: uuid.UUID,
-    question: str,
-    model: str,
-) -> AsyncIterator[str]:
-    async def gen() -> AsyncIterator[str]:
-        tokens: list[str] = []
-        if prepared.messages is None:
-            yield f"data: {json.dumps({'token': DONT_KNOW}, ensure_ascii=False)}\n\n"
-        else:
-            async for tok in prepared.chat.stream(prepared.messages):
-                tokens.append(tok)
-                yield f"data: {json.dumps({'token': tok}, ensure_ascii=False)}\n\n"
-        done = {
-            "status": "done",
-            "refs": _refs_json(prepared.ctx.refs),
-            "passages": _passages_json(prepared.ctx.passages),
-            "stale": False,
-            "cached": False,
-        }
-        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
-        if cache is not None and prepared.ctx.refs and tokens:
-            await cache.upsert(
-                domain_id=domain_id, question=question, answer_md="".join(tokens),
-                refs=prepared.ctx.refs, passages=prepared.ctx.passages, model=model,
-            )
-
-    return gen()
-
-
-@router.get(
-    "/domains/{domain_id}/suggest",
-    dependencies=[Depends(require_role("admin", "editor", "viewer"))],
-)
-async def suggest_domain(
-    domain_id: uuid.UUID,
-    q: str = "",
-    session: AsyncSession = Depends(db),
-) -> SuggestResult:
-    svc = QueryCacheService(session)
-    cfg = await svc.config(domain_id)
-    sugg = await svc.suggest(domain_id=domain_id, q=q, top_k=cfg.suggest_top_k)
-    return SuggestResult(suggestions=sugg)
-
-
-@router.post(
-    "/domains/{domain_id}/query",
-    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor", "viewer"))],
-)
-async def query_domain(
-    domain_id: uuid.UUID,
-    body: QueryRequest,
-    request: Request,
-    refresh: int = 0,
-    session: AsyncSession = Depends(db),
-) -> object:
-    qsvc = QueryService(session).with_redis(get_redis())
-    csvc = QueryCacheService(session).with_redis(get_redis())
-    cfg = await csvc.config(domain_id)
-    wants_sse = "text/event-stream" in request.headers.get("accept", "")
-
-    if cfg.enabled and not refresh:
-        hit = await csvc.lookup(domain_id=domain_id, question=body.q, cfg=cfg)
-        if hit is not None:
-            await csvc.touch(hit.id)
-            if wants_sse:
-                return StreamingResponse(_sse_cached(hit), media_type="text/event-stream")
-            return _cached_result(hit)
-
-    prepared = await qsvc.prepare(domain_id=domain_id, question=body.q)  # raises 404/422
-    model = str(getattr(prepared.chat, "chat_model", ""))
-    if wants_sse:
-        cache = csvc if cfg.enabled else None
-        return StreamingResponse(
-            _sse_compute(prepared, cache, domain_id=domain_id, question=body.q, model=model),
-            media_type="text/event-stream",
-        )
-    answer = await qsvc.complete(prepared)
-    if cfg.enabled and prepared.ctx.refs:
-        await csvc.upsert(
-            domain_id=domain_id, question=body.q, answer_md=answer.answer_md,
-            refs=prepared.ctx.refs, passages=prepared.ctx.passages, model=model,
-        )
-    return _to_result(answer.answer_md, prepared.ctx)
-```
-
-> Both `query_domain` and `suggest_domain` are mounted under `/api/v1` (see `main.py`), giving `/api/v1/domains/{id}/query` and `/api/v1/domains/{id}/suggest`. `suggest` is a GET, so `require_csrf` is not applied (and would be exempt anyway).
-
-- [ ] **Step 6: Run the API tests**
-
-Run: `uv run pytest tests/api/test_query_cache_api.py tests/api/test_suggest_api.py tests/api/test_query_api.py -q`
-Expected: PASS. Cache hit/miss + `?refresh=1` prove acceptance #1, #4 (refresh half), #5.
-
-- [ ] **Step 7: Lint + typecheck**
-
-Run: `uv run ruff check src tests/api && uv run mypy src`
-Expected: clean.
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add src/paw/api/routers/query.py tests/api/test_query_cache_api.py tests/api/test_suggest_api.py tests/api/test_query_api.py
-git commit -m "feat(api): query-cache lookup/upsert, ?refresh=1, /suggest endpoint"
-```
-
----
-
-## Task 9: Web UI — suggestions dropdown + stale badge + Refresh
-
-**Files:**
-- Modify: `src/paw/api/web/routes.py`, `src/paw/api/web/templates/query.html`, `src/paw/api/web/templates/_query_result.html`
-- Create: `src/paw/api/web/templates/_suggestions.html`
-- Test: `tests/api/test_query_cache_web.py` (create)
-
-- [ ] **Step 1: Write the failing web test**
-
-Create `tests/api/test_query_cache_web.py`:
-
-```python
-import pytest
-from httpx import ASGITransport, AsyncClient
-from tests.stubs import StubChatProvider
-
-import paw.services.query as query_mod
-import paw.services.query_cache as cache_mod
-from paw.db.managed import ensure_embedding_column, ensure_query_cache_embedding_column
-from paw.db.repos.articles import ArticleRepo
-from paw.db.repos.domains import DomainRepo
-from paw.db.repos.query_cache import QueryCacheRepo
-from paw.db.repos.users import UserRepo
-from paw.ingest.chunking import ChunkSpec
-from paw.main import create_app
-from paw.security.passwords import hash_password
-from paw.security.secrets import SecretBox
-from paw.services.provider_settings import ProviderSettingsService
-from paw.vector.embed import embed_and_write
-
-_FERNET = "k" * 43 + "="
-
-
-class FixedEmbed:
-    def __init__(self, default): self.default = default
-    async def embed(self, texts, *, model=None): return [self.default for _ in texts]
-
-
-@pytest.fixture
-async def client(db_session, wired_settings, monkeypatch):
-    await UserRepo(db_session).create(
-        email="a@b.c", pw_hash=hash_password("pw12345"), role="admin"
-    )
-    box = SecretBox(_FERNET)
-    await ProviderSettingsService(db_session, box=box).persist_provider(
-        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=4, api_key="k"
-    )
-    dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
-    art = await ArticleRepo(db_session).create(
-        domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:a", summary="s"
-    )
-    await ensure_embedding_column(db_session, 4)
-    emb = FixedEmbed([1.0, 0.0, 0.0, 0.0])
-    await embed_and_write(
-        db_session, article_id=art.id, domain_id=dom.id,
-        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable")],
-        embedder=emb,
-    )
-    await db_session.commit()
-    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
-    monkeypatch.setattr(cache_mod, "build_embedding_provider", lambda pc, b: emb)
-    monkeypatch.setattr(
-        query_mod, "build_chat_provider",
-        lambda pc, b: StubChatProvider(script=[StubChatProvider.text("**reliable** means [tcp]")]),
-    )
-    app = create_app()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
-        await c.post("/api/v1/auth/login", json={"email": "a@b.c", "password": "pw12345"})
-        c._dom = dom  # type: ignore[attr-defined]
-        c._art = art  # type: ignore[attr-defined]
-        c._csrf = c.cookies.get("paw_csrf", "")  # type: ignore[attr-defined]
-        yield c
-
-
-async def test_query_page_has_suggestions_wiring(client):
-    r = await client.get(f"/domains/{client._dom.id}/query")
-    assert r.status_code == 200
-    assert "/suggest" in r.text and "keyup changed delay:300ms" in r.text
-
-
-async def test_web_query_then_stale_badge_and_refresh(client, db_session):
-    url = f"/domains/{client._dom.id}/query"
-    h = {"x-csrf-token": client._csrf}
-    # first query -> live answer, no stale badge
-    r1 = await client.post(url, data={"q": "what is reliable?"}, headers=h)
-    assert "<strong>reliable</strong>" in r1.text
-    assert "may be outdated" not in r1.text
-    # mark the cached entry stale (simulating an article edit on the dependency)
-    from paw.services.cache_seam import mark_cache_stale
-    await mark_cache_stale(db_session, domain_id=client._dom.id, article_ids=[client._art.id])
-    await db_session.commit()
-    # second identical query -> served from cache, now flagged + Refresh present
-    r2 = await client.post(url, data={"q": "what is reliable?"}, headers=h)
-    assert "may be outdated" in r2.text
-    assert "refresh=1" in r2.text
-
-
-async def test_web_suggest_returns_fragment(client, db_session):
-    repo = QueryCacheRepo(db_session)
-    await ensure_query_cache_embedding_column(db_session, 4)
-    cid = await repo.upsert(
-        domain_id=client._dom.id, query_norm="tcp handshake", answer_md="A", refs=[],
-        passages=[], model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await repo.touch(cache_id=cid)
-    await db_session.commit()
-    r = await client.get(f"/domains/{client._dom.id}/suggest", params={"q": "tcp"})
-    assert r.status_code == 200
-    assert "tcp handshake" in r.text
-```
-
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `uv run pytest tests/api/test_query_cache_web.py -q`
-Expected: FAIL — no `/suggest` web route, no stale badge.
-
-- [ ] **Step 3: Update `query.html`**
-
-Replace `src/paw/api/web/templates/query.html` with:
-
-```html
-{% extends "base.html" %}
-{% block title %}Query · {{ domain.name }}{% endblock %}
-{% block sidebar %}<h3>{{ domain.name }}</h3>{% endblock %}
-{% block content %}
-<h1>🔍 Query · {{ domain.name }}</h1>
-<form hx-post="/domains/{{ domain.id }}/query"
-      hx-headers='{"x-csrf-token": "{{ csrf }}"}'
-      hx-target="#query-result" hx-swap="innerHTML">
-  <input type="text" name="q" placeholder="Ask a question…" autocomplete="off" required
-         hx-get="/domains/{{ domain.id }}/suggest"
-         hx-trigger="keyup changed delay:300ms"
-         hx-target="#suggestions" hx-swap="innerHTML">
-  <button type="submit">Ask</button>
-</form>
-<div id="suggestions" class="suggestions"></div>
-<section id="query-result" class="query-result"></section>
-{% endblock %}
-```
-
-- [ ] **Step 4: Create `_suggestions.html`**
+- [ ] **Step 8: Add the web suggest route + partial**
 
 Create `src/paw/api/web/templates/_suggestions.html`:
 
 ```html
 {% if suggestions %}
-<ul class="suggestion-list">
+<ul class="suggest" role="listbox">
   {% for s in suggestions %}
-  <li>
-    <form hx-post="/domains/{{ domain.id }}/query"
-          hx-headers='{"x-csrf-token": "{{ csrf }}"}'
-          hx-target="#query-result" hx-swap="innerHTML">
-      <input type="hidden" name="q" value="{{ s }}">
-      <button type="submit" class="suggestion">{{ s }}</button>
-    </form>
-  </li>
+  <li><button type="button" class="suggest-item"
+      onclick="document.getElementById('query-input').value = this.textContent.trim()">{{ s }}</button></li>
   {% endfor %}
 </ul>
 {% endif %}
 ```
 
-> A hidden input (not `hx-vals`) carries the suggestion text so quotes/special chars are HTML-attribute-escaped by Jinja and submitted intact. Clicking a suggestion runs that query — the FAQ effect.
-
-- [ ] **Step 5: Update `_query_result.html`**
-
-Replace `src/paw/api/web/templates/_query_result.html` with:
-
-```html
-{% if cached and stale %}
-<div class="stale-badge" role="status">
-  ⚠️ This answer may be outdated.
-  <form hx-post="/domains/{{ domain_id }}/query?refresh=1"
-        hx-headers='{"x-csrf-token": "{{ csrf }}"}'
-        hx-target="#query-result" hx-swap="innerHTML">
-    <input type="hidden" name="q" value="{{ question }}">
-    <button type="submit">Refresh</button>
-  </form>
-</div>
-{% endif %}
-<article class="answer">{{ answer_html | safe }}</article>
-{% if refs %}
-<div class="chips">
-  {% for r in refs %}<a class="chip" href="/articles/{{ r.article_id }}">{{ r.slug }}</a>{% endfor %}
-</div>
-{% endif %}
-{% if passages %}
-<details class="passages"><summary>{{ passages | length }} passages</summary>
-  <ul>{% for p in passages %}<li>{{ p.slug }}{% if p.heading_path %} › {{ p.heading_path }}{% endif %}</li>{% endfor %}</ul>
-</details>
-{% endif %}
-```
-
-> `r.slug` / `p.heading_path` work for both `Ref`/`Passage` dataclasses (live answer) and plain dicts (cached) — Jinja falls back to item access.
-
-- [ ] **Step 6: Update the web routes**
-
-In `src/paw/api/web/routes.py`:
-
-(a) Add imports near the existing service imports:
+In `src/paw/api/web/routes.py`, extend the `paw.api.deps` import to include `get_redis`, and add the imports:
 
 ```python
-from paw.api.deps import get_redis
-from paw.services.query_cache import QueryCacheService
-```
-(`get_redis` is in `paw.api.deps`; add it to the existing `from paw.api.deps import (...)` block instead of a second import if you prefer — either works.)
-
-(b) Add `csrf` to the `query_page` template context so the suggestions/refresh mini-forms can post. It already passes `csrf`; confirm the existing `query_page` returns `{"domain": domain, "csrf": csrf}` (it does — no change needed).
-
-(c) Replace the `web_query` handler with:
-
-```python
-@router.post("/domains/{domain_id}/query", response_class=HTMLResponse)
-async def web_query(
-    domain_id: uuid.UUID,
-    request: Request,
-    q: str = Form(...),
-    refresh: int = 0,
-    session: AsyncSession = Depends(db),
-    _: None = Depends(require_csrf),
-    __: User = Depends(require_role("admin", "editor", "viewer")),
-) -> Response:
-    csrf = request.cookies.get(CSRF_COOKIE, "")
-    csvc = QueryCacheService(session).with_redis(get_redis())
-    qsvc = QueryService(session).with_redis(get_redis())
-    cfg = await csvc.config(domain_id)
-
-    if cfg.enabled and not refresh:
-        hit = await csvc.lookup(domain_id=domain_id, question=q, cfg=cfg)
-        if hit is not None:
-            await csvc.touch(hit.id)
-            return templates.TemplateResponse(
-                request,
-                "_query_result.html",
-                {
-                    "answer_html": render_markdown(hit.answer_md),
-                    "refs": hit.refs,
-                    "passages": hit.passages,
-                    "cached": True,
-                    "stale": hit.stale,
-                    "domain_id": domain_id,
-                    "question": q,
-                    "csrf": csrf,
-                },
-            )
-
-    answer = await qsvc.answer(domain_id=domain_id, question=q)
-    if cfg.enabled and answer.refs:
-        await csvc.upsert(
-            domain_id=domain_id, question=q, answer_md=answer.answer_md,
-            refs=answer.refs, passages=answer.passages, model="",
-        )
-    return templates.TemplateResponse(
-        request,
-        "_query_result.html",
-        {
-            "answer_html": render_markdown(answer.answer_md),
-            "refs": answer.refs,
-            "passages": answer.passages,
-            "cached": False,
-            "stale": False,
-            "domain_id": domain_id,
-            "question": q,
-            "csrf": csrf,
-        },
-    )
+from paw.db.repos.query_cache import QueryCacheRepo
+from paw.services.provider_settings import ProviderSettingsService
 ```
 
-(d) Add the web suggest route right after `web_query`:
+Add the route near `query_page`:
 
 ```python
 @router.get("/domains/{domain_id}/suggest", response_class=HTMLResponse)
@@ -2212,304 +2010,509 @@ async def web_suggest(
 ) -> Response:
     if not await _current_uid(request, store):
         return HTMLResponse("")
-    domain = await DomainRepo(session).get(domain_id)
-    csrf = request.cookies.get(CSRF_COOKIE, "")
-    svc = QueryCacheService(session)
-    cfg = await svc.config(domain_id)
-    suggestions = await svc.suggest(domain_id=domain_id, q=q, top_k=cfg.suggest_top_k)
+    suggestions: list[str] = []
+    if q.strip():
+        cfg = await ProviderSettingsService(session).get_query_cache()
+        rows = await QueryCacheRepo(session).suggest(domain_id, q, cfg.suggest_top_k)
+        suggestions = [norm for norm, _ in rows]
     return templates.TemplateResponse(
-        request,
-        "_suggestions.html",
-        {"domain": domain, "suggestions": suggestions, "csrf": csrf},
+        request, "_suggestions.html", {"suggestions": suggestions}
     )
 ```
 
-- [ ] **Step 7: Run the web tests**
+- [ ] **Step 9: Run the web test to verify it passes**
 
-Run: `uv run pytest tests/api/test_query_cache_web.py -q`
-Expected: PASS (3 passed). Proves the stale-badge half of acceptance #4 and the web side of #5.
-
-- [ ] **Step 8: Run the existing web query tests for no regression**
-
-Run: `uv run pytest tests/api/test_query_web.py -q`
-Expected: PASS (2 passed) — sanitized answer + source chip still render.
-
-- [ ] **Step 9: Lint + typecheck**
-
-Run: `uv run ruff check src tests/api && uv run mypy src`
+Run: `uv run pytest tests/api/test_suggest_web.py -q`
+Expected: PASS (2 passed).
+Run: `uv run ruff check src tests && uv run mypy src`
 Expected: clean.
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add src/paw/api/web/routes.py src/paw/api/web/templates/query.html src/paw/api/web/templates/_query_result.html src/paw/api/web/templates/_suggestions.html tests/api/test_query_cache_web.py
-git commit -m "feat(web): suggestions dropdown + stale badge + Refresh on Query screen"
+git add src/paw/db/repos/query_cache.py src/paw/api/routers/query.py src/paw/api/web/routes.py src/paw/api/web/templates/_suggestions.html tests/api/test_suggest_api.py tests/api/test_suggest_web.py
+git commit -m "feat(cache): suggestions — repo.suggest + /suggest API + web dropdown endpoint"
 ```
 
 ---
 
-## Task 10: Dim-change tie-in — clear/rebuild the query-cache embedding
+### Task 10: Web query — cache-aware result with stale badge, Refresh, suggestions dropdown
 
 **Files:**
-- Modify: `src/paw/services/provider_settings.py` (`update_provider`)
-- Test: `tests/integration/test_query_cache_dim_change.py` (create)
+- Modify: `src/paw/api/web/routes.py`
+- Modify: `src/paw/api/web/templates/query.html`
+- Modify: `src/paw/api/web/templates/_query_result.html`
+- Test: `tests/api/test_query_cache_web.py`
+
+**Interfaces:**
+- Consumes: `QueryService.answer_cached`; `get_redis`; `_suggestions.html` (Task 9).
+- Produces:
+  - `web_query` serves from cache and passes `stale`, `q`, `domain_id`, `csrf` to the result partial; accepts a `refresh` form field.
+  - `_query_result.html` renders a "may be outdated" badge + Refresh form when `stale`.
+  - `query.html` wires the as-you-type suggestions dropdown (`hx-get .../suggest`, 300ms delay).
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/integration/test_query_cache_dim_change.py`:
+Create `tests/api/test_query_cache_web.py`:
 
 ```python
+import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from paw.db.managed import ensure_query_cache_embedding_column, query_cache_embedding_dim
-from paw.db.repos.query_cache import QueryCacheRepo
-from paw.db.repos.domains import DomainRepo
-from paw.security.secrets import SecretBox
-from paw.services.provider_settings import ProviderSettingsService
-
-_FERNET = "k" * 43 + "="
-
-
-async def test_dim_change_clears_and_rebuilds_query_cache(db_session):
-    box = SecretBox(_FERNET)
-    psvc = ProviderSettingsService(db_session, box=box)
-    # initial provider at dim 4 + a cache row at dim 4
-    await psvc.set_provider(
-        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=4, api_key="k"
-    )
-    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
-    await ensure_query_cache_embedding_column(db_session, 4)
-    await QueryCacheRepo(db_session).upsert(
-        domain_id=dom.id, query_norm="q", answer_md="A", refs=[], passages=[],
-        model="m", prompt_version="1", query_vector=[1.0, 0.0, 0.0, 0.0],
-    )
-    await db_session.commit()
-    assert await query_cache_embedding_dim(db_session) == 4
-
-    # change dim -> chunks rebuild + cache cleared & rebuilt at the new dim
-    await psvc.update_provider(
-        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=8, api_key="k"
-    )
-    assert await query_cache_embedding_dim(db_session) == 8
-    remaining = (await db_session.execute(text("SELECT count(*) FROM query_cache"))).scalar_one()
-    assert remaining == 0  # stale-dim answers cleared
-```
-
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `uv run pytest tests/integration/test_query_cache_dim_change.py -q`
-Expected: FAIL — after the dim change the cache row is still present and/or the column dim is still 4.
-
-- [ ] **Step 3: Hook the cache rebuild into `update_provider`**
-
-In `src/paw/services/provider_settings.py`:
-
-(a) Add `rebuild_query_cache_embedding_column` to the `from paw.db.managed import ...` line:
-
-```python
-from paw.db.managed import (
-    ensure_embedding_column,
-    rebuild_embedding_column,
-    rebuild_query_cache_embedding_column,
-)
-```
-
-(b) In `update_provider`, inside the existing dim-change branch, add the cache rebuild right after the chunk rebuild:
-
-```python
-        if current is not None and current != embedding_dim:
-            await rebuild_embedding_column(self._s, embedding_dim)
-            await rebuild_query_cache_embedding_column(self._s, embedding_dim)
-            await self.bump_embedding_version()
-        else:
-            await ensure_embedding_column(self._s, embedding_dim)
-```
-
-> `rebuild_query_cache_embedding_column` truncates `query_cache` (cascading to `query_cache_articles`) and re-adds `query_embedding vector(dim)` + HNSW — the cache is an optimization, so clearing it on a dim change is safe and keeps it dim-locked like `chunks.embedding`. The table always exists post-migration, so this is safe even when the cache was never populated.
-
-- [ ] **Step 4: Run the test**
-
-Run: `uv run pytest tests/integration/test_query_cache_dim_change.py -q`
-Expected: PASS. Addresses the spec risk note (dim change reindexes/clears the cache).
-
-- [ ] **Step 5: Confirm no regression in the existing provider-settings tests**
-
-Run: `uv run pytest tests/integration/test_provider_settings.py tests/integration/test_reindex.py -q`
-Expected: PASS.
-
-- [ ] **Step 6: Lint + typecheck**
-
-Run: `uv run ruff check src tests/integration/test_query_cache_dim_change.py && uv run mypy src`
-Expected: clean.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add src/paw/services/provider_settings.py tests/integration/test_query_cache_dim_change.py
-git commit -m "feat(cache): clear+rebuild query_cache embedding on provider dim change"
-```
-
----
-
-## Task 11: E2E — query → cached → edit cited article → stale → refresh → fresh
-
-**Files:**
-- Test: `tests/e2e/test_query_cache_e2e.py` (create)
-
-This task adds no production code — it is the end-to-end proof of acceptance #1, #3, #4 in one flow, exercising the real services together.
-
-- [ ] **Step 1: Write the E2E test**
-
-Create `tests/e2e/test_query_cache_e2e.py`:
-
-```python
-from tests.stubs import StubChatProvider
-
 import paw.services.query as query_mod
-import paw.services.query_cache as cache_mod
 from paw.db.managed import ensure_embedding_column
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.domains import DomainRepo
-from paw.harness.ops.fix import apply_fix, FixProposal
-from paw.harness.ops.lint import LintIssue
+from paw.db.repos.users import UserRepo
 from paw.ingest.chunking import ChunkSpec
-from paw.providers.config import WikiConfig
+from paw.main import create_app
+from paw.security.passwords import hash_password
 from paw.security.secrets import SecretBox
 from paw.services.provider_settings import ProviderSettingsService
-from paw.services.query import QueryService
-from paw.services.query_cache import QueryCacheService
 from paw.vector.embed import embed_and_write
+from tests.stubs import StubChatProvider, StubEmbeddingProvider
 
 _FERNET = "k" * 43 + "="
 
 
-class FixedEmbed:
-    def __init__(self, default): self.default = default
-    async def embed(self, texts, *, model=None): return [self.default for _ in texts]
-
-
-async def test_query_cached_then_edit_marks_stale_then_refresh(db_session, monkeypatch):
+@pytest.fixture
+async def client(db_session, wired_settings, monkeypatch):
+    await UserRepo(db_session).create(
+        email="admin@example.com", pw_hash=hash_password("pw12345"), role="admin"
+    )
     box = SecretBox(_FERNET)
     await ProviderSettingsService(db_session, box=box).persist_provider(
-        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=4, api_key="k"
+        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=8, api_key="k"
     )
     dom = await DomainRepo(db_session).create(name="net", source_prefix="s", wiki_prefix="w")
     art = await ArticleRepo(db_session).create(
         domain_id=dom.id, slug="tcp", title="TCP", storage_ref="b:a", summary="s"
     )
-    await ensure_embedding_column(db_session, 4)
-    emb = FixedEmbed([1.0, 0.0, 0.0, 0.0])
+    await ensure_embedding_column(db_session, 8)
+    emb = StubEmbeddingProvider(dim=8)
     await embed_and_write(
         db_session, article_id=art.id, domain_id=dom.id,
-        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable")],
+        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable delivery")],
         embedder=emb,
     )
     await db_session.commit()
-    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
-    monkeypatch.setattr(cache_mod, "build_embedding_provider", lambda pc, b: emb)
-
-    answers = iter(["v1 reliable [tcp]", "v2 reliable [tcp]"])
-
-    def chat(pc, b):
-        return StubChatProvider(script=[StubChatProvider.text(next(answers))])
-
-    monkeypatch.setattr(query_mod, "build_chat_provider", chat)
-
-    qsvc = QueryService(db_session, fernet_key=_FERNET)
-    csvc = QueryCacheService(db_session, fernet_key=_FERNET)
-    cfg = await csvc.config(dom.id)
-    Q = "is tcp reliable?"
-
-    # 1) MISS -> compute v1 -> upsert (with art dependency)
-    a1 = await qsvc.answer(domain_id=dom.id, question=Q)
-    await csvc.upsert(domain_id=dom.id, question=Q, answer_md=a1.answer_md,
-                      refs=a1.refs, passages=a1.passages, model="m")
-    assert a1.answer_md == "v1 reliable [tcp]"
-
-    # 2) HIT (fresh) -> cached v1, no LLM
-    hit = await csvc.lookup(domain_id=dom.id, question=Q, cfg=cfg)
-    assert hit is not None and hit.answer_md == "v1 reliable [tcp]" and hit.stale is False
-
-    # 3) edit the cited article via the fix op (uses the real seam) -> entry goes stale
-    fix_chat = StubChatProvider(script=[StubChatProvider.text("ignored")])
-    await apply_fix(
-        db_session, domain_id=dom.id,
-        issue=LintIssue(id="i1", kind="thin", target_slug="tcp", detail="d", fix="f"),
-        proposal=FixProposal(markdown="## TCP\nNow with more detail.", summary="s"),
-        cfg=WikiConfig(), author_id=None,
+    monkeypatch.setattr(
+        query_mod, "build_chat_provider",
+        lambda pc, b: StubChatProvider(responder=lambda m, t: StubChatProvider.text("reliable [tcp]")),
     )
-    await db_session.commit()
-    stale_hit = await csvc.lookup(domain_id=dom.id, question=Q, cfg=cfg)
-    assert stale_hit is not None and stale_hit.stale is True
-    assert stale_hit.answer_md == "v1 reliable [tcp]"  # still served, just flagged
+    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://t") as c:
+        await c.post("/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"})
+        c._dom = dom  # type: ignore[attr-defined]
+        c._csrf = c.cookies.get("paw_csrf", "")  # type: ignore[attr-defined]
+        yield c
 
-    # 4) refresh -> recompute v2 -> upsert clears stale
-    a2 = await qsvc.answer(domain_id=dom.id, question=Q)
-    await csvc.upsert(domain_id=dom.id, question=Q, answer_md=a2.answer_md,
-                      refs=a2.refs, passages=a2.passages, model="m")
-    fresh = await csvc.lookup(domain_id=dom.id, question=Q, cfg=cfg)
-    assert fresh is not None and fresh.answer_md == "v2 reliable [tcp]" and fresh.stale is False
+
+async def test_web_query_stale_badge_and_refresh(client, db_session):
+    url = f"/domains/{client._dom.id}/query"
+    h = {"x-csrf-token": client._csrf}
+    fresh = await client.post(url, data={"q": "what is reliable?"}, headers=h)
+    assert "may be outdated" not in fresh.text
+
+    await db_session.execute(text("UPDATE query_cache SET stale = true"))
+    await db_session.commit()
+
+    stale = await client.post(url, data={"q": "what is reliable?"}, headers=h)
+    assert "may be outdated" in stale.text
+    assert "Refresh" in stale.text
+    assert 'name="refresh"' in stale.text
+
+
+async def test_query_page_has_suggest_wiring(client):
+    r = await client.get(f"/domains/{client._dom.id}/query")
+    assert "/suggest" in r.text
+    assert "query-input" in r.text
 ```
 
-> `apply_fix`'s signature is `apply_fix(session, *, domain_id, issue, proposal, cfg, author_id)` and `LintIssue` carries `id, kind, target_slug, detail, fix` — confirm against `harness/ops/fix.py` and `harness/ops/lint.py` before running; adjust kwargs if the local `LintIssue` constructor differs.
+- [ ] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 2: Run the E2E test**
+Run: `uv run pytest tests/api/test_query_cache_web.py -q`
+Expected: FAIL — `"may be outdated"` absent (result partial has no badge), and `/suggest` absent from the query page.
+
+- [ ] **Step 3: Make web_query cache-aware**
+
+In `src/paw/api/web/routes.py`, replace the `web_query` handler with:
+
+```python
+@router.post("/domains/{domain_id}/query", response_class=HTMLResponse)
+async def web_query(
+    domain_id: uuid.UUID,
+    request: Request,
+    q: str = Form(...),
+    refresh: str = Form(""),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor", "viewer")),
+) -> Response:
+    res = await QueryService(session).with_redis(get_redis()).answer_cached(
+        domain_id=domain_id, question=q, refresh=bool(refresh)
+    )
+    return templates.TemplateResponse(
+        request,
+        "_query_result.html",
+        {
+            "answer_html": render_markdown(res.answer_md),
+            "refs": res.refs,
+            "passages": res.passages,
+            "stale": res.stale,
+            "q": q,
+            "domain_id": domain_id,
+            "csrf": request.cookies.get(CSRF_COOKIE, ""),
+        },
+    )
+```
+
+(`get_redis` is now imported in this module from Task 9. `CSRF_COOKIE` and `render_markdown` are already imported.)
+
+- [ ] **Step 4: Add the stale badge + Refresh to the result partial**
+
+Replace `src/paw/api/web/templates/_query_result.html` with:
+
+```html
+<article class="answer">{{ answer_html | safe }}</article>
+{% if stale %}
+<div class="stale-badge" role="status">
+  ⚠ This answer may be outdated.
+  <form hx-post="/domains/{{ domain_id }}/query"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+        hx-target="#query-result" hx-swap="innerHTML" style="display:inline">
+    <input type="hidden" name="q" value="{{ q }}">
+    <input type="hidden" name="refresh" value="1">
+    <button type="submit">Refresh</button>
+  </form>
+</div>
+{% endif %}
+{% if refs %}
+<div class="chips">
+  {% for r in refs %}<a class="chip" href="/articles/{{ r.article_id }}">{{ r.slug }}</a>{% endfor %}
+</div>
+{% endif %}
+{% if passages %}
+<details class="passages"><summary>{{ passages | length }} passages</summary>
+  <ul>{% for p in passages %}<li>{{ p.slug }}{% if p.heading_path %} › {{ p.heading_path }}{% endif %}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+```
+
+- [ ] **Step 5: Wire the suggestions dropdown on the query page**
+
+Replace `src/paw/api/web/templates/query.html` with:
+
+```html
+{% extends "base.html" %}
+{% block title %}Query · {{ domain.name }}{% endblock %}
+{% block sidebar %}<h3>{{ domain.name }}</h3>{% endblock %}
+{% block content %}
+<h1>🔍 Query · {{ domain.name }}</h1>
+<form hx-post="/domains/{{ domain.id }}/query"
+      hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+      hx-target="#query-result" hx-swap="innerHTML">
+  <input id="query-input" type="text" name="q" placeholder="Ask a question…" autocomplete="off" required
+         hx-get="/domains/{{ domain.id }}/suggest"
+         hx-trigger="keyup changed delay:300ms"
+         hx-target="#suggest-box" hx-swap="innerHTML">
+  <div id="suggest-box"></div>
+  <button type="submit">Ask</button>
+</form>
+<section id="query-result" class="query-result"></section>
+{% endblock %}
+```
+
+- [ ] **Step 6: Run the web test to verify it passes**
+
+Run: `uv run pytest tests/api/test_query_cache_web.py -q`
+Expected: PASS (2 passed).
+
+- [ ] **Step 7: Run the existing query web tests (no regression)**
+
+Run: `uv run pytest tests/api/test_query_web.py -q`
+Expected: PASS (the result partial still renders answer/refs/passages; the new `{% if stale %}` block is skipped when `stale` is falsy/absent).
+Run: `uv run ruff check src tests && uv run mypy src`
+Expected: clean.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/paw/api/web/routes.py src/paw/api/web/templates/query.html src/paw/api/web/templates/_query_result.html tests/api/test_query_cache_web.py
+git commit -m "feat(web): cache-aware query — stale badge + Refresh + as-you-type suggestions"
+```
+
+---
+
+### Task 11: GC — TTL cleanup of expired cache entries
+
+**Files:**
+- Modify: `src/paw/db/repos/query_cache.py`
+- Modify: `src/paw/jobs/tasks.py`
+- Test: `tests/integration/test_query_cache_gc.py`
+
+**Interfaces:**
+- Consumes: `QueryCacheRepo`; `get_query_cache().ttl`; existing `gc_housekeeping`.
+- Produces:
+  - `QueryCacheRepo.delete_expired(*, ttl_seconds: int) -> int` — deletes entries whose `COALESCE(last_hit_at, created_at)` is older than `ttl_seconds`.
+  - `gc_housekeeping` also runs cache TTL cleanup (return string `"gc:{pruned}"` is unchanged).
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/integration/test_query_cache_gc.py`:
+
+```python
+from sqlalchemy import text
+
+from paw.db.managed import ensure_embedding_column
+from paw.db.repos.domains import DomainRepo
+from paw.db.repos.query_cache import QueryCacheRepo
+from paw.jobs.tasks import gc_housekeeping
+
+
+async def test_gc_deletes_expired_keeps_fresh(db_session, wired_settings):
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    await ensure_embedding_column(db_session, 8)
+    repo = QueryCacheRepo(db_session)
+    old = await repo.upsert(
+        domain_id=dom.id, query_norm="old", query_vector=[0.1] * 8, answer_md="A",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
+    fresh = await repo.upsert(
+        domain_id=dom.id, query_norm="fresh", query_vector=[0.2] * 8, answer_md="B",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
+    # Age the 'old' entry well past the 14-day default TTL.
+    await db_session.execute(
+        text("UPDATE query_cache SET last_hit_at = now() - interval '30 days', "
+             "created_at = now() - interval '30 days' WHERE id = :i"),
+        {"i": str(old)},
+    )
+    await db_session.commit()
+
+    await gc_housekeeping({})
+
+    remaining = set(
+        str(i) for i in (await db_session.execute(text("SELECT id FROM query_cache"))).scalars()
+    )
+    assert str(old) not in remaining
+    assert str(fresh) in remaining
+
+
+async def test_delete_expired_returns_count(db_session, wired_settings):
+    dom = await DomainRepo(db_session).create(name="d2", source_prefix="s", wiki_prefix="w")
+    await ensure_embedding_column(db_session, 8)
+    repo = QueryCacheRepo(db_session)
+    cid = await repo.upsert(
+        domain_id=dom.id, query_norm="q", query_vector=[0.3] * 8, answer_md="A",
+        refs=[], passages=[], model="m", prompt_version="v1", article_deps=[],
+    )
+    await db_session.execute(
+        text("UPDATE query_cache SET created_at = now() - interval '40 days', last_hit_at = NULL "
+             "WHERE id = :i"),
+        {"i": str(cid)},
+    )
+    await db_session.commit()
+    n = await repo.delete_expired(ttl_seconds=1_209_600)
+    assert n == 1
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `uv run pytest tests/integration/test_query_cache_gc.py -q`
+Expected: FAIL — `gc_housekeeping` does not delete cache rows (the `old` entry remains) and `delete_expired` does not exist.
+
+- [ ] **Step 3: Add delete_expired to the repo**
+
+In `src/paw/db/repos/query_cache.py`, add to `QueryCacheRepo`:
+
+```python
+    async def delete_expired(self, *, ttl_seconds: int) -> int:
+        res = await self._s.execute(
+            text(
+                "DELETE FROM query_cache "
+                "WHERE COALESCE(last_hit_at, created_at) < now() - make_interval(secs => :ttl)"
+            ),
+            {"ttl": ttl_seconds},
+        )
+        await self._s.flush()
+        return res.rowcount or 0
+```
+
+- [ ] **Step 4: Extend gc_housekeeping**
+
+In `src/paw/jobs/tasks.py`, inside `gc_housekeeping`, add the cache cleanup just before `await session.commit()` (after the user-pruning loop). Add `QueryCacheRepo` to the local imports at the top of the function:
+
+```python
+    from paw.db.repos.query_cache import QueryCacheRepo
+```
+
+Then, before `await session.commit()`:
+
+```python
+        qc_cfg = await ProviderSettingsService(session, box=box).get_query_cache()
+        await QueryCacheRepo(session).delete_expired(ttl_seconds=qc_cfg.ttl)
+```
+
+(`ProviderSettingsService` and `box` are already in scope in `gc_housekeeping`.)
+
+- [ ] **Step 5: Run the new test to verify it passes**
+
+Run: `uv run pytest tests/integration/test_query_cache_gc.py -q`
+Expected: PASS (2 passed).
+
+- [ ] **Step 6: Run the existing GC tests (no regression)**
+
+Run: `uv run pytest tests/integration/test_gc_housekeeping.py -q`
+Expected: PASS (return value `"gc:{pruned}"` unchanged; cache cleanup is additive and those tests create no cache rows).
+Run: `uv run ruff check src tests && uv run mypy src`
+Expected: clean.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/paw/db/repos/query_cache.py src/paw/jobs/tasks.py tests/integration/test_query_cache_gc.py
+git commit -m "feat(cache): gc_housekeeping prunes TTL-expired query_cache entries"
+```
+
+---
+
+### Task 12: E2E — query → cached → edit cited article → stale → refresh → fresh
+
+**Files:**
+- Test: `tests/e2e/test_query_cache_e2e.py`
+
+**Interfaces:**
+- Consumes: `QueryService.answer_cached`; `run_format_article` (calls the seam); `QueryCacheRepo`; stubs.
+- Produces: end-to-end coverage of acceptance criteria 1, 3, 4 (cache hit without LLM; edit marks stale; refresh recomputes + clears stale).
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/e2e/test_query_cache_e2e.py`:
+
+```python
+from sqlalchemy import text
+
+import paw.services.query as query_mod
+from paw.db.managed import ensure_embedding_column
+from paw.db.repos.articles import ArticleRepo
+from paw.db.repos.domains import DomainRepo
+from paw.harness.ops.format import run_format_article
+from paw.ingest.chunking import ChunkSpec
+from paw.providers.config import WikiConfig
+from paw.security.secrets import SecretBox
+from paw.services.provider_settings import ProviderSettingsService
+from paw.services.query import QueryService
+from paw.storage.postgres import PostgresStorage
+from paw.vector.embed import embed_and_write
+from tests.stubs import StubChatProvider, StubEmbeddingProvider
+
+_FERNET = "k" * 43 + "="
+
+
+async def test_query_cache_full_round_trip(db_session, monkeypatch):
+    box = SecretBox(_FERNET)
+    await ProviderSettingsService(db_session, box=box).persist_provider(
+        base_url="http://x", chat_model="m", embedding_model="e", embedding_dim=8, api_key="secret"
+    )
+    dom = await DomainRepo(db_session).create(name="d", source_prefix="s", wiki_prefix="w")
+    storage = PostgresStorage(db_session)
+    ref = await storage.put(b"# TCP\n\nTCP provides reliable delivery.", content_type="text/markdown")
+    art = await ArticleRepo(db_session).create(
+        domain_id=dom.id, slug="tcp", title="TCP", storage_ref=ref, summary="TCP summary"
+    )
+    await ensure_embedding_column(db_session, 8)
+    emb = StubEmbeddingProvider(dim=8)
+    await embed_and_write(
+        db_session, article_id=art.id, domain_id=dom.id,
+        specs=[ChunkSpec(kind="section", ord=1, heading_path="R", text="TCP reliable delivery")],
+        embedder=emb,
+    )
+    await db_session.commit()
+
+    chat = StubChatProvider(responder=lambda m, t: StubChatProvider.text("reliable means [tcp]"))
+    monkeypatch.setattr(query_mod, "build_chat_provider", lambda pc, b: chat)
+    monkeypatch.setattr(query_mod, "build_embedding_provider", lambda pc, b: emb)
+    svc = QueryService(db_session, fernet_key=_FERNET).with_redis(None)
+
+    # 1) miss -> caches
+    first = await svc.answer_cached(domain_id=dom.id, question="what is reliable?")
+    assert first.cached is False
+    n_after_first = len(chat.calls)
+
+    # 2) repeat -> served from cache, no LLM (acceptance 1)
+    second = await svc.answer_cached(domain_id=dom.id, question="what is reliable?")
+    assert second.cached is True and second.stale is False
+    assert len(chat.calls) == n_after_first
+
+    # 3) edit the cited article via Format -> seam marks the entry stale (acceptance 3)
+    fmt_chat = StubChatProvider(
+        responder=lambda m, t: StubChatProvider.text("# TCP\n\nTCP provides reliable delivery overall.")
+    )
+    ok = await run_format_article(
+        db_session, domain_id=dom.id, article=art,
+        entity_names=[], citation_quotes=[], chat=fmt_chat, cfg=WikiConfig(), author_id=None,
+    )
+    await db_session.commit()
+    assert ok is True
+    stale_flag = (await db_session.execute(text("SELECT bool_or(stale) FROM query_cache"))).scalar_one()
+    assert stale_flag is True
+
+    # 4) next read returns the cached answer flagged stale
+    third = await svc.answer_cached(domain_id=dom.id, question="what is reliable?")
+    assert third.cached is True and third.stale is True
+
+    # 5) Refresh recomputes + clears stale (acceptance 4)
+    refreshed = await svc.answer_cached(domain_id=dom.id, question="what is reliable?", refresh=True)
+    assert refreshed.cached is False and refreshed.stale is False
+    after_clear = (await db_session.execute(text("SELECT bool_or(stale) FROM query_cache"))).scalar_one()
+    assert after_clear is False
+```
+
+- [ ] **Step 2: Run it to verify it fails (then passes)**
 
 Run: `uv run pytest tests/e2e/test_query_cache_e2e.py -q`
-Expected: PASS. If `LintIssue`/`apply_fix` kwargs differ, fix the constructor call (read `harness/ops/lint.py` for the exact `LintIssue` fields) — the flow logic stays the same.
+Expected: With Tasks 1–11 implemented, this should PASS directly. If it FAILS, the failure pinpoints an integration gap (e.g. the seam not firing on Format, or refresh not clearing stale) — fix the responsible task's code, not the test.
 
-- [ ] **Step 3: Commit**
+If `PostgresStorage.put` has a different signature in this codebase, adjust the two storage lines to match `tests/e2e/test_maintenance_e2e.py`'s article-creation pattern (it plants an article + storage_ref the same way); keep the rest of the test identical.
+
+- [ ] **Step 3: Run the full suite + lint + types**
+
+Run: `uv run pytest -q`
+Expected: PASS (entire suite green, including the pre-existing layers).
+Run: `uv run ruff check . && uv run mypy src`
+Expected: clean.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add tests/e2e/test_query_cache_e2e.py
-git commit -m "test(e2e): query->cache->edit->stale->refresh->fresh"
+git commit -m "test(e2e): query -> cached -> edit cited article -> stale -> refresh -> fresh"
 ```
 
 ---
 
-## Task 12: Full-suite gate + docs
+## Self-Review
 
-**Files:** none (verification) · optionally docs if a `docs/wiki/` exists.
+**1. Spec coverage** (each spec section → task):
 
-- [ ] **Step 1: Run the entire suite (CI parity)**
+- DB `query_cache` + `query_cache_articles` (cols, unique, indexes, managed `vector(dim)`) → Tasks 2, 3.
+- Lookup: exact-norm fast-path, then semantic ANN ≥ `sim_threshold`; fresh hit returns `answer_md`+`refs` without LLM; miss → full path → upsert with deps → Tasks 5, 7.
+- Eager stale-marking via the Phase 2/6 seam, transactional, per `article_id`, on **all three** write ops (ingest/fix/format) → Task 6.
+- Stale handling: flag + Refresh (`?refresh=1` bypasses, recomputes, clears stale) → Tasks 7, 8, 10.
+- Suggestions `GET /suggest?q=` ranked by `hit_count` → Task 9 (API) + Task 10 (web dropdown).
+- GC TTL cleanup in `gc_housekeeping` → Task 11.
+- Web UI: suggestions dropdown (300ms) + stale badge + Refresh → Task 10.
+- Config `query_cache` block (`enabled`, `sim_threshold`, `ttl`, `suggest_top_k`), global + per-domain → Task 1 (+ per-domain override resolved in Task 7 `_resolve`).
+- Security: per-domain scoping on every query → Tasks 5, 7, 9; sanitized render → Task 10 (`render_markdown`).
+- Risk: dim change reindexes/clears cache → Task 3 (`rebuild` truncates query_cache). Stale-marking transactional → Task 6 (in the writers' commit boundary).
+- Acceptance criteria 1–6 → Tasks 7/8 (1, 2), 6 (3 — ingest/fix/format, with a re-ingest test) + 12 (3 — format leg), 8/12 (4), 9 (5), 11 (6).
+- Out-of-scope respected: chat never cached (untouched); scheduled GC cron not added (manual `gc_housekeeping` only); reranking not added.
 
-Run: `uv run ruff check . && uv run mypy src && uv run pytest -q`
-Expected: all three pass. This is exactly what CI runs.
+**2. Placeholder scan:** No "TBD"/"handle edge cases"/"similar to Task N" — every code/test step shows complete content. The only conditional instruction is Task 12 Step 2's fallback for `PostgresStorage.put`, which names the exact reference file to mirror.
 
-- [ ] **Step 2: Re-read the acceptance criteria against the suite**
+**3. Type consistency:** `QueryCacheRepo` methods (`upsert`, `get_exact`, `get_ann`, `touch_hit`, `mark_stale_for_articles`, `suggest`, `delete_expired`) are defined in Tasks 5/6/9/11 and consumed with matching signatures in Tasks 6/7/8/9/11. `CachedAnswer(answer_md, refs, passages, stale, cached)` defined in Task 7 and consumed identically in Tasks 8/10/12. `mark_articles_cache_stale(session, article_ids)` defined in Task 6 and called with `[art.id]` in fix/format. `QueryCacheConfig` fields (`enabled`, `sim_threshold`, `ttl`, `suggest_top_k`) consistent across Tasks 1/7/9/11. `Ref`/`Passage` (de)serialization round-trips through the repo's JSONB helpers.
 
-Confirm each spec acceptance criterion maps to a green test:
-
-1. Repeated identical query served from cache, 0 LLM calls → `test_query_cache_service.py::test_miss_then_exact_hit_skips_llm`, `test_query_cache_api.py::test_second_identical_query_served_from_cache`.
-2. Paraphrase within threshold hits via ANN; below misses → `test_query_cache_service.py::test_ann_hit_within_threshold_else_miss`.
-3. Editing a cited article marks dependents stale, same transaction → `test_cache_stale_seam.py` (both tests), `test_query_cache_e2e.py`.
-4. Stale hit returns flagged answer; Refresh recomputes + clears stale → `test_query_cache_web.py::test_web_query_then_stale_badge_and_refresh`, `test_query_cache_api.py::test_refresh_bypasses_and_recomputes`, `test_query_cache_e2e.py`.
-5. `GET /suggest?q=` ranks by hit_count → `test_suggest_api.py`, `test_query_cache_repo.py::test_suggest_ranks_by_hit_count`.
-6. `gc_housekeeping` removes expired entries → `test_query_cache_gc.py`.
-
-- [ ] **Step 3: (Only if `docs/wiki/` exists)** Update docs via iwiki
-
-This repo currently has **no** `docs/wiki/` (the session reminder confirms iwiki is not initialised). Skip iwiki ingest/lint. If a `docs/wiki/` has since been created, run `iwiki:iwiki-ingest src/paw/services/query_cache.py` and `/iwiki-lint`.
-
-- [ ] **Step 4: Finish the branch**
-
-Use **superpowers:finishing-a-development-branch** to open the PR for `dev/paw-phase-3` (or a fresh `dev/paw-phase-7` cut from the up-to-date base branch — confirm the correct base, since this repo has long-lived `dev/*` branches) into the agreed target. Do not merge to `master` directly.
-
----
-
-## Self-Review (performed during planning)
-
-- **Spec coverage:** DB tables (Task 2) · exact+ANN lookup before retrieval (Task 5, 8) · eager transactional stale-marking via the seam (Task 6) · stale flag + Refresh (Task 8, 9) · suggestions ranked by hit_count (Task 8, 9) · GC TTL (Task 7) · config block global+per-domain (Task 1, 5) · per-domain isolation (cache rows keyed by `domain_id`, lookups filter on it) · dim-lock + reindex tie-in (Task 10). All in-scope items map to a task.
-- **Type/name consistency:** `mark_cache_stale(session, *, domain_id, article_ids)` used identically in cache_seam + all three writers + tests. `QueryCacheConfig` fields (`enabled`, `sim_threshold`, `ttl_seconds`, `suggest_top_k`) consistent across config, service, GC, router. `CacheHit(id, answer_md, refs, passages, stale)` consistent across service + router. `QueryCacheRepo` method names (`get_by_norm`, `ann_nearest`, `upsert`, `set_deps`, `touch`, `set_stale`, `mark_stale_for_articles`, `suggest`, `delete_expired`) match all call sites. `QueryResult` gains `stale`/`cached` consistently (router + updated shape test).
-- **Decisions locked:** stale precision is **article-level** (per user choice); `suggest` uses a prefix `ILIKE` (the as-you-type case) ranked by `hit_count` — a deliberate v1 simplification of the spec's "FTS/ANN" (noted in Task 4); dont-know / empty-refs answers are **not** cached (no dependencies to invalidate them); chat is never cached (untouched). TTL is measured from `COALESCE(last_hit_at, created_at)`.
-
----
-
-## Execution Handoff
-
-Plan complete and saved to `docs/superpowers/plans/2026-06-24-paw-phase-7-query-cache.md`. Two execution options:
-
-1. **Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration. REQUIRED SUB-SKILL: superpowers:subagent-driven-development.
-2. **Inline Execution** — execute tasks in this session with checkpoints. REQUIRED SUB-SKILL: superpowers:executing-plans.
-
-Which approach?
+**Note for the implementer:** Tasks are ordered by dependency — implement in sequence. Each task ends green (its own tests + ruff + mypy) before the next begins.

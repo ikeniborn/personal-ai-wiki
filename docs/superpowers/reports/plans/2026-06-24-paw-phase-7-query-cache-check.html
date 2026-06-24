@@ -1,318 +1,284 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Проверка плана — Phase 7 Query-cache</title>
 <style>
   :root{
-    --bg:#0f1419; --panel:#171c24; --panel2:#1e2630; --ink:#e6edf3; --muted:#9aa7b4;
-    --line:#2b3542; --accent:#4ea1ff; --ok:#3fb950; --warn:#d29922; --crit:#f85149;
-    --info:#8b949e; --chip:#223044; --shadow:rgba(0,0,0,.45);
+    --bg:#0f1419; --panel:#171d26; --panel2:#1d2530; --ink:#e6edf3; --muted:#9aa7b4;
+    --line:#2a3441; --accent:#4aa3ff; --accent2:#7c5cff;
+    --ok:#2ea043; --okbg:#0f2a17; --warn:#d29922; --warnbg:#332701; --crit:#f85149;
+    --critbg:#3a1413; --info:#6e7681; --infobg:#1c2128; --fixed:#388bfd; --fixedbg:#0d2747;
+    --accepted:#39c5bb; --acceptedbg:#0c2b2a; --hot:#7c5cff; --hotbg:#1b1733;
+    --node:#1d2530; --nodeln:#3a4757; --edge:#48566a;
   }
-  :root.light{
-    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --ink:#1f2328; --muted:#57606a;
-    --line:#d0d7de; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
-    --info:#6e7781; --chip:#eaf2ff; --shadow:rgba(140,149,159,.25);
+  html[data-theme="light"]{
+    --bg:#f4f6f9; --panel:#ffffff; --panel2:#eef1f5; --ink:#1b2330; --muted:#5a6675;
+    --line:#d8dee6; --accent:#0969da; --accent2:#6639ba;
+    --ok:#1a7f37; --okbg:#dcf5e3; --warn:#9a6700; --warnbg:#fdf3d6; --crit:#cf222e;
+    --critbg:#ffe3e1; --info:#6e7681; --infobg:#eef1f5; --fixed:#0969da; --fixedbg:#dbeafe;
+    --accepted:#117f78; --acceptedbg:#cdf2ef; --hot:#6639ba; --hotbg:#ece4fb;
+    --node:#ffffff; --nodeln:#c4ccd6; --edge:#9aa7b4;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:1240px;margin:0 auto;padding:28px 22px 64px}
-  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
-    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:24px}
-  h1{font-size:22px;margin:0 0 4px}
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;font-size:15px}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 64px}
+  header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  h1{font-size:23px;margin:0 0 4px}
   h2{font-size:18px;margin:34px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
   h3{font-size:15px;margin:22px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
   .sub{color:var(--muted);font-size:13px}
-  .verdict{display:inline-flex;align-items:center;gap:8px;background:var(--ok);color:#fff;
-    border-radius:8px;padding:6px 14px;font-weight:600;font-size:14px}
-  .toggle{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;
-    padding:8px 14px;cursor:pointer;font-size:13px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+    background:var(--panel2);padding:1px 5px;border-radius:4px}
+  .toggle{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:8px;padding:8px 14px;font-size:13px}
   .toggle:hover{border-color:var(--accent)}
-  .grid-meta{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 0}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;
-    box-shadow:0 1px 3px var(--shadow)}
-  .card .k{color:var(--muted);font-size:12px}
-  .card .v{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  .verdict{display:inline-flex;align-items:center;gap:8px;background:var(--okbg);color:var(--ok);
+    border:1px solid var(--ok);border-radius:10px;padding:8px 14px;font-weight:600;font-size:14px;margin-top:10px}
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:14px}
+  .meta div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 13px}
+  .meta b{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:2px}
   table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);
-    border-radius:10px;overflow:hidden;margin:6px 0 8px}
-  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{background:var(--panel2);font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+    border-radius:10px;overflow:hidden;font-size:13.5px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel2);font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
   tr:last-child td{border-bottom:none}
-  td.id,td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;white-space:nowrap}
-  .badge{display:inline-block;border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:700;letter-spacing:.02em}
-  .b-crit{background:var(--crit);color:#fff}
-  .b-warn{background:var(--warn);color:#1a1200}
-  .b-info{background:var(--chip);color:var(--info);border:1px solid var(--line)}
-  .b-pass{background:var(--ok);color:#fff}
-  .b-wf{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
-  .phase-row{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 2px}
-  .phase{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
-    border-radius:999px;padding:6px 14px;font-size:13px}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
-  figure{margin:0}
-  .figwrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;overflow:auto;
-    box-shadow:0 1px 3px var(--shadow)}
+  .tid{font-weight:700;color:var(--accent);white-space:nowrap}
+  .badge{display:inline-block;border-radius:20px;padding:2px 10px;font-size:11.5px;font-weight:700;
+    border:1px solid;white-space:nowrap}
+  .b-passed{color:var(--ok);background:var(--okbg);border-color:var(--ok)}
+  .b-crit{color:var(--crit);background:var(--critbg);border-color:var(--crit)}
+  .b-warn{color:var(--warn);background:var(--warnbg);border-color:var(--warn)}
+  .b-info{color:var(--info);background:var(--infobg);border-color:var(--info)}
+  .b-fixed{color:var(--fixed);background:var(--fixedbg);border-color:var(--fixed)}
+  .b-accepted{color:var(--accepted);background:var(--acceptedbg);border-color:var(--accepted)}
+  .phases{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;flex:1;min-width:150px}
+  .phase .nm{font-size:13px;font-weight:600;margin-bottom:6px}
+  figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;overflow-x:auto}
   figcaption{color:var(--muted);font-size:12.5px;margin-top:8px}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:8px 2px 0}
   .legend span{display:inline-flex;align-items:center;gap:6px}
-  .swatch{width:14px;height:3px;border-radius:2px;display:inline-block}
-  .yes{color:var(--accent);font-weight:700}
-  .ov{background:var(--chip);font-weight:700;color:var(--accent)}
-  svg text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-  code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12.5px}
-  .dod{font-size:13.5px}
-  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:14px;color:var(--muted);font-size:12.5px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid var(--nodeln)}
+  .mx td.hit{background:var(--accent);color:#fff;text-align:center;font-weight:700}
+  html[data-theme="light"] .mx td.hit{background:var(--accent);color:#fff}
+  .mx td.hot{background:var(--hot);color:#fff;text-align:center;font-weight:700}
+  .mx th.col{text-align:center;width:30px;color:var(--accent);font-weight:700}
+  .mx td.f{white-space:nowrap;font-family:ui-monospace,monospace;font-size:12px}
+  .mx tr.hotrow td.f{color:var(--hot);font-weight:700}
+  .note{background:var(--panel2);border-left:3px solid var(--accent);border-radius:6px;
+    padding:10px 13px;font-size:13px;margin:12px 0}
+  .chain{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 13px;margin-top:10px;word-break:break-all}
+  svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 </style>
 </head>
 <body>
 <div class="wrap">
+
   <header class="top">
     <div>
-      <h1>Проверка плана — Phase 7: Query-cache + Suggestions</h1>
-      <div class="sub">IDD <code>/check-plan</code> · 5 фаз · 12 задач · 2026-06-24</div>
+      <h1>Проверка плана: Phase 7 — Query-cache + suggestions</h1>
+      <div class="sub">IDD <code>/check-plan</code> · дата 2026-06-24</div>
+      <div class="verdict">✓ Вердикт: OK — план готов к исполнению (0 critical open · 0 warning open)</div>
     </div>
-    <div style="display:flex;gap:12px;align-items:center">
-      <span class="verdict">● OK — гейт открыт</span>
-      <button class="toggle" id="themeBtn">☾ Тема</button>
-    </div>
+    <button class="toggle" id="themeBtn" type="button">☾ Тёмная / Светлая</button>
   </header>
 
-  <div class="grid-meta">
-    <div class="card"><div class="k">План</div>
-      <div class="v">…/plans/2026-06-24-paw-phase-7-query-cache.md</div>
-      <div class="k" style="margin-top:6px">plan_hash</div><div class="v">ef04f506c634931a</div></div>
-    <div class="card"><div class="k">Спека</div>
-      <div class="v">…/specs/2026-06-22-paw-phase-7-query-cache-design.md</div>
-      <div class="k" style="margin-top:6px">spec_hash</div><div class="v">517ac36128dd837d</div></div>
-    <div class="card"><div class="k">Сводка findings</div>
-      <div class="v">CRITICAL open: 0 · WARNING open: 0 · INFO: 2</div>
-      <div class="k" style="margin-top:6px">Все verdict</div><div class="v">∈ {wontfix}</div></div>
+  <div class="meta">
+    <div><b>План</b><code>docs/superpowers/plans/2026-06-24-paw-phase-7-query-cache.md</code><br><span class="sub">plan_hash <code>22674f1a6e57b257</code></span></div>
+    <div><b>Спецификация</b><code>…specs/2026-06-22-paw-phase-7-query-cache-design.md</code><br><span class="sub">spec_hash <code>517ac36128dd837d</code></span></div>
+    <div><b>Findings</b>5 всего · 2 fixed · 3 accepted · <b style="display:inline">0 open</b></div>
   </div>
 
-  <!-- ================= БЛОК 1 ================= -->
-  <h2>1 · Резюме плана — задачи и критерии готовности (DoD)</h2>
-  <table>
-    <thead><tr><th style="width:46px">#</th><th style="width:30%">Задача</th><th>Критерий готовности (DoD)</th></tr></thead>
-    <tbody>
-      <tr><td class="id">T1</td><td>QueryCacheConfig</td><td class="dod">unit-тест defaults/merge зелёный; <code>ruff</code>+<code>mypy</code> чисто.</td></tr>
-      <tr><td class="id">T2</td><td>Миграция 0005 + ORM-модели + managed-колонка <code>query_embedding vector(dim)</code> + conftest truncate</td><td class="dod"><code>test_query_cache_models</code> зелёный; <code>alembic upgrade head</code> проходит; <code>test_migration</code> зелёный.</td></tr>
-      <tr><td class="id">T3</td><td>Чистые хелперы normalize / passes_threshold / dep_article_ids</td><td class="dod">unit-тест (4 кейса) зелёный.</td></tr>
-      <tr><td class="id">T4</td><td>QueryCacheRepo (exact/ANN/upsert/deps/touch/mark_stale/suggest/ttl)</td><td class="dod">integration-тест (6 кейсов) зелёный.</td></tr>
-      <tr><td class="id">T5</td><td>QueryCacheService lookup/upsert/suggest</td><td class="dod">integration-тест (4) зелёный; доказано 0 вызовов LLM на повтор (крит. #1, #2).</td></tr>
-      <tr><td class="id">T6</td><td>Article-level seam <code>mark_cache_stale</code> → ingest/fix/format</td><td class="dod">unit+integration (3) зелёный; op-тесты fix/format/ingest без регресса (крит. #3).</td></tr>
-      <tr><td class="id">T7</td><td>GC TTL-уборка в <code>gc_housekeeping</code></td><td class="dod">новый GC-тест зелёный; строка возврата <code>gc:{N}</code> не меняется; 3 существующих gc-теста зелёные (крит. #6).</td></tr>
-      <tr><td class="id">T8</td><td>API: кэш в query-роутере, <code>?refresh=1</code>, <code>/suggest</code>, поля stale/cached</td><td class="dod">api cache+suggest+обновлённый shape-тест зелёные (крит. #1, #4, #5).</td></tr>
-      <tr><td class="id">T9</td><td>Web: дропдаун подсказок + бейдж stale + Refresh</td><td class="dod">web-тест (3) зелёный; старый <code>query_web</code>-тест без регресса.</td></tr>
-      <tr><td class="id">T10</td><td>Смена dim: очистка+ребилд query_cache embedding в <code>update_provider</code></td><td class="dod">dim-change-тест зелёный; provider_settings/reindex без регресса (риск-нота спеки).</td></tr>
-      <tr><td class="id">T11</td><td>E2E: query→cached→правка статьи→stale→refresh→fresh</td><td class="dod">e2e-тест зелёный (крит. #1, #3, #4).</td></tr>
-      <tr><td class="id">T12</td><td>Полный прогон CI + сверка крит. 1–6</td><td class="dod"><code>ruff check .</code> + <code>mypy src</code> + <code>pytest -q</code> — все зелёные.</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ================= БЛОК 2 ================= -->
-  <h2>2 · Зависимости и пересечения</h2>
-
-  <h3>Граф зависимостей задач (M→N: результат M используется в N)</h3>
-  <div class="figwrap">
-  <figure>
-  <svg viewBox="0 0 1140 400" width="1140" height="400" role="img" aria-label="Граф зависимостей задач">
-    <defs>
-      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
-      </marker>
-      <marker id="arrowGate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
-      </marker>
-      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="var(--shadow)"/>
-      </filter>
-    </defs>
-    <!-- edges (solid) -->
-    <g stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#arrow)" opacity=".8">
-      <!-- T1 -->
-      <path d="M156,60 C260,90 280,150 360,168"/>
-      <path d="M156,60 C330,90 430,180 505,212"/>
-      <path d="M156,60 C420,40 560,150 650,168"/>
-      <!-- T2 -->
-      <path d="M156,170 C180,195 195,210 215,216"/>
-      <path d="M156,170 C330,120 430,90 505,78"/>
-      <path d="M156,170 C300,200 420,215 505,218"/>
-      <path d="M156,170 C320,300 430,340 505,346"/>
-      <!-- T3 -->
-      <path d="M156,280 C180,250 195,235 215,224"/>
-      <path d="M156,280 C260,250 300,190 360,176"/>
-      <!-- T4 -->
-      <path d="M311,216 C330,200 345,182 360,174"/>
-      <path d="M311,210 C400,140 450,95 505,80"/>
-      <path d="M311,216 C400,215 450,216 505,218"/>
-      <path d="M311,222 C380,310 440,345 505,350"/>
-      <path d="M311,222 C470,250 560,190 650,172"/>
-      <path d="M311,224 C520,330 680,270 800,250"/>
-      <!-- T5 -->
-      <path d="M456,170 C520,168 580,168 650,170"/>
-      <path d="M456,176 C560,230 680,248 800,252"/>
-      <path d="M456,164 C600,120 700,100 800,102"/>
-      <!-- T6 -->
-      <path d="M601,75 C680,78 720,92 800,100"/>
-      <!-- T8 -->
-      <path d="M746,170 C760,200 775,228 800,240"/>
-      <path d="M746,168 C760,140 775,115 800,104"/>
-    </g>
-    <!-- gate edges (dashed) -->
-    <g stroke="var(--accent)" stroke-width="1.5" fill="none" marker-end="url(#arrowGate)" stroke-dasharray="5 4" opacity=".75">
-      <path d="M896,100 C930,120 945,140 960,166"/>
-      <path d="M896,250 C930,220 945,200 960,184"/>
-      <path d="M601,350 C760,360 900,210 960,178"/>
-    </g>
-    <!-- nodes -->
-    <g font-size="13" font-weight="700">
-      <g filter="url(#ds)">
-        <rect x="60" y="40" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="60" y="150" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="60" y="260" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="215" y="200" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="360" y="150" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--accent)" stroke-width="1.6"/>
-        <rect x="505" y="55" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="505" y="195" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="505" y="330" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="650" y="150" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--accent)" stroke-width="1.6"/>
-        <rect x="800" y="85" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="800" y="235" width="96" height="40" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
-        <rect x="960" y="150" width="120" height="40" rx="9" fill="var(--panel)" stroke="var(--ok)" stroke-width="1.8"/>
-      </g>
-      <g fill="var(--ink)" text-anchor="middle">
-        <text x="108" y="65">T1 · Config</text>
-        <text x="108" y="175">T2 · DB</text>
-        <text x="108" y="285">T3 · helpers</text>
-        <text x="263" y="225">T4 · Repo</text>
-        <text x="408" y="175">T5 · Service</text>
-        <text x="553" y="80">T6 · seam</text>
-        <text x="553" y="220">T7 · GC</text>
-        <text x="553" y="355">T10 · dim</text>
-        <text x="698" y="175">T8 · API</text>
-        <text x="848" y="110">T11 · E2E</text>
-        <text x="848" y="260">T9 · Web</text>
-        <text x="1020" y="175">T12 · CI-гейт</text>
-      </g>
-    </g>
-  </svg>
-  <figcaption>Все рёбра направлены вперёд (M&lt;N) — ориентированный ацикличный граф; фаза <em>dependencies</em> циклов и нарушений порядка не нашла. Пунктирные синие рёбра — заход в финальный гейт <strong>T12</strong> (полный прогон после T1–T11). Синяя обводка — узлы-хабы (T5 Service, T8 API).</figcaption>
-  </figure>
-  <div class="legend">
-    <span><span class="swatch" style="background:var(--muted)"></span> зависимость данных</span>
-    <span><span class="swatch" style="background:var(--accent)"></span> заход в гейт (T12)</span>
-  </div>
-  </div>
-
-  <h3>Пересечения по артефактам (один файл — несколько задач)</h3>
-  <table>
-    <thead><tr><th>Файл</th><th style="width:42%">Задачи</th><th>Тип</th></tr></thead>
-    <tbody>
-      <tr><td class="mono">src/paw/services/query_cache.py</td><td>T3 (создание + хелперы), T5 (сервис + CacheHit)</td><td><span class="ov">overlap</span></td></tr>
-      <tr><td class="mono">src/paw/services/provider_settings.py</td><td>T1 (get_query_cache), T10 (update_provider ребилд)</td><td><span class="ov">overlap</span></td></tr>
-      <tr><td class="mono">src/paw/jobs/tasks.py</td><td>T6 (seam-вызов в ingest), T7 (gc TTL)</td><td>разные функции — без конфликта</td></tr>
-      <tr><td class="mono">src/paw/db/managed.py</td><td>T2 (managed-хелперы)</td><td>solo</td></tr>
-      <tr><td class="mono">src/paw/api/routers/query.py</td><td>T8 (перепись: роутер+suggest+shape)</td><td>solo</td></tr>
-      <tr><td class="mono">src/paw/api/web/routes.py</td><td>T9 (web_query + web_suggest)</td><td>solo</td></tr>
-      <tr><td class="mono">tests/conftest.py</td><td>T2 (_clean_db truncate + drop)</td><td>solo</td></tr>
-      <tr><td class="mono">tests/api/test_query_api.py</td><td>T8 (обновление shape-теста)</td><td>solo</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Покрытие требований (требование → задачи)</h3>
-  <table>
-    <thead><tr><th style="width:46%">Требование спеки</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>T8</th><th>T9</th><th>T11</th></tr></thead>
-    <tbody>
-      <tr><td>Крит.#1 — повтор из кэша, 0 LLM</td><td></td><td class="yes">✓</td><td></td><td></td><td class="yes">✓</td><td></td><td class="yes">✓</td></tr>
-      <tr><td>Крит.#2 — ANN-порог hit/miss</td><td></td><td class="yes">✓</td><td></td><td></td><td></td><td></td><td></td></tr>
-      <tr><td>Крит.#3 — правка статьи → stale в одной транзакции</td><td></td><td></td><td class="yes">✓</td><td></td><td></td><td></td><td class="yes">✓</td></tr>
-      <tr><td>Крит.#4 — stale-флаг + Refresh</td><td></td><td></td><td></td><td></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
-      <tr><td>Крит.#5 — /suggest по hit_count</td><td class="yes">✓</td><td></td><td></td><td></td><td class="yes">✓</td><td class="yes">✓</td><td></td></tr>
-      <tr><td>Крит.#6 — GC TTL</td><td class="yes">✓</td><td></td><td></td><td class="yes">✓</td><td></td><td></td><td></td></tr>
-    </tbody>
-  </table>
-  <p class="sub">Прочее: DB-схема (LLD §2) → T2; config-блок (§10) → T1, T5; dim-lock / reindex-нота → T2, T10; per-domain изоляция и безопасность → T5 (ключ <code>domain_id</code> во всех запросах).</p>
-
-  <!-- ================= БЛОК 3 ================= -->
-  <h2>3 · Результаты проверки</h2>
-
-  <h3>Статусы фаз</h3>
-  <div class="phase-row">
-    <span class="phase"><span class="dot"></span> structure — passed</span>
-    <span class="phase"><span class="dot"></span> coverage — passed</span>
-    <span class="phase"><span class="dot"></span> dependencies — passed</span>
-    <span class="phase"><span class="dot"></span> verifiability — passed</span>
-    <span class="phase"><span class="dot"></span> consistency — passed</span>
+  <!-- ============ ФАЗЫ ============ -->
+  <h2>Результаты проверки — 5 фаз</h2>
+  <div class="phases">
+    <div class="phase"><div class="nm">1 · structure</div><span class="badge b-passed">passed</span></div>
+    <div class="phase"><div class="nm">2 · coverage</div><span class="badge b-passed">passed</span></div>
+    <div class="phase"><div class="nm">3 · dependencies</div><span class="badge b-passed">passed</span></div>
+    <div class="phase"><div class="nm">4 · verifiability</div><span class="badge b-passed">passed</span></div>
+    <div class="phase"><div class="nm">5 · consistency</div><span class="badge b-passed">passed</span></div>
   </div>
 
   <h3>Findings</h3>
   <table>
-    <thead><tr><th style="width:64px">ID</th><th style="width:96px">Severity</th><th style="width:18%">Секция</th><th>Описание</th><th style="width:84px">Verdict</th></tr></thead>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
     <tbody>
       <tr>
-        <td class="id">F-001</td><td><span class="badge b-crit">CRITICAL</span></td>
-        <td>Task 8/9 — URL тестов</td>
-        <td>Ревьюер пометил <code>client._REDACTED</code> в URL тестов как нерабочее. <strong>Проверено — ложноположительное:</strong> в файле <code>client._dom.id</code> (grep: 9 совпадений; литерального <code>_REDACTED</code> — 0). Несоответствие = артефакт redaction-слоя в выводе Read у субагента, а не содержимое файла. Правка не нужна (внесла бы баг).</td>
-        <td><span class="badge b-wf">wontfix</span></td>
+        <td class="tid">F-001</td><td><span class="badge b-crit">CRITICAL</span></td><td>Task 6</td>
+        <td>Спека перечисляет <code>ingest/fix/format</code> для eager stale-marking (In scope + acceptance crit.3), но план подключил только fix/format. Re-ingest цитируемой статьи (<code>upsert_article</code> бампает <code>current_rev</code>) не инвалидировал бы кэш. <b>Исправлено:</b> <code>ingest.py</code> теперь вызывает <code>mark_articles_cache_stale(session,[art.id])</code> после Stage C + добавлен интеграционный re-ingest тест.</td>
+        <td><span class="badge b-fixed">fixed</span></td>
       </tr>
       <tr>
-        <td class="id">F-002</td><td><span class="badge b-warn">WARNING</span></td>
-        <td>Task 8 — router model</td>
-        <td><code>model = getattr(prepared.chat,'chat_model','')</code> — у стаба нет <code>chat_model</code>, колонка <code>model</code> пустая в тестах; критерии приёмки на <code>model</code> не опираются. Приемлемо для v1.</td>
-        <td><span class="badge b-wf">wontfix</span></td>
+        <td class="tid">F-002</td><td><span class="badge b-warn">WARNING</span></td><td>Task 12</td>
+        <td>E2E покрывал только Format-путь, маскируя пробел с ingest. <b>Исправлено:</b> Task 6 теперь содержит интеграционный тест ре-ингеста, закрывающий ingest-путь crit.3.</td>
+        <td><span class="badge b-fixed">fixed</span></td>
       </tr>
       <tr>
-        <td class="id">F-003</td><td><span class="badge b-warn">WARNING</span></td>
-        <td>Tasks 8/9 — фикстуры</td>
-        <td>Сервисы в API/web создаются без явного <code>fernet_key</code>, опора на <code>get_settings().fernet_key</code>. Удовлетворено фикстурой <code>wired_settings</code>, присутствующей во всех api/web фикстурах — не дефект, инвариант для исполнителя.</td>
-        <td><span class="badge b-wf">wontfix</span></td>
+        <td class="tid">F-003</td><td><span class="badge b-warn">WARNING</span></td><td>Task 11</td>
+        <td>Заявление о «no regression» для <code>gc_housekeeping</code> не было сверено с фикстурами. <b>Проверено:</b> существующий <code>test_gc_housekeeping</code> использует <code>wired_settings</code>, <code>get_query_cache()</code> возвращает дефолт, <code>delete_expired</code> трогает только пустую <code>query_cache</code> → регрессий нет.</td>
+        <td><span class="badge b-accepted">accepted</span></td>
       </tr>
       <tr>
-        <td class="id">F-004</td><td><span class="badge b-info">INFO</span></td>
-        <td>Task 4 — suggest</td>
-        <td>Префиксный <code>ILIKE</code> вместо «FTS/ANN» спеки — намеренное упрощение v1 (отмечено в Task 4 + Self-Review). Крит.#5 требует лишь ранжирование по <code>hit_count</code> — выполнено.</td>
-        <td><span class="badge b-wf">wontfix</span></td>
+        <td class="tid">F-004</td><td><span class="badge b-info">INFO</span></td><td>Task 5</td>
+        <td>Lookup не фильтруется по <code>embedding_version</code>; после смены модели/версии без смены dim старые эмбеддинги той же размерности могут ANN-совпасть. Спека требует только обработку смены dim → в рамках scope.</td>
+        <td><span class="badge b-accepted">accepted</span></td>
       </tr>
       <tr>
-        <td class="id">F-005</td><td><span class="badge b-info">INFO</span></td>
-        <td>Task 8 — refresh</td>
-        <td>Фоновый refresh не реализован (только синхронный <code>?refresh=1</code>). Спека помечает его «optionally» — не гэп.</td>
-        <td><span class="badge b-wf">wontfix</span></td>
+        <td class="tid">F-005</td><td><span class="badge b-info">INFO</span></td><td>Task 8</td>
+        <td>Существующий <code>test_query_response_shape_valid</code> проверяет точный набор ключей; план корректно обновляет его на <code>stale/cached</code>. Подтверждено, действий не требуется.</td>
+        <td><span class="badge b-accepted">accepted</span></td>
       </tr>
     </tbody>
   </table>
+  <div class="note"><b>Сводка:</b> CRITICAL open = 0 · WARNING open = 0 · INFO open = 0. Все findings закрыты (2 fixed, 3 accepted). Exit-критерий выполнен → <b>OK</b>.</div>
+  <div class="chain"><b>Chain:</b> (intent: null) → specs/2026-06-22-paw-phase-7-query-cache-design.md → plans/2026-06-24-paw-phase-7-query-cache.md</div>
 
-  <h3>Сводка</h3>
-  <div class="grid-meta">
-    <div class="card"><div class="k">CRITICAL open</div><div class="v" style="font-size:18px;color:var(--ok)">0</div></div>
-    <div class="card"><div class="k">WARNING open</div><div class="v" style="font-size:18px;color:var(--ok)">0</div></div>
-    <div class="card"><div class="k">INFO</div><div class="v" style="font-size:18px">2</div></div>
-    <div class="card"><div class="k">Финальный вердикт</div><div class="v" style="font-size:15px;color:var(--ok)">OK — IDD-гейт открыт</div></div>
-  </div>
+  <!-- ============ ГРАФ ЗАВИСИМОСТЕЙ ============ -->
+  <h2>Граф зависимостей шагов</h2>
+  <figure>
+    <svg viewBox="0 0 1040 360" width="100%" role="img" aria-label="Граф зависимостей задач T1–T12">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+        </marker>
+      </defs>
+      <!-- edges (M->N, M<N, все слева-направо) -->
+      <g stroke="var(--edge)" stroke-width="1.4" fill="none" marker-end="url(#arr)" opacity="0.85">
+        <line x1="102" y1="50"  x2="638" y2="150"/>
+        <line x1="102" y1="50"  x2="488" y2="170"/>
+        <line x1="102" y1="50"  x2="488" y2="300"/>
+        <line x1="102" y1="150" x2="188" y2="150"/>
+        <line x1="102" y1="150" x2="338" y2="150"/>
+        <line x1="252" y1="150" x2="338" y2="150"/>
+        <line x1="252" y1="150" x2="638" y2="150"/>
+        <line x1="252" y1="150" x2="788" y2="70"/>
+        <line x1="252" y1="150" x2="488" y2="170"/>
+        <line x1="252" y1="150" x2="788" y2="230"/>
+        <line x1="102" y1="250" x2="638" y2="150"/>
+        <line x1="402" y1="150" x2="488" y2="50"/>
+        <line x1="402" y1="150" x2="638" y2="150"/>
+        <line x1="402" y1="150" x2="788" y2="70"/>
+        <line x1="402" y1="150" x2="488" y2="170"/>
+        <line x1="402" y1="150" x2="488" y2="300"/>
+        <line x1="552" y1="50"  x2="638" y2="150"/>
+        <line x1="552" y1="50"  x2="938" y2="150"/>
+        <line x1="702" y1="150" x2="788" y2="70"/>
+        <line x1="702" y1="150" x2="788" y2="230"/>
+        <line x1="702" y1="150" x2="938" y2="150"/>
+        <line x1="552" y1="170" x2="788" y2="230"/>
+        <line x1="852" y1="70"  x2="938" y2="150"/>
+        <line x1="852" y1="230" x2="938" y2="150"/>
+        <line x1="552" y1="300" x2="938" y2="150"/>
+      </g>
+      <!-- nodes -->
+      <g font-size="12" font-weight="700" text-anchor="middle">
+        <g><rect x="38" y="33"  width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="70" y="54" fill="var(--ink)">T1</text></g>
+        <g><rect x="38" y="133" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="70" y="154" fill="var(--ink)">T2</text></g>
+        <g><rect x="38" y="233" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="70" y="254" fill="var(--ink)">T4</text></g>
+        <g><rect x="188" y="133" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="220" y="154" fill="var(--ink)">T3</text></g>
+        <g><rect x="338" y="133" width="64" height="34" rx="8" fill="var(--hotbg)" stroke="var(--hot)"/><text x="370" y="154" fill="var(--ink)">T5</text></g>
+        <g><rect x="488" y="33"  width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="520" y="54" fill="var(--ink)">T6</text></g>
+        <g><rect x="488" y="153" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="520" y="174" fill="var(--ink)">T9</text></g>
+        <g><rect x="488" y="283" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="520" y="304" fill="var(--ink)">T11</text></g>
+        <g><rect x="638" y="133" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--accent)"/><text x="670" y="154" fill="var(--ink)">T7</text></g>
+        <g><rect x="788" y="53"  width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="820" y="74" fill="var(--ink)">T8</text></g>
+        <g><rect x="788" y="213" width="64" height="34" rx="8" fill="var(--node)" stroke="var(--nodeln)"/><text x="820" y="234" fill="var(--ink)">T10</text></g>
+        <g><rect x="938" y="133" width="64" height="34" rx="8" fill="var(--okbg)" stroke="var(--ok)"/><text x="970" y="154" fill="var(--ink)">T12</text></g>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--hotbg);border-color:var(--hot)"></span>T5 — узел с наибольшим fan-out (5 потребителей)</span>
+      <span><span class="dot" style="background:var(--node);border-color:var(--accent)"></span>T7 — центр интеграции</span>
+      <span><span class="dot" style="background:var(--okbg);border-color:var(--ok)"></span>T12 — финальный E2E (потребляет всё)</span>
+    </div>
+    <figcaption>Рёбра M→N означают «результат задачи M используется в N» (всегда M&lt;N). Циклов нет, нарушений порядка нет — фаза <b>dependencies = passed</b>. Топология: T1/T2/T4 — корни; T5 (repo) и T7 (answer_cached) — узлы наибольшего пересечения.</figcaption>
+  </figure>
 
-  <h3>Chain</h3>
-  <div class="figwrap" style="padding:16px">
-    <span class="badge b-info">intent: null</span>
-    <span style="color:var(--muted)">→</span>
-    <code>specs/2026-06-22-paw-phase-7-query-cache-design.md</code>
-    <span style="color:var(--muted)">→</span>
-    <code>plans/2026-06-24-paw-phase-7-query-cache.md</code>
-  </div>
+  <!-- ============ ПЕРЕСЕЧЕНИЯ ============ -->
+  <h2>Пересечения по артефактам</h2>
+  <figure>
+    <table class="mx">
+      <thead><tr>
+        <th>Файл / артефакт</th>
+        <th class="col">T1</th><th class="col">T2</th><th class="col">T3</th><th class="col">T4</th>
+        <th class="col">T5</th><th class="col">T6</th><th class="col">T7</th><th class="col">T8</th>
+        <th class="col">T9</th><th class="col">T10</th><th class="col">T11</th><th class="col">T12</th>
+      </tr></thead>
+      <tbody>
+        <tr class="hotrow"><td class="f">db/repos/query_cache.py</td>
+          <td></td><td></td><td></td><td></td><td class="hot">✓</td><td class="hot">✓</td><td></td><td></td><td class="hot">✓</td><td></td><td class="hot">✓</td><td></td></tr>
+        <tr><td class="f">api/routers/query.py</td>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td class="hit">✓</td><td></td><td></td><td></td></tr>
+        <tr><td class="f">api/web/routes.py</td>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td class="hit">✓</td><td></td><td></td></tr>
+        <tr><td class="f">providers/config.py + provider_settings</td>
+          <td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="f">alembic 0005 + db/models.py</td>
+          <td></td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="f">db/managed.py + conftest.py</td>
+          <td></td><td></td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="f">services/query_cache.py (helpers)</td>
+          <td></td><td></td><td></td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="f">services/query.py</td>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="f">cache_seam.py + ops/ingest|fix|format</td>
+          <td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td class="f">jobs/tasks.py</td>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td></td></tr>
+        <tr><td class="f">templates query/_query_result/_suggestions</td>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td><td class="hit">✓</td><td></td><td></td></tr>
+        <tr><td class="f">tests/e2e/test_query_cache_e2e.py</td>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✓</td></tr>
+      </tbody>
+    </table>
+    <figcaption><b>db/repos/query_cache.py</b> — самый горячий файл (4 задачи: T5 создаёт, T6/T9/T11 дополняют методами). Метод-аддитивные правки не конфликтуют: каждая задача добавляет новый метод в <code>QueryCacheRepo</code>. <code>routers/query.py</code> и <code>web/routes.py</code> делятся между парами задач — править последовательно.</figcaption>
+  </figure>
 
-  <footer>
-    Отчёт IDD <code>/check-plan</code> · сгенерирован 2026-06-24 · self-contained (offline) ·
-    тема dark/light переключаема. Guarded-лог: использован один ограниченный inline-скрипт
-    только для переключения темы (node-edge граф — статичный SVG).
-  </footer>
+  <h3>Покрытие требований несколькими задачами</h3>
+  <table>
+    <thead><tr><th>Требование (acceptance)</th><th>Закрывается задачами</th></tr></thead>
+    <tbody>
+      <tr><td>crit.1/2 — cache hit (exact + ANN) без LLM</td><td><span class="badge b-fixed" style="background:transparent">T7</span> &nbsp;+&nbsp; <span class="badge b-fixed" style="background:transparent">T8</span></td></tr>
+      <tr><td>crit.3 — stale-marking при write (ingest/fix/format)</td><td><span class="badge b-fixed" style="background:transparent">T6</span> &nbsp;+&nbsp; <span class="badge b-fixed" style="background:transparent">T12</span></td></tr>
+      <tr><td>crit.4 — refresh пересчитывает и сбрасывает stale</td><td><span class="badge b-fixed" style="background:transparent">T8</span> &nbsp;+&nbsp; <span class="badge b-fixed" style="background:transparent">T12</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ РЕЗЮМЕ ПЛАНА ============ -->
+  <h2>Резюме плана — 12 задач и критерии готовности</h2>
+  <table>
+    <thead><tr><th>Задача</th><th>Артефакт</th><th>Критерий готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr><td class="tid">T1</td><td><code>providers/config.py</code>, <code>provider_settings.py</code></td><td>unit: дефолты + override; integration: <code>get_query_cache</code> default + global override; ruff + mypy clean</td></tr>
+      <tr><td class="tid">T2</td><td>alembic <code>0005</code>, <code>db/models.py</code></td><td>integration: колонки <code>query_cache</code>/<code>query_cache_articles</code> существуют; <code>UNIQUE(domain_id,query_norm)</code></td></tr>
+      <tr><td class="tid">T3</td><td><code>db/managed.py</code>, <code>conftest.py</code></td><td>integration: <code>ensure</code> создаёт <code>vector(8)</code>+HNSW; <code>rebuild</code> меняет dim→16 и TRUNCATE кэша; нет регрессий managed/embedding</td></tr>
+      <tr><td class="tid">T4</td><td><code>services/query_cache.py</code></td><td>unit: <code>normalize_query</code>, <code>is_similar_enough</code> (граница), <code>extract_dependencies</code> (дедуп)</td></tr>
+      <tr><td class="tid">T5</td><td><code>db/repos/query_cache.py</code></td><td>integration: upsert→exact/ANN lookup, conflict-update, <code>touch_hit</code> инкремент, deps захвачены</td></tr>
+      <tr><td class="tid">T6</td><td><code>cache_seam.py</code>, <code>ops/fix·format·ingest.py</code></td><td>integration: mark_stale только зависимых; re-ingest помечает stale; fix/format/ingest op-тесты зелёные</td></tr>
+      <tr><td class="tid">T7</td><td><code>services/query.py</code></td><td>integration: miss→upsert; exact hit без LLM (<code>calls==1</code>); ANN within/below threshold; disabled bypass</td></tr>
+      <tr><td class="tid">T8</td><td><code>api/routers/query.py</code></td><td>api: повтор из кэша без LLM (<code>cached=true</code>); <code>?refresh</code> пересчёт + сброс stale; обновлён shape-assert</td></tr>
+      <tr><td class="tid">T9</td><td><code>repos·routers·web</code>, <code>_suggestions.html</code></td><td>api: suggest ранжирует по <code>hit_count</code>, пустой <code>q</code>→[]; web: рендер списка</td></tr>
+      <tr><td class="tid">T10</td><td><code>web/routes.py</code>, <code>query.html</code>, <code>_query_result.html</code></td><td>api(web): «may be outdated» + Refresh при stale; <code>/suggest</code>+<code>query-input</code>; нет регрессий query_web</td></tr>
+      <tr><td class="tid">T11</td><td><code>repos/query_cache.py</code>, <code>jobs/tasks.py</code></td><td>integration: <code>gc_housekeeping</code> удаляет просроченные, оставляет свежие; <code>delete_expired</code> count; нет регрессий gc</td></tr>
+      <tr><td class="tid">T12</td><td><code>tests/e2e/test_query_cache_e2e.py</code></td><td>e2e: miss→cached(no LLM)→format edit→stale→refresh→fresh; полный suite + ruff + mypy зелёные</td></tr>
+    </tbody>
+  </table>
+
+  <p class="sub" style="margin-top:30px">Отчёт сгенерирован навыком <code>html-report</code> · self-contained, оффлайн, обе темы.</p>
 </div>
+
 <script>
+  // Guarded: единственный inline-скрипт — переключатель темы (CSS-only сделать нельзя
+  // из-за необходимости запоминать выбор и менять data-theme на <html>).
   (function(){
-    var b=document.getElementById('themeBtn'),r=document.documentElement;
-    b.addEventListener('click',function(){
-      r.classList.toggle('light');
-      b.textContent=r.classList.contains('light')?'☀ Тема':'☾ Тема';
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    btn.addEventListener('click',function(){
+      root.setAttribute('data-theme', root.getAttribute('data-theme')==='dark'?'light':'dark');
     });
   })();
 </script>
