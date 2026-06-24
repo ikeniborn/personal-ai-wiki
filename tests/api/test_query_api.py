@@ -96,4 +96,5 @@ async def test_query_response_shape_valid(client, monkeypatch):
     )
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"answer_md", "refs", "passages"}
+    assert set(body) == {"answer_md", "refs", "passages", "stale", "cached"}
+    assert body["stale"] is False and body["cached"] is False
