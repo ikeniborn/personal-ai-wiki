@@ -11,6 +11,7 @@ from paw.providers.config import (
     GRAPH_KEY,
     MAINTENANCE_KEY,
     PROVIDER_KEY,
+    QUERY_CACHE_KEY,
     RETRIEVAL_KEY,
     WIKI_KEY,
     ChatConfig,
@@ -18,6 +19,7 @@ from paw.providers.config import (
     GraphConfig,
     MaintenanceConfig,
     ProviderConfig,
+    QueryCacheConfig,
     RetrievalConfig,
     WikiConfig,
 )
@@ -135,6 +137,10 @@ class ProviderSettingsService:
     async def get_maintenance(self) -> MaintenanceConfig:
         raw = (await self._all()).get(MAINTENANCE_KEY)
         return MaintenanceConfig.model_validate(raw) if raw else MaintenanceConfig()
+
+    async def get_query_cache(self) -> QueryCacheConfig:
+        raw = (await self._all()).get(QUERY_CACHE_KEY)
+        return QueryCacheConfig.model_validate(raw) if raw else QueryCacheConfig()
 
     async def get_embedding_version(self) -> int:
         raw = (await self._all()).get(EMBEDDING_KEY)

@@ -9,6 +9,7 @@ CHAT_KEY = "chat"
 GRAPH_KEY = "graph"
 MAINTENANCE_KEY = "maintenance"
 EMBEDDING_KEY = "embedding"
+QUERY_CACHE_KEY = "query_cache"
 
 
 class ProviderConfig(BaseModel):
@@ -75,3 +76,10 @@ class MaintenanceConfig(BaseModel):
 
 class EmbeddingConfig(BaseModel):
     version: int = 1  # the embedding_version search filters on; bumped on a model/dim change
+
+
+class QueryCacheConfig(BaseModel):
+    enabled: bool = True
+    sim_threshold: float = 0.92  # cosine similarity floor for an ANN hit
+    ttl_seconds: int = 30 * 24 * 3600  # GC deletes entries idle longer than this
+    suggest_top_k: int = 5  # max as-you-type suggestions returned
