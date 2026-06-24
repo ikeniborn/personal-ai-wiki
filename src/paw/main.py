@@ -1,3 +1,5 @@
+import contextlib
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -19,6 +21,8 @@ from paw.api.routers import setup as setup_router
 from paw.api.routers import sources as sources_router
 from paw.api.routers import users as users_router
 from paw.api.web import routes as web_routes
+from paw.mcp.auth import MCPAuthMiddleware
+from paw.mcp.server import build_mcp
 
 _STATIC_DIR = Path(__file__).parent / "api" / "web" / "static"
 
@@ -28,7 +32,16 @@ _CSP = (
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Personal AI Wiki", version="0.1.0")
+    mcp = build_mcp()
+    # streamable_http_app() must be called before session_manager is accessed
+    mcp_asgi = mcp.streamable_http_app()
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        async with mcp.session_manager.run():
+            yield
+
+    app = FastAPI(title="Personal AI Wiki", version="0.1.0", lifespan=lifespan)
     install_error_handlers(app)
 
     @app.middleware("http")
@@ -59,6 +72,8 @@ def create_app() -> FastAPI:
         app.include_router(r.router, prefix="/api/v1")
     app.include_router(web_routes.router)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+    app.mount("/mcp", mcp_asgi)
+    app.add_middleware(MCPAuthMiddleware)
     return app
 
 
