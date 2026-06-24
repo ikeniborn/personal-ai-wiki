@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from paw.api.errors import install_error_handlers
+from paw.api.routers import api_keys as api_keys_router
 from paw.api.routers import articles as articles_router
 from paw.api.routers import auth as auth_router
 from paw.api.routers import chat as chat_router
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
         setup_router,
         settings_router,
         users_router,
+        api_keys_router,
         jobs_router,
         query_router,
         chat_router,
