@@ -64,7 +64,7 @@ class ApiKeyService:
             return None
         prefix, secret = parsed
         for row in await self._repo.by_prefix(prefix):
-            if row.revoked_at is None and verify_secret(secret, row.hash):
+            if verify_secret(secret, row.hash) and row.revoked_at is None:
                 await self._repo.touch_last_used(row.id)
                 await self._s.commit()
                 return AuthedKey(id=row.id, user_id=row.user_id, scopes=list(row.scopes))
