@@ -85,6 +85,14 @@ def wired_settings(
     db_session_mod._engine = None
     db_session_mod._sessionmaker = None
     queue_mod._pool = None
+    # Flush the shared container Redis so cached query embeddings / sessions from a
+    # prior test cannot leak across the process-global app Redis (test isolation).
+    import redis as redis_sync
+
+    redis_sync.Redis(
+        host=redis_container.get_container_host_ip(),
+        port=int(redis_container.get_exposed_port(6379)),
+    ).flushdb()
     yield
     get_settings.cache_clear()
     deps._redis = None
@@ -102,12 +110,15 @@ async def _clean_db(pg_async_url: str) -> AsyncIterator[None]:
             text(
                 "TRUNCATE users, api_keys, app_settings, domains, blobs, "
                 "sources, articles, article_revisions, audit_log, "
-                "chat_sessions, chat_messages RESTART IDENTITY CASCADE"
+                "chat_sessions, chat_messages, query_cache, query_cache_articles "
+                "RESTART IDENTITY CASCADE"
             )
         )
-        # Drop the managed embedding column/index so each test starts with a clean DDL state.
+        # Drop managed vector columns/indexes so each test starts with a clean DDL state.
         await conn.execute(text("DROP INDEX IF EXISTS ix_chunks_embedding_hnsw"))
         await conn.execute(text("ALTER TABLE chunks DROP COLUMN IF EXISTS embedding"))
+        await conn.execute(text("DROP INDEX IF EXISTS ix_query_cache_embedding_hnsw"))
+        await conn.execute(text("ALTER TABLE query_cache DROP COLUMN IF EXISTS query_embedding"))
     await engine.dispose()
 
 

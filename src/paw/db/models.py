@@ -338,6 +338,44 @@ class ChatMessage(Base):
     session: Mapped[ChatSession] = relationship(back_populates="messages")
 
 
+class QueryCache(Base):
+    __tablename__ = "query_cache"
+    __table_args__ = (UniqueConstraint("domain_id", "query_norm"),)
+    # NOTE: `query_embedding vector(dim)` is a runtime-managed column
+    # (see db/managed.py + QueryCacheRepo raw SQL); intentionally NOT ORM-mapped.
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domains.id", ondelete="CASCADE"), nullable=False
+    )
+    query_norm: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_md: Mapped[str] = mapped_column(Text, nullable=False)
+    refs: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    passages: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    model: Mapped[str | None] = mapped_column(Text)
+    prompt_version: Mapped[str | None] = mapped_column(Text)
+    stale: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    hit_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_hit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class QueryCacheArticle(Base):
+    __tablename__ = "query_cache_articles"
+    cache_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("query_cache.id", ondelete="CASCADE"), primary_key=True
+    )
+    article_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True
+    )
+    rev: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 # BigInteger and String imported for future use (Task 6 large-object oid columns).
 _biginteger: type[Any] = BigInteger
 _string: type[Any] = String

@@ -1,3 +1,14 @@
+{% if cached and stale %}
+<div class="stale-badge" role="status">
+  ⚠️ This answer may be outdated.
+  <form hx-post="/domains/{{ domain_id }}/query?refresh=1"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+        hx-target="#query-result" hx-swap="innerHTML">
+    <input type="hidden" name="q" value="{{ question }}">
+    <button type="submit">Refresh</button>
+  </form>
+</div>
+{% endif %}
 <article class="answer">{{ answer_html | safe }}</article>
 {% if refs %}
 <div class="chips">

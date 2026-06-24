@@ -3,7 +3,13 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.config import get_settings
-from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
+from paw.db.managed import (
+    ensure_embedding_column,
+    ensure_query_cache_embedding_column,
+    query_cache_embedding_dim,
+    rebuild_embedding_column,
+    rebuild_query_cache_embedding_column,
+)
 from paw.db.repos.settings import SettingsRepo
 from paw.providers.config import (
     CHAT_KEY,
@@ -11,6 +17,7 @@ from paw.providers.config import (
     GRAPH_KEY,
     MAINTENANCE_KEY,
     PROVIDER_KEY,
+    QUERY_CACHE_KEY,
     RETRIEVAL_KEY,
     WIKI_KEY,
     ChatConfig,
@@ -18,6 +25,7 @@ from paw.providers.config import (
     GraphConfig,
     MaintenanceConfig,
     ProviderConfig,
+    QueryCacheConfig,
     RetrievalConfig,
     WikiConfig,
 )
@@ -99,7 +107,11 @@ class ProviderSettingsService:
     ) -> ProviderConfig:
         from paw.db.managed import embedding_dim as current_embedding_dim
 
+        # A dim change is detected against EITHER managed vector column (chunks or
+        # query_cache); both are kept at the provider's dim. Rebuild whichever
+        # already exists at a different dim (destructive), else ensure it fresh.
         current = await current_embedding_dim(self._s)
+        current_qc = await query_cache_embedding_dim(self._s)
         pc = await self.persist_provider(
             base_url=base_url,
             chat_model=chat_model,
@@ -108,11 +120,18 @@ class ProviderSettingsService:
             api_key=api_key,
             vision_model=vision_model,
         )
-        if current is not None and current != embedding_dim:
+        chunks_dim_changed = current is not None and current != embedding_dim
+        qc_dim_changed = current_qc is not None and current_qc != embedding_dim
+        if chunks_dim_changed:
             await rebuild_embedding_column(self._s, embedding_dim)
-            await self.bump_embedding_version()
         else:
             await ensure_embedding_column(self._s, embedding_dim)
+        if qc_dim_changed:
+            await rebuild_query_cache_embedding_column(self._s, embedding_dim)
+        else:
+            await ensure_query_cache_embedding_column(self._s, embedding_dim)
+        if chunks_dim_changed or qc_dim_changed:
+            await self.bump_embedding_version()
         await self._s.commit()
         return pc
 
@@ -135,6 +154,10 @@ class ProviderSettingsService:
     async def get_maintenance(self) -> MaintenanceConfig:
         raw = (await self._all()).get(MAINTENANCE_KEY)
         return MaintenanceConfig.model_validate(raw) if raw else MaintenanceConfig()
+
+    async def get_query_cache(self) -> QueryCacheConfig:
+        raw = (await self._all()).get(QUERY_CACHE_KEY)
+        return QueryCacheConfig.model_validate(raw) if raw else QueryCacheConfig()
 
     async def get_embedding_version(self) -> int:
         raw = (await self._all()).get(EMBEDDING_KEY)

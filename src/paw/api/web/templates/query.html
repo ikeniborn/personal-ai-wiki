@@ -6,8 +6,12 @@
 <form hx-post="/domains/{{ domain.id }}/query"
       hx-headers='{"x-csrf-token": "{{ csrf }}"}'
       hx-target="#query-result" hx-swap="innerHTML">
-  <input type="text" name="q" placeholder="Ask a question…" autocomplete="off" required>
+  <input type="text" name="q" placeholder="Ask a question…" autocomplete="off" required
+         hx-get="/domains/{{ domain.id }}/suggest"
+         hx-trigger="keyup changed delay:300ms"
+         hx-target="#suggestions" hx-swap="innerHTML">
   <button type="submit">Ask</button>
 </form>
+<div id="suggestions" class="suggestions"></div>
 <section id="query-result" class="query-result"></section>
 {% endblock %}
