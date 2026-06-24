@@ -56,6 +56,7 @@ async def apply_fix(
     domain_id: uuid.UUID,
     issue: LintIssue,
     proposal: FixProposal,
+    cfg: WikiConfig,
     author_id: uuid.UUID | None,
 ) -> bool:
     if issue.target_slug is None:
@@ -78,7 +79,7 @@ async def apply_fix(
         author_id=author_id,
     )
     graph = GraphRepo(session)
-    allowed = WikiConfig().link_types
+    allowed = cfg.link_types
     for link in proposal.add_links:
         dst_id = slug_map.get(link.dst_slug)
         if dst_id is None or dst_id == art.id or link.type not in allowed:
@@ -126,5 +127,5 @@ async def run_fix_issue(
         cfg=cfg,
     )
     return await apply_fix(
-        session, domain_id=domain_id, issue=issue, proposal=proposal, author_id=author_id
+        session, domain_id=domain_id, issue=issue, proposal=proposal, cfg=cfg, author_id=author_id
     )

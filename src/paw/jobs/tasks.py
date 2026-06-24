@@ -217,6 +217,7 @@ async def fix_issues(
                             fixed += 1
                         await jobs.heartbeat(jid)
                         await jobs.append_log(jid, {"step": "fix", "issue_id": issue.id})
+                        # job session only (progress/heartbeat); data_s commits after the loop
                         await job_s.commit()
                         await _safe_publish(redis, jid, {"step": "fix", "issue_id": issue.id})
                 await data_s.commit()
@@ -285,6 +286,7 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
                             formatted += 1
                         await jobs.heartbeat(jid)
                         await jobs.append_log(jid, {"step": "format", "slug": art.slug})
+                        # job session only (progress/heartbeat); data_s commits after the loop
                         await job_s.commit()
                         await _safe_publish(redis, jid, {"step": "format", "slug": art.slug})
                 await data_s.commit()
