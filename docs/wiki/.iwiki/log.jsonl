@@ -17,3 +17,5 @@
 {"op":"ingest","source":"src/paw/api","page":"api.md","date":"2026-06-24","note":"phase7: cache-aware query, ?refresh, stale/cached, /suggest, web dropdown+badge"}
 {"op":"ingest","source":"src/paw/jobs","page":"jobs.md","date":"2026-06-24","note":"phase7: gc_housekeeping TTL sweep of query_cache"}
 {"op":"ingest","source":"src/paw/harness","page":"harness.md","date":"2026-06-24","note":"phase7: ingest/fix/format call cache stale seam"}
+{"op":"ingest","source":"src/paw/db","page":"db.md","date":"2026-06-24","note":"phase7 followups: delete_expired domain scope, suggest LIKE-escape"}
+{"op":"ingest","source":"src/paw/jobs","page":"jobs.md","date":"2026-06-24","note":"phase7 followups: per-domain TTL gc"}
