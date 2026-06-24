@@ -59,11 +59,11 @@ class LinksResult(BaseModel):
 
 async def _resolve_article(session: AsyncSession, domain_id: uuid.UUID, ref: str) -> Article:
     repo = ArticleRepo(session)
-    art: Article | None
     try:
-        art = await repo.get(uuid.UUID(ref))
+        uid: uuid.UUID | None = uuid.UUID(ref)
     except ValueError:
-        art = await repo.get_by_slug(domain_id, ref)
+        uid = None
+    art = await repo.get(uid) if uid is not None else await repo.get_by_slug(domain_id, ref)
     if art is None or art.domain_id != domain_id:
         raise ValueError("article not found in domain")
     return art
