@@ -1,0 +1,13 @@
+{"op":"init","source":"src/paw (entry points: main.py, worker.py, config.py)","page":"architecture.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/api","page":"api.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/services","page":"services.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/db","page":"db.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/storage","page":"storage.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/security","page":"security.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/vector","page":"vector.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/graph","page":"graph.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/harness","page":"harness.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/ingest","page":"ingest.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/jobs","page":"jobs.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/providers","page":"providers.md","date":"2026-06-24"}
+{"op":"init","source":"src/paw/audit","page":"audit.md","date":"2026-06-24"}
