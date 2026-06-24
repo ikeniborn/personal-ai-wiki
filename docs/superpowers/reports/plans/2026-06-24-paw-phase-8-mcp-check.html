@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Phase 8 MCP</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#1b1f24; --muted:#5b6672; --line:#e2e6eb;
+    --accent:#3b6cf6; --ok:#1a7f4b; --okbg:#e3f6ec;
+    --info:#2563eb; --infobg:#e7effe; --warn:#9a6700; --warnbg:#fff4d6; --crit:#b4232c; --critbg:#fde7e9;
+    --node:#eef2ff; --nodeline:#9db0e8; --edge:#7d8794;
+    --shadow:0 1px 3px rgba(20,24,30,.12);
+  }
+  [data-theme="dark"]{
+    --bg:#0f1318; --panel:#171c23; --ink:#e6eaef; --muted:#9aa6b2; --line:#2a313b;
+    --accent:#6f9bff; --ok:#4cd08a; --okbg:#10271c;
+    --info:#7aa7ff; --infobg:#16243d; --warn:#e3b341; --warnbg:#2e2510; --crit:#ff7b84; --critbg:#36161a;
+    --node:#1d2740; --nodeline:#3f5392; --edge:#7d8794;
+    --shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 22px 64px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px;}
+  h1{font-size:23px;margin:0;letter-spacing:.2px;}
+  h2{font-size:17px;margin:34px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);}
+  .sub{color:var(--muted);font-size:13px;margin:2px 0 0;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow);padding:14px 16px;margin-top:12px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;}
+  tr:last-child td{border-bottom:none;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:var(--node);padding:1px 5px;border-radius:5px;}
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;}
+  .b-ok{background:var(--okbg);color:var(--ok);}
+  .b-info{background:var(--infobg);color:var(--info);}
+  .b-warn{background:var(--warnbg);color:var(--warn);}
+  .b-crit{background:var(--critbg);color:var(--crit);}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;background:var(--panel);}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .phases{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+  .toggle{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:7px 13px;font-size:13px;}
+  .toggle:hover{border-color:var(--accent);}
+  figure{margin:0;}
+  figcaption{color:var(--muted);font-size:12.5px;margin-top:6px;}
+  .chain{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--muted);word-break:break-all;}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px;}
+  .svgbox{overflow-x:auto;}
+  svg text{fill:var(--ink);font:600 12px -apple-system,Segoe UI,Roboto,sans-serif;}
+  .nlabel{font-size:11px;fill:var(--muted);font-weight:500;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Проверка плана — Phase 8 · MCP-сервер</h1>
+      <p class="sub">IDD check-plan · 5 фаз · last_run 2026-06-24</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <span class="badge b-ok" style="font-size:13px;padding:5px 14px;">ВЕРДИКТ: OK</span>
+      <button class="toggle" id="tg" aria-label="Сменить тему">🌗 Тема</button>
+    </div>
+  </header>
+
+  <div class="panel">
+    <table>
+      <tr><th>Артефакт</th><th>Путь</th><th>Хеш</th></tr>
+      <tr><td>План</td><td><code>docs/superpowers/plans/2026-06-24-paw-phase-8-mcp.md</code></td><td><code>2b6aad5fd77280f7</code></td></tr>
+      <tr><td>Спека</td><td><code>docs/superpowers/specs/2026-06-22-paw-phase-8-mcp-design.md</code></td><td><code>33b04c7f8f3a3db9</code></td></tr>
+    </table>
+    <div class="phases">
+      <span class="pill"><span class="dot" style="background:var(--ok)"></span>structure — passed</span>
+      <span class="pill"><span class="dot" style="background:var(--ok)"></span>coverage — passed</span>
+      <span class="pill"><span class="dot" style="background:var(--ok)"></span>dependencies — passed</span>
+      <span class="pill"><span class="dot" style="background:var(--ok)"></span>verifiability — passed</span>
+      <span class="pill"><span class="dot" style="background:var(--ok)"></span>consistency — passed</span>
+    </div>
+    <div class="legend" style="margin-top:10px;">
+      <span><b style="color:var(--ink)">CRITICAL open:</b> 0</span>
+      <span><b style="color:var(--ink)">WARNING open:</b> 0</span>
+      <span><b style="color:var(--ink)">INFO:</b> 4</span>
+    </div>
+  </div>
+
+  <h2>1 · Резюме плана (таски и критерий готовности)</h2>
+  <p class="sub">Цель: read-only MCP-сервер на <code>/mcp</code> (Streamable HTTP, auth по API-ключу) — три инструмента <code>search_wiki</code>/<code>get_article</code>/<code>list_links</code> + surface <code>/api-keys</code>.</p>
+  <div class="panel">
+    <table>
+      <tr><th>Task</th><th>Артефакты</th><th>Критерий готовности (DoD)</th></tr>
+      <tr><td><b>T1</b> Крипто api-ключей + dep MCP</td><td><code>pyproject.toml</code> (+mcp&gt;=1.28, mypy override), <code>security/api_keys.py</code></td><td><code>pytest tests/unit/test_api_keys_crypto.py</code> → 4 passed; ruff+mypy чисто</td></tr>
+      <tr><td><b>T2</b> ApiKeyRepo</td><td><code>db/repos/api_keys.py</code></td><td><code>test_api_keys_repo.py</code> → 4 passed</td></tr>
+      <tr><td><b>T3</b> ApiKeyService</td><td><code>services/api_keys.py</code></td><td><code>test_api_keys_service.py</code> → 5 passed</td></tr>
+      <tr><td><b>T4</b> REST /api-keys</td><td><code>api/routers/api_keys.py</code>, <code>main.py</code> (include)</td><td><code>test_api_keys.py</code> → 5 passed</td></tr>
+      <tr><td><b>T5</b> MCP tool-логика + repo helpers</td><td><code>mcp/__init__.py</code>, <code>mcp/tools.py</code>, <code>domains.py</code> (get_by_name), <code>articles.py</code> (get_by_slug)</td><td><code>test_mcp_tools.py</code> → 4 passed</td></tr>
+      <tr><td><b>T6</b> Сборка build_mcp</td><td><code>mcp/server.py</code></td><td><code>test_mcp_server.py</code> → 2 passed (list_tools == 3 read-only)</td></tr>
+      <tr><td><b>T7</b> Auth-middleware + mount + lifespan</td><td><code>mcp/auth.py</code>, <code>main.py</code> (mount /mcp, lifespan, add_middleware)</td><td><code>test_mcp_auth.py</code> → 3 passed (401/403); регресс <code>tests/api</code> зелёный</td></tr>
+      <tr><td><b>T8</b> E2E round-trip</td><td><code>tests/e2e/test_mcp_e2e.py</code></td><td>uvicorn (порт 0) + реальный mcp-клиент: list_tools==3, search→get→links → 1 passed</td></tr>
+      <tr><td><b>T9</b> Docs + полный CI</td><td><code>docs/wiki/*</code></td><td>ruff &amp;&amp; mypy &amp;&amp; pytest зелёно; iwiki-ingest + /iwiki-lint без битых ссылок; PR в master</td></tr>
+    </table>
+  </div>
+
+  <h2>2 · Зависимости и пересечения</h2>
+  <div class="panel">
+    <figure>
+      <div class="svgbox">
+      <svg viewBox="0 0 900 370" width="900" height="370" role="img" aria-label="Граф зависимостей тасков">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"></path>
+          </marker>
+          <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-opacity="0.25"></feDropShadow>
+          </filter>
+        </defs>
+        <!-- edges (drawn first) -->
+        <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#arr)" opacity="0.85">
+          <line x1="148" y1="60"  x2="262" y2="100"></line>
+          <line x1="148" y1="60"  x2="442" y2="200"></line>
+          <line x1="148" y1="150" x2="262" y2="100"></line>
+          <line x1="338" y1="100" x2="442" y2="80"></line>
+          <line x1="338" y1="100" x2="442" y2="200"></line>
+          <line x1="338" y1="100" x2="622" y2="300"></line>
+          <line x1="148" y1="300" x2="262" y2="300"></line>
+          <line x1="148" y1="300" x2="622" y2="300"></line>
+          <line x1="338" y1="300" x2="442" y2="200"></line>
+          <line x1="338" y1="300" x2="622" y2="300"></line>
+          <line x1="518" y1="200" x2="622" y2="300"></line>
+          <line x1="518" y1="80"  x2="782" y2="200"></line>
+          <line x1="698" y1="300" x2="782" y2="200"></line>
+        </g>
+        <!-- nodes -->
+        <g filter="url(#ds)">
+          <g><rect x="72"  y="43"  width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="110" y="64" text-anchor="middle">T1</text></g>
+          <g><rect x="72"  y="133" width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="110" y="154" text-anchor="middle">T2</text></g>
+          <g><rect x="72"  y="283" width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="110" y="304" text-anchor="middle">T5</text></g>
+          <g><rect x="262" y="83"  width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="300" y="104" text-anchor="middle">T3</text></g>
+          <g><rect x="262" y="283" width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="300" y="304" text-anchor="middle">T6</text></g>
+          <g><rect x="442" y="63"  width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="480" y="84" text-anchor="middle">T4</text></g>
+          <g><rect x="442" y="183" width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="480" y="204" text-anchor="middle">T7</text></g>
+          <g><rect x="622" y="283" width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="660" y="304" text-anchor="middle">T8</text></g>
+          <g><rect x="782" y="183" width="76" height="34" rx="8" fill="var(--node)" stroke="var(--nodeline)"></rect><text x="820" y="204" text-anchor="middle">T9</text></g>
+        </g>
+        <!-- node captions -->
+        <text class="nlabel" x="110" y="34" text-anchor="middle">крипто</text>
+        <text class="nlabel" x="110" y="124" text-anchor="middle">repo</text>
+        <text class="nlabel" x="110" y="274" text-anchor="middle">tools</text>
+        <text class="nlabel" x="300" y="74" text-anchor="middle">service</text>
+        <text class="nlabel" x="300" y="274" text-anchor="middle">build_mcp</text>
+        <text class="nlabel" x="480" y="54" text-anchor="middle">/api-keys</text>
+        <text class="nlabel" x="480" y="174" text-anchor="middle">auth+mount</text>
+        <text class="nlabel" x="660" y="274" text-anchor="middle">e2e</text>
+        <text class="nlabel" x="820" y="174" text-anchor="middle">CI+docs</text>
+      </svg>
+      </div>
+      <figcaption>Граф зависимостей тасков (M→N, M&lt;N). Циклов и нарушений порядка не найдено — фаза <b>dependencies</b> passed.</figcaption>
+    </figure>
+  </div>
+
+  <div class="panel">
+    <p class="sub" style="margin:0 0 8px;"><b>Пересечения по артефактам (overlap)</b></p>
+    <table>
+      <tr><th>Файл</th><th>Таски</th><th>Риск конфликта</th></tr>
+      <tr><td><code>src/paw/main.py</code></td><td>T4 (include api_keys_router) · T7 (mount /mcp + lifespan + add_middleware)</td><td><span class="badge b-ok">нет</span> правки в разных участках <code>create_app()</code></td></tr>
+      <tr><td>Все прочие файлы</td><td>по одному создателю</td><td><span class="badge b-ok">нет</span></td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <p class="sub" style="margin:0 0 8px;"><b>Покрытие требований спеки → таски</b> (каждое требование закрыто ≥1 таском; scope-creep не найден)</p>
+    <table>
+      <tr><th>Требование</th><th>Таски</th></tr>
+      <tr><td>Инструменты search_wiki / get_article / list_links</td><td>T5 (логика) · T6 (регистрация) · T8 (e2e)</td></tr>
+      <tr><td>API-key Bearer auth (prefix→sha256→scopes→revoked)</td><td>T1 · T3 · T7</td></tr>
+      <tr><td>CSRF-exempt для api-key пути</td><td>T7 (middleware, без CSRF на /mcp)</td></tr>
+      <tr><td>POST·GET·DELETE /api-keys</td><td>T4</td></tr>
+      <tr><td>AC1 — 3 read-only инструмента, нет write</td><td>T6 · T8</td></tr>
+      <tr><td>AC2 — search/get/links результаты</td><td>T5 · T8</td></tr>
+      <tr><td>AC3 — 401 revoked/unknown, 403 нет scope</td><td>T7</td></tr>
+      <tr><td>AC4 — domain scoping</td><td>T5 (cross-domain reject) · T8</td></tr>
+      <tr><td>Tests Unit / Integration / API / E2E</td><td>T1,T6 / T2,T3,T5 / T4,T7 / T8</td></tr>
+    </table>
+  </div>
+
+  <h2>3 · Результаты проверки</h2>
+  <div class="panel">
+    <table>
+      <tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr>
+      <tr><td><b>F-001</b></td><td><span class="badge b-info">INFO</span></td><td>Task 4 · Step 5</td><td>Ожидаемый счёт «PASS (5 passed)» совпадает с 5 тест-функциями — консистентно.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><b>F-002</b></td><td><span class="badge b-info">INFO</span></td><td>Task 7</td><td>Требование «Traefik не буферизует Streamable HTTP» — deploy/infra, отражено в Risks, без отдельного шага — допустимо.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><b>F-003</b></td><td><span class="badge b-warn">WARNING</span></td><td>Task 8</td><td>Тестовый <code>db_session</code> — свой engine; middleware/инструменты читают через глобальный <code>get_sessionmaker()</code>. Одна физическая БД, seed коммитится до чтения — видимость есть. Держать <code>await db_session.commit()</code> перед чтением app/MCP.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><b>F-004</b></td><td><span class="badge b-info">INFO</span></td><td>Task 9 · Step 3</td><td>Регенерация wiki через iwiki — наименее строго измерима, но есть проверка <code>/iwiki-lint</code> и ожидаемый итог — проходит порог.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><b>F-005</b></td><td><span class="badge b-warn">WARNING</span></td><td>Task 6 · Step 3</td><td>API FastMCP (конструктор, <code>settings.streamable_http_path</code>, <code>session_manager.run()</code>, <code>streamable_http_app()</code>, <code>@mcp.tool</code>, <code>list_tools()</code>) не проверен эмпирически — <code>mcp</code> не установлен в среде ревью. Внешний SDK <code>mcp&gt;=1.28</code>; подтвердить на T1/T6.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><b>F-006</b></td><td><span class="badge b-info">INFO</span></td><td>Task 7 · Step 6</td><td>Отсутствие регрессий подтверждено: тесты используют <code>ASGITransport</code> без lifespan-менеджера → FastAPI lifespan не запускается; <code>MCPAuthMiddleware</code> пропускает не-/mcp пути. E2E запускает uvicorn с <code>lifespan='on'</code>.</td><td><span class="badge b-ok">accepted</span></td></tr>
+    </table>
+    <div class="legend" style="margin-top:12px;">
+      <span><span class="badge b-crit">CRITICAL</span> 0 open</span>
+      <span><span class="badge b-warn">WARNING</span> 0 open (2 accepted)</span>
+      <span><span class="badge b-info">INFO</span> 4</span>
+    </div>
+    <p style="margin:12px 0 0;"><b>Финальный вердикт: <span class="badge b-ok">OK</span></b> — план исполним как написан; все несущие символы/сигнатуры проверены против реального кода репозитория.</p>
+  </div>
+
+  <h2>Chain</h2>
+  <div class="panel">
+    <p class="chain">intent: <i>нет</i> &nbsp;→&nbsp; docs/superpowers/specs/2026-06-22-paw-phase-8-mcp-design.md &nbsp;→&nbsp; docs/superpowers/plans/2026-06-24-paw-phase-8-mcp.md</p>
+  </div>
+
+  <p class="sub" style="margin-top:26px;">Сгенерировано навыком html-report · self-contained · оффлайн.</p>
+</div>
+
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('tg');
+    var saved=null; try{saved=localStorage.getItem('paw-theme');}catch(e){}
+    if(saved){root.setAttribute('data-theme',saved);}
+    btn.addEventListener('click',function(){
+      var cur=root.getAttribute('data-theme')==='dark'?'light':'dark';
+      root.setAttribute('data-theme',cur);
+      try{localStorage.setItem('paw-theme',cur);}catch(e){}
+    });
+  })();
+</script>
+</body>
+</html>
