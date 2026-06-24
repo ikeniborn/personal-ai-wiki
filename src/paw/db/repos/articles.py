@@ -34,6 +34,12 @@ class ArticleRepo:
     async def get(self, article_id: uuid.UUID) -> Article | None:
         return await self._s.get(Article, article_id)
 
+    async def get_by_slug(self, domain_id: uuid.UUID, slug: str) -> Article | None:
+        res = await self._s.execute(
+            select(Article).where(Article.domain_id == domain_id, Article.slug == slug)
+        )
+        return res.scalar_one_or_none()
+
     async def list_by_domain(self, domain_id: uuid.UUID) -> list[Article]:
         res = await self._s.execute(
             select(Article).where(Article.domain_id == domain_id).order_by(Article.slug)

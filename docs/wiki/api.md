@@ -2,13 +2,14 @@
 
 ## Overview
 
-`paw` exposes a thin async FastAPI layer: JSON routers mounted under `/api/v1` (auth, domains, sources, articles, setup, settings, users, jobs, query, chat, graph, maintenance) plus an HTMX web UI. Handlers stay thin — they validate, call a [[services#How services are wired]] method, and serialize. `deps.py` injects the DB session, current user/role, redis and CSRF guards; errors raise `ProblemError` rendered as RFC 9457 problem+json; cursor pagination is a tiny base64 helper. The query router (Phase 7) adds a cache layer and a `suggest` endpoint for as-you-type completions.
+`paw` exposes a thin async FastAPI layer: JSON routers mounted under `/api/v1` (auth, domains, sources, articles, setup, settings, users, api-keys, jobs, query, chat, graph, maintenance) plus an HTMX web UI and an MCP server at `/mcp`. Handlers stay thin — they validate, call a [[services#How services are wired]] method, and serialize. `deps.py` injects the DB session, current user/role, redis and CSRF guards; errors raise `ProblemError` rendered as RFC 9457 problem+json; cursor pagination is a tiny base64 helper. The query router (Phase 7) adds a cache layer and a `suggest` endpoint for as-you-type completions. Phase 8 adds the api-keys router and the [[mcp#Auth & mount]] endpoint.
 
 ## App wiring
 
 `main.py::create_app()` builds the `FastAPI` app, installs error handlers, adds a CSP middleware that stamps a strict `Content-Security-Policy` on every response, and registers `GET /health`. Every JSON router is mounted with `prefix="/api/v1"`; the HTMX `web_routes.router` mounts at root and `/static` serves assets. See [[architecture#Layered dependencies (no cycles)]].
 
-- One include loop adds all twelve API routers under `/api/v1`.
+- One include loop adds all thirteen API routers under `/api/v1` (auth, domains, sources, articles, setup, settings, users, api-keys, jobs, query, chat, graph, maintenance).
+- `app.mount("/mcp", mcp_asgi)` mounts the MCP ASGI app; `app.add_middleware(MCPAuthMiddleware)` wraps the whole app with Bearer api-key auth. `mcp.streamable_http_app()` must be called before `mcp.session_manager` is accessed; the lifespan runs `mcp.session_manager.run()`. See [[mcp#Auth & mount]].
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'`.
 - `app = create_app()` is the module-level ASGI entrypoint (`uvicorn paw.main:app`).
 
@@ -100,6 +101,14 @@
 ## Graph router
 
 `graph.py` (`GET /graph`) returns a JSON subgraph for the Cytoscape page via [[services#GraphService]] and [[graph#Subgraph]]. Query params: `domain`, `root`, optional `depth` and `types` (CSV link-type allowlist — absent = full allowlist, empty = root only). Response carries `nodes` (`id/slug/title/summary`) and `edges` (`src/dst/type`).
+
+## Api-keys router
+
+`api_keys.py` (`/api/v1/api-keys`) lets users manage personal API keys for MCP access. All write endpoints require `require_csrf`; all endpoints require `current_user` (session auth). The full token is shown exactly once at issue time and never returned again. See [[security#API keys]] and [[services#How services are wired]].
+
+- `POST /api-keys` (201) — body `{scopes: ["read"]}` (default `["read"]`); response `{id, prefix, key, scopes}` — `key` is the full `paw_<prefix>.<secret>` token.
+- `GET /api-keys` — list caller's keys as `[{id, prefix, scopes, created_at, last_used, revoked_at}]`; secret never returned.
+- `DELETE /api-keys/{key_id}` (204) — revokes a key owned by the caller; 404 if not found or not owned.
 
 ## Web UI (HTMX)
 

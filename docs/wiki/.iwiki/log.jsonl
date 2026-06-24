@@ -19,3 +19,7 @@
 {"op":"ingest","source":"src/paw/harness","page":"harness.md","date":"2026-06-24","note":"phase7: ingest/fix/format call cache stale seam"}
 {"op":"ingest","source":"src/paw/db","page":"db.md","date":"2026-06-24","note":"phase7 followups: delete_expired domain scope, suggest LIKE-escape"}
 {"op":"ingest","source":"src/paw/jobs","page":"jobs.md","date":"2026-06-24","note":"phase7 followups: per-domain TTL gc"}
+{"op":"ingest","source":"src/paw/mcp","page":"mcp.md","date":"2026-06-24"}
+{"op":"ingest","source":"src/paw/security/api_keys.py","page":"security.md","date":"2026-06-24"}
+{"op":"ingest","source":"src/paw/api/routers/api_keys.py","page":"api.md","date":"2026-06-24"}
+{"op":"ingest","source":"src/paw/services/api_keys.py","page":"mcp.md","date":"2026-06-24"}

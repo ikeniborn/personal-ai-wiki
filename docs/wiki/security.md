@@ -1,7 +1,7 @@
 # Security
 
 ## Overview
-Security spans Redis-backed server-side sessions (opaque `paw_session` cookie), `require_role` RBAC and `require_csrf` double-submit CSRF (exempt for GET/HEAD/OPTIONS), argon2 password hashing, Fernet-encrypted secrets at rest via `SecretBox`, upload validation by extension/magic-bytes/UTF-8, nh3 HTML sanitization of rendered markdown, and a CSP/security-headers middleware. Enforcement is wired through FastAPI dependencies in [[api#Dependency helpers (deps.py)]].
+Security spans Redis-backed server-side sessions (opaque `paw_session` cookie), `require_role` RBAC and `require_csrf` double-submit CSRF (exempt for GET/HEAD/OPTIONS), argon2 password hashing, Fernet-encrypted secrets at rest via `SecretBox`, upload validation by extension/magic-bytes/UTF-8, nh3 HTML sanitization of rendered markdown, a CSP/security-headers middleware, and Bearer api-key auth for the MCP endpoint. Enforcement is wired through FastAPI dependencies in [[api#Dependency helpers (deps.py)]].
 
 ## Sessions
 `SessionStore` (`security/sessions.py`) keeps sessions server-side in Redis under the `session:` prefix; the `paw_session` cookie holds only an opaque `secrets.token_urlsafe(32)` id. `create` writes `user_id` with a TTL, `get` reads it, `delete` revokes it. The cookie is `SameSite=Lax`.
@@ -50,6 +50,15 @@ Provider API keys and other secrets are encrypted at rest with Fernet via `Secre
 `security/sanitize.py` renders user markdown and then strips dangerous HTML. `render_markdown` runs mistune (tables + strikethrough) and passes the result through `nh3.clean` with a strict tag/attribute allow-list (`_ALLOWED_TAGS`, `_ALLOWED_ATTRS` — only `href/title` on `a`, `src/alt/title` on `img`).
 
 - `[[slug]]` / `[[slug|label]]` wikilinks are extracted (`extract_wikilink_targets`) and resolved to article links (`resolve_wikilinks`) **before** rendering; unknown slugs degrade to plain text. See [[services#ArticleService]].
+
+## API keys
+
+`security/api_keys.py` provides the crypto primitives for MCP Bearer tokens. A key has the shape `paw_<prefix>.<secret>` where `prefix` is 8 hex chars (`secrets.token_hex(4)`) and `secret` is a urlsafe-base64 string (`secrets.token_urlsafe(32)`). Only the SHA-256 hash of the secret is stored — the prefix is the non-secret lookup handle. `verify_secret` uses `hmac.compare_digest` for constant-time comparison; importantly the verification runs before the revocation check, so timing cannot distinguish wrong-secret from revoked. The only current scope is `"read"` (`MCP_REQUIRED_SCOPE`).
+
+- `generate_key()` → `(prefix, secret, full_token)` — caller stores `hash_secret(secret)`, shows `full_token` to the user once.
+- `parse_bearer(authorization)` → `(prefix, secret) | None` — strips the `Bearer paw_` prefix and splits on `.`.
+- `ApiKeyService` (`services/api_keys.py`) is the commit boundary: `issue` and `revoke` each call `session.commit()` once; `authenticate` also commits after `touch_last_used`. `list` is read-only.
+- `MCPAuthMiddleware` gates all `/mcp` requests: 401 if authentication fails, 403 if `"read"` scope is absent. See [[mcp#Auth & mount]] and [[api#Api-keys router]].
 
 ## Headers
 A CSP / security-headers middleware is wired in `main.py::create_app()` alongside the routers and `/health`, so every response carries a Content-Security-Policy and related hardening headers. See [[architecture#create_app() wiring]] for where the middleware sits in the stack and [[api#Dependency helpers (deps.py)]] for the per-route guards above.

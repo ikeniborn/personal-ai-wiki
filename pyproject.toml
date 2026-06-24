@@ -24,6 +24,7 @@ dependencies = [
     "mammoth>=1.8",
     "trafilatura>=1.12",
     "markdownify>=0.13",
+    "mcp>=1.28",
 ]
 
 [dependency-groups]
@@ -62,3 +63,7 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["mcp.*"]
+ignore_missing_imports = true
