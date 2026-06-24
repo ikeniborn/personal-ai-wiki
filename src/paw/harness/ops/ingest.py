@@ -17,6 +17,7 @@ from paw.harness.prompts import get_prompt
 from paw.ingest.chunking import build_chunks
 from paw.providers.base import ChatProvider, EmbeddingProvider, Message
 from paw.providers.config import WikiConfig
+from paw.services.cache_seam import mark_cache_stale
 from paw.services.ingest_write import upsert_article
 from paw.vector.embed import embed_and_write
 
@@ -155,6 +156,7 @@ async def run_ingest(
         for eid in entity_ids:
             await chunk_repo.tag_entity(chunk_id=cid, entity_id=eid)
 
+    await mark_cache_stale(session, domain_id=domain_id, article_ids=[art.id])
     return IngestResult(
         article_id=art.id,
         chunk_count=len(ids),

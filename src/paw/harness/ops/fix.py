@@ -12,7 +12,7 @@ from paw.harness.ops.lint import LintIssue
 from paw.harness.prompts import get_prompt
 from paw.providers.base import ChatProvider, Message
 from paw.providers.config import WikiConfig
-from paw.services.cache_seam import mark_domain_cache_stale
+from paw.services.cache_seam import mark_cache_stale
 from paw.services.ingest_write import upsert_article
 from paw.storage.postgres import PostgresStorage
 
@@ -95,7 +95,7 @@ async def apply_fix(
         target_id=art.id,
         meta={"issue_kind": issue.kind, "issue_id": issue.id},
     )
-    await mark_domain_cache_stale(session, domain_id)
+    await mark_cache_stale(session, domain_id=domain_id, article_ids=[art.id])
     return True
 
 
