@@ -3,7 +3,11 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.config import get_settings
-from paw.db.managed import ensure_embedding_column, rebuild_embedding_column
+from paw.db.managed import (
+    ensure_embedding_column,
+    rebuild_embedding_column,
+    rebuild_query_cache_embedding_column,
+)
 from paw.db.repos.settings import SettingsRepo
 from paw.providers.config import (
     CHAT_KEY,
@@ -112,6 +116,7 @@ class ProviderSettingsService:
         )
         if current is not None and current != embedding_dim:
             await rebuild_embedding_column(self._s, embedding_dim)
+            await rebuild_query_cache_embedding_column(self._s, embedding_dim)
             await self.bump_embedding_version()
         else:
             await ensure_embedding_column(self._s, embedding_dim)
