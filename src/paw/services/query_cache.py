@@ -17,6 +17,7 @@ from paw.db.managed import (
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.query_cache import QueryCacheRepo
 from paw.harness.retrieve import Passage, Ref
+from paw.obs import metrics
 from paw.providers.config import QueryCacheConfig
 from paw.providers.factory import build_embedding_provider
 from paw.security.secrets import SecretBox
@@ -113,7 +114,7 @@ class QueryCacheService:
         self._embed_memo[question] = result
         return result
 
-    async def lookup(
+    async def _lookup_impl(
         self, *, domain_id: uuid.UUID, question: str, cfg: QueryCacheConfig
     ) -> CacheHit | None:
         norm = normalize_query(question)
@@ -133,6 +134,13 @@ class QueryCacheService:
         if not passes_threshold(dist, cfg.sim_threshold):
             return None
         return CacheHit(row.id, row.answer_md, row.refs, row.passages, row.stale)
+
+    async def lookup(
+        self, *, domain_id: uuid.UUID, question: str, cfg: QueryCacheConfig
+    ) -> CacheHit | None:
+        result = await self._lookup_impl(domain_id=domain_id, question=question, cfg=cfg)
+        metrics.CACHE_HITS.labels(result="hit" if result is not None else "miss").inc()
+        return result
 
     async def touch(self, cache_id: uuid.UUID) -> None:
         await self._repo.touch(cache_id=cache_id)

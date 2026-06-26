@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paw.api.deps import db, get_redis, require_csrf, require_role
 from paw.harness.ops.query import DONT_KNOW
 from paw.harness.retrieve import Passage, Ref, RetrievedContext
+from paw.obs import metrics
 from paw.services.query import Prepared, QueryService
 from paw.services.query_cache import CacheHit, QueryCacheService
 
@@ -87,15 +88,19 @@ def _cached_result(hit: CacheHit) -> QueryResult:
 
 def _sse_cached(hit: CacheHit) -> AsyncIterator[str]:
     async def gen() -> AsyncIterator[str]:
-        yield f"data: {json.dumps({'token': hit.answer_md}, ensure_ascii=False)}\n\n"
-        done = {
-            "status": "done",
-            "refs": hit.refs,
-            "passages": hit.passages,
-            "stale": hit.stale,
-            "cached": True,
-        }
-        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
+        metrics.SSE_ACTIVE.inc()
+        try:
+            yield f"data: {json.dumps({'token': hit.answer_md}, ensure_ascii=False)}\n\n"
+            done = {
+                "status": "done",
+                "refs": hit.refs,
+                "passages": hit.passages,
+                "stale": hit.stale,
+                "cached": True,
+            }
+            yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
+        finally:
+            metrics.SSE_ACTIVE.dec()
 
     return gen()
 
@@ -109,26 +114,30 @@ def _sse_compute(
     model: str,
 ) -> AsyncIterator[str]:
     async def gen() -> AsyncIterator[str]:
-        tokens: list[str] = []
-        if prepared.messages is None:
-            yield f"data: {json.dumps({'token': DONT_KNOW}, ensure_ascii=False)}\n\n"
-        else:
-            async for tok in prepared.chat.stream(prepared.messages):
-                tokens.append(tok)
-                yield f"data: {json.dumps({'token': tok}, ensure_ascii=False)}\n\n"
-        done = {
-            "status": "done",
-            "refs": _refs_json(prepared.ctx.refs),
-            "passages": _passages_json(prepared.ctx.passages),
-            "stale": False,
-            "cached": False,
-        }
-        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
-        if cache is not None and prepared.ctx.refs and tokens:
-            await cache.upsert(
-                domain_id=domain_id, question=question, answer_md="".join(tokens),
-                refs=prepared.ctx.refs, passages=prepared.ctx.passages, model=model,
-            )
+        metrics.SSE_ACTIVE.inc()
+        try:
+            tokens: list[str] = []
+            if prepared.messages is None:
+                yield f"data: {json.dumps({'token': DONT_KNOW}, ensure_ascii=False)}\n\n"
+            else:
+                async for tok in prepared.chat.stream(prepared.messages):
+                    tokens.append(tok)
+                    yield f"data: {json.dumps({'token': tok}, ensure_ascii=False)}\n\n"
+            done = {
+                "status": "done",
+                "refs": _refs_json(prepared.ctx.refs),
+                "passages": _passages_json(prepared.ctx.passages),
+                "stale": False,
+                "cached": False,
+            }
+            yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
+            if cache is not None and prepared.ctx.refs and tokens:
+                await cache.upsert(
+                    domain_id=domain_id, question=question, answer_md="".join(tokens),
+                    refs=prepared.ctx.refs, passages=prepared.ctx.passages, model=model,
+                )
+        finally:
+            metrics.SSE_ACTIVE.dec()
 
     return gen()
 
