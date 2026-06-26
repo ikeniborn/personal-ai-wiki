@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>paw-9d-backups-deploy — chain report</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+body{
+  margin:0 auto; padding:1.2rem 2rem 4rem; max-width:1140px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1{font-size:1.5rem;margin:.2rem 0}
+h2{font-size:1.2rem;margin:1.6rem 0 .6rem;border-bottom:2px solid var(--border);padding-bottom:.25rem}
+h3{font-size:1.02rem;margin:1.1rem 0 .4rem;color:var(--accent)}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+header{display:flex;flex-direction:column;gap:.15rem}
+.sub{color:var(--muted);font-size:.9rem}
+table{border-collapse:collapse;width:100%;margin:.6rem 0 1rem;font-size:.9rem;background:var(--surface);box-shadow:0 1px 3px var(--shadow);border-radius:8px;overflow:hidden}
+th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left;vertical-align:top}
+th{background:color-mix(in srgb,var(--accent) 14%, var(--surface));color:var(--fg)}
+tbody tr:nth-child(even){background:var(--zebra)}
+code{background:color-mix(in srgb,var(--accent) 12%, var(--surface));padding:.05rem .3rem;border-radius:4px;font-size:.86em}
+.note{background:color-mix(in srgb,var(--accent) 10%, var(--surface));border-left:4px solid var(--accent);padding:.6rem .9rem;border-radius:6px;margin:.8rem 0}
+.badge{display:inline-block;padding:.08rem .5rem;border-radius:999px;font-size:.76rem;font-weight:600;line-height:1.5}
+.b-ok{background:color-mix(in srgb,var(--ok) 25%, var(--surface));color:var(--ok-2);border:1px solid var(--ok)}
+.b-warn{background:color-mix(in srgb,var(--warn) 22%, var(--surface));color:var(--warn-2);border:1px solid var(--warn)}
+.b-info{background:color-mix(in srgb,var(--accent) 18%, var(--surface));color:var(--accent-2);border:1px solid var(--accent)}
+.b-crit{background:color-mix(in srgb,var(--danger) 22%, var(--surface));color:var(--danger-2);border:1px solid var(--danger)}
+figure{margin:1rem 0}
+figcaption{color:var(--muted);font-size:.85rem;margin-top:.3rem}
+svg{max-width:100%;height:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.legend{font-size:.82rem;color:var(--muted);margin:.3rem 0}
+/* tabs */
+.tab-radio{position:absolute;opacity:0;pointer-events:none}
+.chain-tabs{display:flex;gap:.3rem;margin:1rem 0 0;flex-wrap:wrap}
+.chain-tabs label{cursor:pointer;padding:.4rem .9rem;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:var(--surface);color:var(--muted)}
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent);border-color:var(--accent);font-weight:600}
+.tab-pane{display:none;border:1px solid var(--border);border-radius:0 10px 10px 10px;padding:1rem 1.3rem;background:color-mix(in srgb,var(--surface) 70%, var(--bg))}
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{display:block}
+.verdict{font-size:1.05rem;font-weight:700;padding:.6rem .9rem;border-radius:8px;display:inline-block;margin:.5rem 0}
+.v-pass{background:color-mix(in srgb,var(--ok) 22%, var(--surface));color:var(--ok-2);border:1px solid var(--ok)}
+.summary-row{display:flex;gap:.6rem;flex-wrap:wrap;margin:.6rem 0}
+.chip{padding:.3rem .7rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:.85rem}
+.small{font-size:.82rem;color:var(--muted)}
+.matrix td.hit{background:color-mix(in srgb,var(--accent) 18%, var(--surface));text-align:center;font-weight:700;color:var(--accent-2)}
+.matrix td.empty{text-align:center;color:var(--muted)}
+ul{margin:.3rem 0 .6rem;padding-left:1.2rem}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<header>
+  <h1>paw · Phase 9d — Backups + deploy hardening</h1>
+  <div class="sub">Цепочка IDD→SDD · вкладка <b>Plan</b> обновлена check-plan · 2026-06-26</div>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+
+  <h2>1. Резюме плана</h2>
+  <p class="small">План: <code>2026-06-26-paw-9d-backups-deploy.md</code> · infra-only под-план фазы 9 · plan_hash <code>5bb187aa647b12c3</code> · 8 задач.</p>
+  <p class="note">Под-план <b>9d</b> покрывает только: запланированные <code>pg_dump</code>-бэкапы + retention + протестированное восстановление; compose-профиль <code>backup</code>; restart-политики; worker-healthcheck; гайд по ресурсам; deploy-переменные в <code>.env.example</code>; prod/ops-документ. Остальные пункты фазы 9 (observability / security / loaders / admin-ui / i18n) принадлежат смежным под-планам 9a/9b/9c — вне scope (частичное покрытие спеки ожидаемо).</p>
+
+  <table>
+    <thead><tr><th>Задача</th><th>Шаг</th><th>Действие</th><th>Определение готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="5"><b>Task 1</b><br>Backup + restore shell-скрипты</td><td>1</td><td>Создать <code>deploy/backup/backup.sh</code> (<code>pg_dump --format=custom</code> + прунинг по retention)</td><td>Файл создан с указанным содержимым</td></tr>
+      <tr><td>2</td><td>Создать <code>deploy/backup/restore.sh</code> (<code>pg_restore --clean --if-exists</code>, отказ без пути дампа)</td><td>Файл создан</td></tr>
+      <tr><td>3</td><td><code>chmod +x</code> обоих скриптов</td><td>Режим <code>0755</code>, проверка <code>ls -l deploy/backup</code></td></tr>
+      <tr><td>4</td><td>Синтакс-проверка <code>sh -n</code> обоих скриптов</td><td>Печатает <code>syntax-ok</code>, без ошибок парсинга</td></tr>
+      <tr><td>5</td><td>Коммит</td><td><code>feat(ops)</code> commit</td></tr>
+
+      <tr><td rowspan="6"><b>Task 2</b><br>backup-sidecar + volume <code>backups</code> в compose</td><td>1</td><td>Прочитать текущий <code>docker-compose.yml</code></td><td>Подтверждены границы блоков сервисов и карта volumes</td></tr>
+      <tr><td>2</td><td>Добавить сервис <code>backup</code> (<code>postgres:16-alpine</code>, <code>profiles:["backup"]</code>, loop <code>backup.sh</code>+<code>sleep</code>)</td><td>YAML вставлен перед <code>volumes:</code></td></tr>
+      <tr><td>3</td><td>Добавить именованный volume <code>backups</code></td><td><code>backups:</code> в карте volumes</td></tr>
+      <tr><td>4</td><td><code>docker compose config</code> валидация</td><td>Печатает <code>compose-config-ok</code>; <code>--profiles</code> перечисляет <code>backup</code></td></tr>
+      <tr><td>5</td><td>Подтвердить, что default <code>up</code> исключает <code>backup</code></td><td>Список без профиля НЕ содержит <code>backup</code>; с <code>--profile backup</code> — содержит</td></tr>
+      <tr><td>6</td><td>Коммит</td><td><code>feat(ops)</code> commit</td></tr>
+
+      <tr><td rowspan="5"><b>Task 3</b><br>restart-политики, worker-healthcheck, гайд по ресурсам</td><td>1</td><td><code>restart: unless-stopped</code> пяти долгоживущим сервисам (traefik/postgres/redis/api/worker)</td><td>Строки добавлены; <code>init</code>/<code>backup</code> не тронуты</td></tr>
+      <tr><td>2</td><td>worker-healthcheck (Python-проба ключа <code>paw:worker:heartbeat</code> через <code>REDIS_URL</code>)</td><td>Блок <code>healthcheck</code> добавлен</td></tr>
+      <tr><td>3</td><td><code>deploy.resources</code> на каждый сервис</td><td>Блоки добавлены</td></tr>
+      <tr><td>4</td><td><code>docker compose config</code> валидация</td><td><code>compose-config-ok</code></td></tr>
+      <tr><td>5</td><td>Коммит</td><td><code>feat(ops)</code> commit</td></tr>
+
+      <tr><td rowspan="4"><b>Task 4</b><br>deploy/backup env-vars в <code>.env.example</code></td><td>1</td><td>Прочитать текущий файл</td><td>Подтверждено окончание после <code>FERNET_KEY</code></td></tr>
+      <tr><td>2</td><td>Дописать секцию (POSTGRES_PASSWORD, ACME_EMAIL, PAW_HOST, BACKUP_RETENTION_DAYS, BACKUP_INTERVAL_SECONDS)</td><td>Append-only; старые строки не тронуты</td></tr>
+      <tr><td>3</td><td>Проверка парсинга как env (<code>set -a; . ./.env.example</code>)</td><td>Печатает 3 значения, без ошибок</td></tr>
+      <tr><td>4</td><td>Коммит</td><td><code>docs(ops)</code> commit</td></tr>
+
+      <tr><td rowspan="4"><b>Task 5</b><br>backup→restore roundtrip-тест (Docker-gated)</td><td>1</td><td>Написать <code>tests/integration/test_backup_restore.py</code></td><td>seeds→dump→delete→restore→assert row counts</td></tr>
+      <tr><td>2</td><td>Запустить локально</td><td><code>1 skipped</code> без Docker; <code>1 passed</code> на Docker-хосте/CI</td></tr>
+      <tr><td>3</td><td><code>ruff</code> на новом файле</td><td>Без ошибок</td></tr>
+      <tr><td>4</td><td>Коммит</td><td><code>test(ops)</code> commit</td></tr>
+
+      <tr><td rowspan="5"><b>Task 6</b><br>живая проверка backup-профиля (Docker host)</td><td>1</td><td>Поднять стек + backup-профиль</td><td><code>backup</code> running; <code>worker</code> healthy</td></tr>
+      <tr><td>2</td><td>Форсировать backup, подтвердить дамп</td><td><code>[backup] wrote …</code>; <code>ls</code> показывает <code>paw-*.dump</code> ненулевого размера</td></tr>
+      <tr><td>3</td><td>Restore в scratch DB, сравнить row counts</td><td>counts <code>domains</code>/<code>articles</code> в <code>paw_restore</code> == baseline (AC#4 live)</td></tr>
+      <tr><td>4</td><td>Подтвердить прунинг retention</td><td><code>paw-old.dump</code> (10 дней) удалён, свежий остаётся</td></tr>
+      <tr><td>5</td><td>Зафиксировать результат</td><td>Counts в PR description или отметка «deferred to Docker host»</td></tr>
+
+      <tr><td rowspan="3"><b>Task 7</b><br>prod/ops-документ + README cross-link</td><td>1</td><td>Создать <code>docs/wiki/ops.md</code> (10 секций: Overview, Required env, TLS/ACME, Named volumes, Healthchecks, Restart policies, Resource guidance, Backups, Restore procedure, Prod checklist)</td><td>Файл с перечисленными секциями</td></tr>
+      <tr><td>2</td><td>Cross-link из <code>README.md</code></td><td>Секция «Deployment / Ops» добавлена</td></tr>
+      <tr><td>3</td><td>Коммит</td><td><code>docs(ops)</code> commit</td></tr>
+
+      <tr><td rowspan="5"><b>Task 8</b><br>docs refresh + полный CI + PR</td><td>1</td><td>Полный прогон тестов <code>uv run pytest -q</code></td><td>Green; новый тест skipped локально / passed на CI</td></tr>
+      <tr><td>2</td><td>Полный CI-гейт (<code>ruff</code> + <code>mypy</code> + <code>pytest</code>)</td><td>Все три проходят</td></tr>
+      <tr><td>3</td><td><code>iwiki-ingest</code> ops.md + docker-compose.yml, затем <code>/iwiki-lint</code></td><td>Проиндексировано; cross-links резолвятся; нет битых <code>[[refs]]</code>/orphan/stale</td></tr>
+      <tr><td>4</td><td>Коммит docs</td><td><code>docs(wiki)</code> commit</td></tr>
+      <tr><td>5</td><td>Открыть PR в <code>master</code> (отметить вероятный merge-конфликт с 9a/9b)</td><td>PR создан; worktree удалён, если использовался</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей задач</h3>
+  <figure>
+    <svg viewBox="0 0 920 320" role="img" aria-label="Граф зависимостей задач">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--line)"></path>
+        </marker>
+      </defs>
+      <!-- edges (M -> N, M<N) -->
+      <g stroke="var(--line)" stroke-width="2" fill="none" marker-end="url(#arrow)">
+        <line x1="120" y1="70" x2="270" y2="70"></line>   <!-- T1->T2 -->
+        <line x1="95"  y1="95" x2="430" y2="245"></line>  <!-- T1->T6 -->
+        <line x1="320" y1="95" x2="445" y2="240"></line>  <!-- T2->T6 -->
+        <line x1="320" y1="190" x2="455" y2="235"></line> <!-- T3->T6 -->
+        <line x1="520" y1="170" x2="700" y2="100"></line> <!-- T4->T7 -->
+        <line x1="345" y1="175" x2="690" y2="90"></line>  <!-- T3->T7 -->
+        <line x1="520" y1="265" x2="700" y2="95"></line>  <!-- T6->T7 -->
+        <line x1="620" y1="195" x2="800" y2="105"></line> <!-- T5->T8 -->
+        <line x1="785" y1="70" x2="810" y2="70"></line>   <!-- T7->T8 (short, see layout) -->
+      </g>
+      <g font-size="13" font-family="system-ui" text-anchor="middle">
+        <g><rect x="40" y="50" width="80" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="80" y="74" fill="var(--fg)">T1 scripts</text></g>
+        <g><rect x="270" y="50" width="80" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="310" y="74" fill="var(--fg)">T2 sidecar</text></g>
+        <g><rect x="270" y="160" width="80" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="310" y="184" fill="var(--fg)">T3 compose</text></g>
+        <g><rect x="450" y="150" width="80" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="490" y="174" fill="var(--fg)">T4 env</text></g>
+        <g><rect x="560" y="180" width="80" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="600" y="204" fill="var(--fg)">T5 test</text></g>
+        <g><rect x="430" y="245" width="90" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="475" y="269" fill="var(--fg)">T6 live</text></g>
+        <g><rect x="700" y="50" width="85" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="742" y="74" fill="var(--fg)">T7 ops-doc</text></g>
+        <g><rect x="810" y="50" width="80" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"></rect><text x="850" y="74" fill="var(--fg)">T8 CI/PR</text></g>
+      </g>
+    </svg>
+    <figcaption>Рёбра M→N: «результат задачи M используется в задаче N» (M&lt;N). Циклов и нарушений порядка нет. Примечание: T2 ссылается на env-vars из T4 через <code>${VAR:-default}</code>, поэтому жёсткой forward-зависимости нет (значения по умолчанию).</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам (задача × файл)</h3>
+  <table class="matrix">
+    <thead><tr><th>Файл</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>T8</th></tr></thead>
+    <tbody>
+      <tr><td><code>docker-compose.yml</code></td><td class="empty">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td></tr>
+      <tr><td><code>.env.example</code></td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="hit">✓</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td></tr>
+      <tr><td><code>README.md</code></td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="hit">✓</td><td class="empty">·</td></tr>
+      <tr><td><code>docs/wiki/ops.md</code></td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="hit">✓</td><td class="hit">✓</td></tr>
+      <tr><td><code>deploy/backup/*.sh</code></td><td class="hit">✓</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="hit">✓</td><td class="empty">·</td><td class="empty">·</td></tr>
+      <tr><td><code>tests/integration/test_backup_restore.py</code></td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td><td class="hit">✓</td><td class="empty">·</td><td class="empty">·</td><td class="empty">·</td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Пересечение внутри плана только в <code>docker-compose.yml</code> (T2/T3) — разные сервисы/ключи, append-only, без конфликта. Межплановый textual-конфликт с 9a/9b по <code>docker-compose.yml</code> и <code>.env.example</code> отмечен в плане (key-disjoint, разрешается re-append).</p>
+
+  <h3>Покрытие требований (требование × задачи)</h3>
+  <table>
+    <thead><tr><th>Требование спеки (9d-scope)</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td>AC#4 · scheduled <code>pg_dump</code></td><td>T1, T2</td></tr>
+      <tr><td>AC#4 · retention</td><td>T1, T6</td></tr>
+      <tr><td>AC#4 · restore reproduces corpus</td><td>T5, T6</td></tr>
+      <tr><td>AC#4 · documented restore procedure</td><td>T7</td></tr>
+      <tr><td>Resourcing/deploy · resource guidance</td><td>T3, T7</td></tr>
+      <tr><td>Resourcing/deploy · compose profiles</td><td>T2</td></tr>
+      <tr><td>Resourcing/deploy · restart policies</td><td>T3</td></tr>
+      <tr><td>Resourcing/deploy · worker healthcheck</td><td>T3</td></tr>
+      <tr><td>Resourcing/deploy · missing env vars</td><td>T4</td></tr>
+      <tr><td>Resourcing/deploy · prod checklist doc</td><td>T7</td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Каждое требование закрыто ≥1 задачей; конфликтов покрытия нет.</p>
+
+  <h2>3. Результаты проверки</h2>
+
+  <div class="summary-row">
+    <span class="chip">structure <span class="badge b-ok">passed</span></span>
+    <span class="chip">coverage <span class="badge b-ok">passed</span></span>
+    <span class="chip">dependencies <span class="badge b-ok">passed</span></span>
+    <span class="chip">verifiability <span class="badge b-ok">passed</span></span>
+    <span class="chip">consistency <span class="badge b-ok">passed</span></span>
+  </div>
+
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Итог</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>Нет плейсхолдеров (TODO/TBD/???/FIXME); задачи 1–8 без пропусков/дублей; шаги внутри задач последовательны; дублей заголовков нет.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>Оба in-scope-для-9d требования спеки (AC#4 Backups; Resourcing/deploy) покрыты ≥1 задачей; лишних шагов нет. Прочие пункты фазы 9 (observability/security/loaders/admin-ui/i18n) — вне scope 9d (ожидаемо, не находка).</td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>Порядок корректен (скрипты→sidecar→живая проверка; env/ресурсы→ops-док; тест→CI; docs/PR последними); циклов нет; ни одна задача не зависит от более поздней; claims о состоянии репозитория верифицированы (compose-сервисы/volumes, ключ <code>paw:worker:heartbeat</code> в <code>src/paw/worker.py</code>, dev-dep <code>psycopg2-binary</code>, cross-ref цели architecture.md/jobs.md существуют).</td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>У каждого содержательного шага есть исполняемая команда и ожидаемый результат; Docker-зависимые шаги (T5 in-test, T6) помечены «run on a Docker host / CI»; локально исполнимы <code>sh -n</code> и <code>docker compose config</code>.</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>Идентификаторы стабильны (<code>deploy/backup/{backup,restore}.sh</code>; сервис/профиль <code>backup</code>; volume <code>backups</code>; env-vars; ключ <code>paw:worker:heartbeat</code>; <code>docs/wiki/ops.md</code>); первый прогон, дрейфа секций нет.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <p class="note">Находок нет — ни одной (таблица пустая).</p>
+
+  <div class="summary-row">
+    <span class="chip">CRITICAL open: <b>0</b></span>
+    <span class="chip">WARNING open: <b>0</b></span>
+  </div>
+
+  <p><span class="verdict v-pass">Вердикт: OK — план прошёл проверку</span></p>
+  <p class="small">plan_hash <code>5bb187aa647b12c3</code> · spec_hash <code>25f8d2e8b94c05a4</code> · last_run 2026-06-26</p>
+  <p class="small">Цепочка: intent <i>(нет)</i> → spec <code>2026-06-22-paw-phase-9-ops-hardening-design.md</code> → plan <code>2026-06-26-paw-9d-backups-deploy.md</code></p>
+
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</body>
+</html>

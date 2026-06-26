@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>paw-phase-9-ops-hardening — chain report</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+body{
+  margin:0 auto; padding:1.2rem 2rem 4rem; max-width:1140px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1{font-size:1.5rem;margin:.2rem 0}
+h2{font-size:1.2rem;margin:1.6rem 0 .6rem;border-bottom:2px solid var(--border);padding-bottom:.25rem}
+h3{font-size:1.02rem;margin:1.1rem 0 .4rem;color:var(--accent)}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+header{display:flex;flex-direction:column;gap:.15rem}
+.sub{color:var(--muted);font-size:.9rem}
+table{border-collapse:collapse;width:100%;margin:.6rem 0 1rem;font-size:.9rem;background:var(--surface);box-shadow:0 1px 3px var(--shadow);border-radius:8px;overflow:hidden}
+th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left;vertical-align:top}
+th{background:color-mix(in srgb,var(--accent) 14%, var(--surface));color:var(--fg)}
+tbody tr:nth-child(even){background:var(--zebra)}
+code{background:color-mix(in srgb,var(--accent) 12%, var(--surface));padding:.05rem .3rem;border-radius:4px;font-size:.86em}
+.note{background:color-mix(in srgb,var(--accent) 10%, var(--surface));border-left:4px solid var(--accent);padding:.6rem .9rem;border-radius:6px;margin:.8rem 0}
+.badge{display:inline-block;padding:.08rem .5rem;border-radius:999px;font-size:.76rem;font-weight:600;line-height:1.5}
+.b-ok{background:color-mix(in srgb,var(--ok) 25%, var(--surface));color:var(--ok-2);border:1px solid var(--ok)}
+.b-warn{background:color-mix(in srgb,var(--warn) 22%, var(--surface));color:var(--warn-2);border:1px solid var(--warn)}
+.b-info{background:color-mix(in srgb,var(--accent) 18%, var(--surface));color:var(--accent-2);border:1px solid var(--accent)}
+.b-crit{background:color-mix(in srgb,var(--danger) 22%, var(--surface));color:var(--danger-2);border:1px solid var(--danger)}
+/* solution block diagram */
+.flow{display:flex;flex-wrap:wrap;gap:.8rem;margin:1rem 0}
+.lane{flex:1 1 250px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;box-shadow:0 1px 3px var(--shadow)}
+.lane h4{margin:.1rem 0 .5rem;font-size:.95rem;color:var(--accent)}
+.box{background:color-mix(in srgb,var(--accent) 10%, var(--surface));border:1px solid var(--border);border-radius:7px;padding:.35rem .55rem;margin:.35rem 0;font-size:.84rem}
+.arrow{color:var(--muted);text-align:center;font-size:.8rem;margin:.1rem 0}
+figure{margin:1rem 0}
+figcaption{color:var(--muted);font-size:.85rem;margin-top:.3rem}
+svg{max-width:100%;height:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.legend{font-size:.82rem;color:var(--muted);margin:.3rem 0}
+/* tabs */
+.tab-radio{position:absolute;opacity:0;pointer-events:none}
+.chain-tabs{display:flex;gap:.3rem;margin:1rem 0 0;flex-wrap:wrap}
+.chain-tabs label{cursor:pointer;padding:.4rem .9rem;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:var(--surface);color:var(--muted)}
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent);border-color:var(--accent);font-weight:600}
+.tab-pane{display:none;border:1px solid var(--border);border-radius:0 10px 10px 10px;padding:1rem 1.3rem;background:color-mix(in srgb,var(--surface) 70%, var(--bg))}
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{display:block}
+.verdict{font-size:1.05rem;font-weight:700;padding:.6rem .9rem;border-radius:8px;display:inline-block;margin:.5rem 0}
+.v-pass{background:color-mix(in srgb,var(--ok) 22%, var(--surface));color:var(--ok-2);border:1px solid var(--ok)}
+.summary-row{display:flex;gap:.6rem;flex-wrap:wrap;margin:.6rem 0}
+.chip{padding:.3rem .7rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:.85rem}
+.small{font-size:.82rem;color:var(--muted)}
+ul{margin:.3rem 0 .6rem;padding-left:1.2rem}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<header>
+  <h1>paw · Phase 9 — Ops + hardening</h1>
+  <div class="sub">Цепочка IDD→SDD · вкладка <b>Spec</b> обновлена check-spec · 2026-06-26</div>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+
+  <h2>1. Резюме спецификации</h2>
+  <p class="small">Spec: <code>2026-06-22-paw-phase-9-ops-hardening-design.md</code> · production-readiness фаза · <code>depends_on: [1..8]</code> · spec_hash <code>25f8d2e8b94c05a4</code>.</p>
+
+  <h3>Требования по разделам</h3>
+  <table>
+    <thead><tr><th>Раздел</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>In scope · Observability — metrics</td><td><code>prometheus-client</code> <code>/metrics</code> на api + worker; api = RED по route-template (rate/errors/latency), in-flight, активные SSE; worker = arq job по type/status, histogram длительности, глубина очереди, retries, dead-letter, job-lock wait; domain-счётчики (articles/chunks на ingest, embeddings, tokens in/out + cost на op, LLM latency/errors, cache hit-rate); <code>/health</code> (liveness/readiness) отдельно от <code>/metrics</code>; подключение инструментирования из ранних фаз.</td></tr>
+      <tr><td>In scope · Observability — collection</td><td>Экспортёры <code>postgres_exporter</code>, <code>redis_exporter</code>, Traefik Prometheus, <code>cAdvisor</code>; Prometheus + Grafana как opt-in compose-профиль <code>observability</code> (vendored дашборды) либо внешний scrape; кардинальность меток ограничена.</td></tr>
+      <tr><td>In scope · Observability — Langfuse</td><td>Только внешний клиент; host + public/secret ключи в <code>app_settings</code> (secret Fernet-шифрован), off by default; интеграция в harness-loop (op=trace, LLM-вызов=generation-span, tool-call=span); обёртка <code>langfuse.openai</code>; <code>trace_id=job_id/request_id</code>; метаданные <code>domain_id</code> + <code>prompt_version</code>; неблокирующий batch flush; опц. redaction/sampling.</td></tr>
+      <tr><td>In scope · Backups</td><td>Запланированный <code>pg_dump</code> (cron/sidecar) + retention + документированная процедура восстановления.</td></tr>
+      <tr><td>In scope · Security hardening</td><td>Полная проверка загрузок (magic-byte sniff, whitelist, max-size, anti-zip-bomb); SSRF для url-loader (allowlist + блок private/link-local, только https, size-cap); финализация CSP (без inline-script) + обработка секретов.</td></tr>
+      <tr><td>In scope · Remaining loaders</td><td><code>ingest/loaders/{epub,url,image}.py</code> — epub <code>ebooklib</code>→md; url <code>httpx</code> (SSRF-guarded)→readability; image/scanned-pdf через <code>VisionProvider.describe</code> (OCR)→text; Bulk upload: zip/folder→unpack(anti-zip-bomb)→batch register→ingest; крупные файлы стримятся в storage.</td></tr>
+      <tr><td>In scope · Admin UI polish + i18n</td><td>UI управления api-keys/users (issue/scope/revoke, роли); переключатель UI i18n (<code>ui_language</code> RU/EN), независимо от content/reasoning языков.</td></tr>
+      <tr><td>In scope · Resourcing/deploy</td><td>Гайд по ресурсам на сервис, compose-профили, prod-checklist (healthchecks, volumes, TLS/ACME).</td></tr>
+      <tr><td>Out of scope</td><td>rate limiting, idempotency keys, soft-delete, reranking, resumable ingest, graph pagination perf, scheduled cron jobs; per-domain ACL, config hot-reload, webhooks, quality eval harness.</td></tr>
+      <tr><td>Data model touched</td><td>Новых core-таблиц нет; <code>app_settings</code> получает Langfuse config-ключи; metrics/cost — на существующих таблицах (<code>chat_messages.meta</code>, job records).</td></tr>
+      <tr><td>Config</td><td>env (scrape/limits/SSRF allowlist, upload caps); <code>app_settings</code> (Langfuse host/keys + enable flag, <code>ui_language</code> default); compose-профиль <code>observability</code>.</td></tr>
+      <tr><td>Security</td><td>Завершение baseline — sniffing загрузок + anti-zip-bomb, SSRF-блоки, финализация CSP, шифрованный Langfuse-secret вне agent context, lifecycle api-key; Langfuse-трейсы могут нести untrusted content → опц. redaction/sampling.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Критерии успеха (Acceptance, проверяемые)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>/metrics</code> отдаёт api RED + worker arq + domain/token/cost счётчики; <code>/health</code> отдельный, рапортует readiness.</td></tr>
+      <tr><td>2</td><td><code>docker compose --profile observability up</code> поднимает Prometheus + Grafana + экспортёры с рабочими дашбордами; без профиля приложение работает без изменений.</td></tr>
+      <tr><td>3</td><td>Langfuse off by default; при включении op даёт trace с per-LLM generation-спанами; падение Langfuse не валит op.</td></tr>
+      <tr><td>4</td><td><code>pg_dump</code> бэкап идёт по расписанию; восстановление из дампа воспроизводит корпус.</td></tr>
+      <tr><td>5</td><td>URL-loader отклоняет private/link-local/non-https цели + oversize-тела; zip-bomb отклонён; не-allowlisted типы загрузок отказаны.</td></tr>
+      <tr><td>6</td><td>epub, url, image (OCR) источники ингестятся в статьи; bulk zip регистрирует + ингестит несколько источников.</td></tr>
+      <tr><td>7</td><td>Переключатель языка UI меняет RU/EN независимо; api-keys и users управляемы в admin UI.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Тесты</h3>
+  <ul>
+    <li><b>Unit:</b> SSRF-решения, anti-zip-bomb, magic-byte, кардинальность меток метрик, Langfuse no-op при выключении.</li>
+    <li><b>Integration (testcontainers):</b> контент <code>/metrics</code>, roundtrip backup→restore, epub/url/image loaders со стабами, bulk-zip ingest.</li>
+    <li><b>API:</b> переключатель i18n, управление api-keys/users, <code>/health</code> vs <code>/metrics</code>.</li>
+    <li><b>E2E:</b> профиль observability up + scrape, ingest url/epub/image, backup/restore.</li>
+  </ul>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (компоненты и потоки)</h3>
+  <div class="flow">
+    <div class="lane">
+      <h4>Scrapers / dashboards</h4>
+      <div class="box">Prometheus (opt-in профиль)</div>
+      <div class="arrow">▼ scrape</div>
+      <div class="box">api <code>/metrics</code> · worker <code>/metrics</code></div>
+      <div class="box">exporters: postgres · redis · Traefik · cAdvisor</div>
+      <div class="arrow">▼</div>
+      <div class="box">Grafana (vendored дашборды)</div>
+    </div>
+    <div class="lane">
+      <h4>api process</h4>
+      <div class="box">routers + middleware → RED-метрики</div>
+      <div class="box"><code>/health</code> (liveness/readiness) — отдельно</div>
+      <div class="box">upload-валидация: magic-byte + anti-zip-bomb</div>
+      <div class="box">финализация CSP (no inline-script)</div>
+      <div class="box">admin UI: api-keys/users + i18n switch</div>
+    </div>
+    <div class="lane">
+      <h4>worker process</h4>
+      <div class="box">arq jobs → job-метрики</div>
+      <div class="box">loaders epub/url/image + bulk-zip unpack</div>
+      <div class="arrow">▼ batch register → ingest jobs</div>
+      <div class="box">harness loop → domain/token/cost счётчики</div>
+      <div class="arrow">▼ fire-and-forget batch flush</div>
+      <div class="box">Langfuse client (внешний, off by default, Fernet secret)</div>
+    </div>
+    <div class="lane">
+      <h4>Cross-cutting</h4>
+      <div class="box">url loader → SSRF guard (allowlist · block private/link-local · https-only · size-cap) → readability</div>
+      <div class="box">Backups: pg_dump cron/sidecar → dump + retention → restore</div>
+      <div class="box">Storage: крупные файлы стримятся в PostgresStorage blobs</div>
+      <div class="box">Config: env (infra/secrets/allowlists) ⊕ app_settings (Langfuse, ui_language)</div>
+    </div>
+  </div>
+
+  <h3>Граф зависимостей (A→B = A зависит от B)</h3>
+  <figure>
+  <svg viewBox="0 0 980 470" role="img" aria-label="Граф зависимостей требований Phase 9">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"/>
+      </filter>
+      <style>
+        .n rect{fill:color-mix(in srgb,var(--accent) 12%, var(--surface));stroke:var(--accent);stroke-width:1.2px;filter:url(#ds)}
+        .leaf rect{fill:color-mix(in srgb,var(--muted) 14%, var(--surface));stroke:var(--line)}
+        .n text{fill:var(--fg);font:11px system-ui;text-anchor:middle;dominant-baseline:middle}
+        .e{stroke:var(--line);stroke-width:1.3px;fill:none;marker-end:url(#arr)}
+      </style>
+    </defs>
+
+    <!-- edges (drawn first) -->
+    <!-- collection -> metrics, health -->
+    <path class="e" d="M150,70 L150,118"/>
+    <path class="e" d="M205,55 L300,118"/>
+    <!-- langfuse -> harness, app_settings, fernet -->
+    <path class="e" d="M470,70 L470,118"/>
+    <path class="e" d="M520,70 L660,118"/>
+    <path class="e" d="M540,60 L820,118"/>
+    <!-- resourcing -> compose, collection -->
+    <path class="e" d="M760,235 L640,200 L210,75"/>
+    <path class="e" d="M790,235 L800,200"/>
+    <!-- sec uploads -> magic/zip -->
+    <path class="e" d="M150,300 L150,348"/>
+    <!-- sec ssrf -> url-loader -->
+    <path class="e" d="M340,300 L340,348"/>
+    <!-- loaders url -> ssrf-guard -->
+    <path class="e" d="M520,300 L360,290"/>
+    <!-- loaders image -> vision -->
+    <path class="e" d="M560,300 L660,348"/>
+    <!-- loaders bulk -> anti-zip-bomb, register, ingest -->
+    <path class="e" d="M600,300 L210,360"/>
+    <path class="e" d="M620,300 L820,348"/>
+    <!-- admin i18n -> app_settings(ui_lang), api-key lifecycle -->
+    <path class="e" d="M760,420 L700,200"/>
+    <path class="e" d="M820,420 L900,300"/>
+    <!-- config app_settings -> fernet -->
+    <path class="e" d="M700,165 L820,150"/>
+
+    <!-- nodes -->
+    <g class="n"><rect x="95" y="25" width="115" height="30" rx="6"/><text x="152" y="40">Obs-collection</text></g>
+    <g class="n"><rect x="95" y="118" width="115" height="30" rx="6"/><text x="152" y="133">Obs-metrics</text></g>
+    <g class="leaf"><rect x="270" y="118" width="90" height="30" rx="6"/><text x="315" y="133">/health</text></g>
+    <g class="n"><rect x="415" y="25" width="120" height="30" rx="6"/><text x="475" y="40">Obs-Langfuse</text></g>
+    <g class="n"><rect x="415" y="118" width="110" height="30" rx="6"/><text x="470" y="133">harness-loop</text></g>
+    <g class="n"><rect x="640" y="118" width="125" height="30" rx="6"/><text x="702" y="133">app_settings cfg</text></g>
+    <g class="leaf"><rect x="800" y="118" width="120" height="30" rx="6"/><text x="860" y="133">Fernet-secrets</text></g>
+
+    <g class="n"><rect x="715" y="235" width="120" height="30" rx="6"/><text x="775" y="250">Resourcing/deploy</text></g>
+    <g class="leaf"><rect x="755" y="185" width="100" height="30" rx="6"/><text x="805" y="200">compose-profiles</text></g>
+
+    <g class="n"><rect x="90" y="270" width="125" height="30" rx="6"/><text x="152" y="285">Sec-uploads</text></g>
+    <g class="leaf"><rect x="90" y="348" width="125" height="30" rx="6"/><text x="152" y="363">magic/anti-zip</text></g>
+    <g class="n"><rect x="280" y="270" width="120" height="30" rx="6"/><text x="340" y="285">Sec-SSRF</text></g>
+    <g class="n"><rect x="280" y="348" width="120" height="30" rx="6"/><text x="340" y="363">url-loader</text></g>
+
+    <g class="n"><rect x="510" y="270" width="130" height="30" rx="6"/><text x="575" y="285">Loaders epub/url/img</text></g>
+    <g class="leaf"><rect x="615" y="348" width="100" height="30" rx="6"/><text x="665" y="363">VisionProvider</text></g>
+    <g class="leaf"><rect x="775" y="348" width="120" height="30" rx="6"/><text x="835" y="363">register/ingest</text></g>
+
+    <g class="n"><rect x="730" y="420" width="120" height="30" rx="6"/><text x="790" y="435">Admin-UI + i18n</text></g>
+    <g class="leaf"><rect x="855" y="270" width="100" height="30" rx="6"/><text x="905" y="285">api-key lifecycle</text></g>
+  </svg>
+  <figcaption>Узлы — требования/компоненты спеки; рёбра направлены «зависит от». Циклов не обнаружено. Серые узлы — листовые зависимости (инфраструктура / переиспользуемые механизмы).</figcaption>
+  </figure>
+
+  <h3>Карта покрытия (задача → требования спеки)</h3>
+  <table>
+    <thead><tr><th>Задача (план)</th><th>Покрывающие требования / AC / тесты</th></tr></thead>
+    <tbody>
+      <tr><td>#1 · Plan 9a — Observability</td><td>Obs-metrics, Obs-collection, Obs-Langfuse; AC 1, 2, 3; Key flows Metrics + Langfuse; тесты (кардинальность меток, Langfuse no-op, контент /metrics, E2E observability).</td></tr>
+      <tr><td>#2 · Plan 9b — Hardening + loaders</td><td>Security-hardening, Remaining-loaders; AC 5, 6; Key flows Bulk ingest + URL ingest; раздел Security; тесты (SSRF, anti-zip-bomb, magic-byte, loaders, bulk-zip).</td></tr>
+      <tr><td>#3 · Plan 9c — Admin UI + i18n</td><td>Admin-UI-polish + i18n; AC 7; тесты (i18n switch, управление api-keys/users).</td></tr>
+      <tr><td>#4 · Plan 9d — Backups + deploy</td><td>Backups, Resourcing/deploy; AC 4; тесты (roundtrip backup→restore + E2E).</td></tr>
+      <tr><td>#5 · Self-review всех 4 планов</td><td>Мета/процессная задача — без прямого требования спеки (покрыта общими Acceptance + Tests).</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <p class="small">spec_hash <code>25f8d2e8b94c05a4</code> · last_run 2026-06-26 · первый прогон (review-блок отсутствовал, инициализирован).</p>
+
+  <div class="summary-row">
+    <span class="chip">structure: <span class="badge b-ok">passed</span></span>
+    <span class="chip">coverage: <span class="badge b-ok">passed</span></span>
+    <span class="chip">clarity: <span class="badge b-ok">passed</span></span>
+    <span class="chip">consistency: <span class="badge b-ok">passed</span></span>
+  </div>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>section</th><th>fragment</th><th>text</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge b-info">INFO</span></td><td>Data model touched</td>
+        <td><code>app_settings gains Langfuse config keys.</code></td>
+        <td>Раздел Data-model перечисляет добавления в <code>app_settings</code> только как Langfuse-ключи, но раздел Config добавляет ещё и ключ <code>ui_language</code> default. Секции перечисляют разные дополнения к <code>app_settings</code>; согласовать.</td>
+        <td>В «Data model touched» дописать «+ the <code>ui_language</code> default» либо явно указать, что <code>ui_language</code> уже существует.</td>
+        <td><span class="badge b-info">open</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>Out of scope</td>
+        <td><code>scheduled cron jobs; per-domain ACL</code></td>
+        <td>Out-of-scope откладывает «scheduled cron jobs», тогда как in-scope Backups задаёт «scheduled pg_dump (cron/sidecar)». Одинаковая формулировка по обе стороны без разграничения внутри спеки (overview §8 уточняет отложенный пункт как app-доменные джобы lint/reindex/GC, но читатель только этой спеки видит видимое противоречие).</td>
+        <td>Разграничить формулировку Out-of-scope, напр. «scheduled application/maintenance cron jobs (lint/reindex/GC)», чтобы отделить от инфра-уровня pg_dump cron/sidecar (in scope).</td>
+        <td><span class="badge b-warn">open</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td><span class="badge b-warn">WARNING</span></td><td>Acceptance criteria</td>
+        <td><code>Resourcing/deploy: per-service resource guidance, compose profiles, prod checklist…</code></td>
+        <td>Семь из восьми in-scope пунктов имеют свой критерий приёмки (AC 1–7), но in-scope пункт «Resourcing/deploy» не имеет соответствующего критерия приёмки / проверяемого DoD — поставляется без проверки.</td>
+        <td>Добавить критерий приёмки для Resourcing/deploy (compose-профили задокументированы; prod-checklist healthchecks/volumes/TLS-ACME присутствует; свежий boot prod-профиля проходит healthchecks) либо перенести в Out-of-scope.</td>
+        <td><span class="badge b-warn">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="summary-row">
+    <span class="chip">CRITICAL open: <b>0</b></span>
+    <span class="chip">WARNING open: <b>2</b></span>
+    <span class="chip">INFO open: <b>1</b></span>
+  </div>
+
+  <div class="verdict v-pass">Вердикт: PASSED — открытых CRITICAL нет</div>
+  <p class="note">2 WARNING + 1 INFO открыты — рекомендуется доработать, но не блокирует валидацию.</p>
+
+  <h3>Цепочка</h3>
+  <p class="small">intent → <b>spec</b>. <code>intent = null</code> (отдельный intent-документ отсутствует; задачи фазы 9 заданы overview-спекой <code>paw-00-overview §5 Phase map</code> + четырьмя планами-задачами 9a/9b/9c/9d). spec = <code>docs/superpowers/specs/2026-06-22-paw-phase-9-ops-hardening-design.md</code>.</p>
+
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+
+</body>
+</html>

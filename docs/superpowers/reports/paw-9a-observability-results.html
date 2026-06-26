@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цепочка IDD→SDD — paw-9a-observability</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1120px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+header{ display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+h1{ font-size:1.5rem; margin:.2rem 0; }
+h2{ font-size:1.2rem; margin:1.6rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; }
+h3{ font-size:1.02rem; margin:1.2rem 0 .4rem; color:var(--accent); }
+.theme-btn{
+  position:sticky; top:.5rem; margin-left:auto;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+.chain-tabs{ display:flex; gap:.3rem; margin:1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border);
+  border-bottom:none; border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+.tab-pane{ display:none; border:1px solid var(--border); border-radius:0 8px 8px 8px; padding:1rem 1.2rem; background:color-mix(in srgb,var(--surface) 60%, transparent); }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+table{ border-collapse:collapse; width:100%; margin:.6rem 0 1rem; font-size:.92rem; }
+th,td{ border:1px solid var(--border); padding:.45rem .6rem; text-align:left; vertical-align:top; }
+th{ background:color-mix(in srgb,var(--accent) 14%, var(--surface)); }
+tbody tr:nth-child(even){ background:var(--zebra); }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px; font-size:.86em; }
+.note{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border-left:4px solid var(--accent); padding:.6rem .9rem; border-radius:4px; margin:.8rem 0; }
+.badge{ display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.78rem; font-weight:600; }
+.b-ok{ background:color-mix(in srgb,var(--ok) 25%, var(--surface)); color:var(--ok-2); }
+.b-warn{ background:color-mix(in srgb,var(--warn) 25%, var(--surface)); color:var(--warn-2); }
+.b-danger{ background:color-mix(in srgb,var(--danger) 25%, var(--surface)); color:var(--danger-2); }
+.b-info{ background:color-mix(in srgb,var(--accent) 22%, var(--surface)); color:var(--accent-2); }
+.matrix td.hit{ background:color-mix(in srgb,var(--accent) 30%, var(--surface)); text-align:center; font-weight:700; }
+.matrix td{ text-align:center; }
+.matrix td.lbl{ text-align:left; font-weight:600; }
+figure{ margin:1rem 0; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.3rem; }
+.verdict{ font-size:1.05rem; font-weight:700; padding:.6rem .9rem; border-radius:6px; }
+.v-ok{ background:color-mix(in srgb,var(--ok) 20%, var(--surface)); border:1px solid var(--ok); }
+.chain-line{ font-size:.85rem; color:var(--muted); margin-top:1.4rem; }
+svg{ max-width:100%; height:auto; background:color-mix(in srgb,var(--surface) 50%, transparent); border:1px solid var(--border); border-radius:8px; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<header>
+  <h1>Цепочка IDD→SDD — <code>paw-9a-observability</code></h1>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:spec END -->
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+
+  <p class="note">Проверка плана <code>docs/superpowers/plans/2026-06-26-paw-9a-observability.md</code>
+  (Фаза 9a — Observability) против спеки
+  <code>docs/superpowers/specs/2026-06-22-paw-phase-9-ops-hardening-design.md</code>.
+  Дата прогона: 2026-06-26. <span class="badge b-ok">Вердикт: OK</span></p>
+
+  <h2>1. Резюме плана</h2>
+  <p>9 задач. По каждой — критерий готовности (DoD) и команда проверки.</p>
+  <table>
+    <thead><tr><th>Задача</th><th>Суть</th><th>DoD / артефакты</th><th>Проверка</th></tr></thead>
+    <tbody>
+      <tr><td><b>Task 1</b></td><td>Зависимости + реестр метрик + таблица стоимостей</td>
+        <td><code>prometheus-client</code>+<code>langfuse</code>; <code>obs/metrics.py</code> (все коллекторы <code>paw_*</code>) + <code>obs/cost.py</code> (<code>MODEL_COSTS</code>, <code>compute_cost</code>); <code>config.worker_metrics_port=0</code></td>
+        <td><code>uv run pytest tests/unit/test_obs_cost.py tests/unit/test_obs_metrics_render.py -q</code> → pass</td></tr>
+      <tr><td><b>Task 2</b></td><td>HTTP RED middleware + <code>/metrics</code> + разделение <code>/health</code></td>
+        <td><code>obs/http.py</code> (метка route-template, <code>&lt;unmatched&gt;</code> на 404), <code>obs/readiness.py</code>, в <code>main.py</code> — <code>/metrics</code>+<code>/health?ready=1</code>+<code>/ready</code></td>
+        <td><code>uv run pytest …test_health* test_obs_http_metrics.py -q</code> → liveness не изменён, readiness 200/503</td></tr>
+      <tr><td><b>Task 3</b></td><td>Langfuse-клиент + сервис настроек (OFF по умолчанию, no-op-safe)</td>
+        <td><code>obs/langfuse_client.py</code> (<code>LangfuseConfig</code>, <code>get_langfuse</code>, <code>trace_op</code>, <code>OpTrace</code> fire-and-forget); <code>services/langfuse_settings.py</code> (4 ключа <code>app_settings</code>, секрет через Fernet)</td>
+        <td><code>uv run pytest …test_obs_langfuse_noop.py -q &amp;&amp; uv run mypy src</code> → pass</td></tr>
+      <tr><td><b>Task 4</b></td><td>Инструментированные провайдеры (latency+cost+tokens+Langfuse generation span)</td>
+        <td><code>obs/instrument.py</code> (<code>InstrumentedChat/EmbeddingProvider</code>), вшиты в <code>jobs/tasks.py</code> per-op + per-op trace + счётчики <code>ARTICLES/CHUNKS</code></td>
+        <td><code>uv run pytest tests/integration/test_obs_instrument.py -q</code> + ingest без регрессий</td></tr>
+      <tr><td><b>Task 5</b></td><td>Метрик-сервер воркера + arq job/lock/queue метрики</td>
+        <td><code>worker.py on_startup</code> поднимает prometheus http-сервер (gated); <code>jobs/tasks.py _record_job</code> (<code>JOB_TOTAL/DURATION/RETRIES/DEADLETTER</code>); <code>jobs/locks.py JOB_LOCK_WAIT</code></td>
+        <td><code>uv run pytest tests/integration/test_worker_metrics.py -q</code> → счётчики растут</td></tr>
+      <tr><td><b>Task 6</b></td><td>Метрики cache-hit + active-SSE</td>
+        <td><code>query_cache.py</code> <code>CACHE_HITS</code> hit/miss; <code>chat.py</code>+<code>query.py</code> gauge <code>SSE_ACTIVE</code></td>
+        <td><code>uv run pytest -k "cache and obs" -q</code> → miss, затем hit</td></tr>
+      <tr><td><b>Task 7</b></td><td>Opt-in compose-профиль <code>observability</code> + vendored Prometheus/Grafana</td>
+        <td><code>deploy/observability/*</code> (prometheus.yml, grafana provisioning+dashboard); <code>docker-compose.yml</code> <code>profiles:[observability]</code> + Traefik metrics + <code>WORKER_METRICS_PORT</code>; <code>.env.example</code></td>
+        <td><code>docker compose config --services</code> с/без <code>--profile observability</code></td></tr>
+      <tr><td><b>Task 8</b></td><td>Настройки Langfuse через settings API (+ опц. поле в admin)</td>
+        <td>API-тест сохраняет ключи <code>langfuse_*</code> и <code>LangfuseSettingsService.load()</code> возвращает расшифрованный секрет</td>
+        <td><code>uv run pytest tests/api -k settings -q</code> → round-trip</td></tr>
+      <tr><td><b>Task 9</b></td><td>Обновление документации + полный CI-гейт</td>
+        <td>Полный CI (ruff+mypy+pytest) зелёный; iwiki-доки для <code>paw.obs</code> регенерированы; <code>/iwiki-lint</code> чист</td>
+        <td><code>uv run ruff check . / mypy src / pytest -q</code>; <code>/iwiki-lint</code> без битых ссылок</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей задач</h3>
+  <figure>
+  <svg viewBox="0 0 940 360" role="img" aria-label="Граф зависимостей задач">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="var(--shadow)"/>
+      </filter>
+    </defs>
+    <!-- edges (drawn first, behind nodes) -->
+    <g stroke="var(--line)" stroke-width="2" fill="none" marker-end="url(#arrow)">
+      <path d="M95,70 L215,70"/>     <!-- T1->T2 -->
+      <path d="M95,80 C160,150 200,180 215,195"/> <!-- T1->T4 -->
+      <path d="M95,85 C150,230 230,290 285,300"/> <!-- T1->T5 -->
+      <path d="M70,95 C70,260 70,300 470,315"/>   <!-- T1->T6 (low sweep) -->
+      <path d="M285,150 L255,180"/>  <!-- T3->T4 -->
+      <path d="M300,135 C480,200 600,250 660,290"/> <!-- T3->T8 -->
+      <path d="M285,215 L355,290"/>  <!-- T4->T5 -->
+      <path d="M310,70 L455,70"/>    <!-- T2->T7 -->
+      <path d="M400,300 C480,200 520,120 545,80"/> <!-- T5->T7 -->
+    </g>
+    <!-- collective edge to T9 -->
+    <g stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#arrow)">
+      <path d="M620,70 C720,120 760,150 800,175"/>  <!-- T7->T9 -->
+      <path d="M700,300 C760,260 780,230 800,205"/> <!-- T8->T9 -->
+    </g>
+    <g font-size="13" font-weight="700" text-anchor="middle">
+      <g filter="url(#ds)">
+        <rect x="30" y="50" width="65" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+        <rect x="215" y="50" width="95" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="245" y="130" width="65" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="215" y="180" width="75" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="350" y="290" width="65" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="455" y="290" width="65" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="455" y="50" width="165" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="635" y="280" width="70" height="40" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="800" y="160" width="110" height="55" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+      </g>
+      <g fill="var(--fg)">
+        <text x="62" y="74">T1 reg</text>
+        <text x="262" y="74">T2 http</text>
+        <text x="277" y="154">T3 lf</text>
+        <text x="252" y="204">T4 instr</text>
+        <text x="382" y="314">T5 wkr</text>
+        <text x="487" y="314">T6 cache</text>
+        <text x="537" y="74">T7 compose</text>
+        <text x="670" y="304">T8 api</text>
+        <text x="855" y="184">T9 docs</text>
+        <text x="855" y="202">+ CI</text>
+      </g>
+    </g>
+  </svg>
+  <figcaption>Рёбра M→N: результат задачи M используется в N (M&lt;N). Сплошные — прямые зависимости; пунктир к T9 — финальный гейт зависит от всех. Циклов и нарушений порядка не найдено.</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам (файлам)</h3>
+  <table class="matrix">
+    <thead><tr><th>Файл / артефакт</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>T8</th></tr></thead>
+    <tbody>
+      <tr><td class="lbl">src/paw/jobs/tasks.py</td><td></td><td></td><td></td><td class="hit">✎</td><td class="hit">✎</td><td></td><td></td><td></td></tr>
+      <tr><td class="lbl">src/paw/obs/metrics.py</td><td class="hit">+</td><td>·</td><td></td><td>·</td><td>·</td><td>·</td><td></td><td></td></tr>
+      <tr><td class="lbl">src/paw/obs/langfuse_client.py</td><td></td><td></td><td class="hit">+</td><td>·</td><td></td><td></td><td></td><td>·</td></tr>
+      <tr><td class="lbl">src/paw/main.py</td><td></td><td class="hit">✎</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="lbl">docker-compose.yml / .env.example</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="hit">✎</td><td></td></tr>
+    </tbody>
+  </table>
+  <p class="note"><b>Единственное реальное пересечение записи</b> — <code>jobs/tasks.py</code> правят T4 (обёртка провайдеров + domain-счётчики) и T5 (счётчик/длительность задач). Разные участки, порядок T4&lt;T5 — конфликта нет. Знак «+» — создание файла, «✎» — модификация, «·» — импорт/потребление.</p>
+
+  <h3>Пересечения по покрытию (требование ↔ задачи)</h3>
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Закрывающие задачи</th></tr></thead>
+    <tbody>
+      <tr><td>AC#1 — <code>/metrics</code> (RED + arq + domain/cost), readiness <code>/health</code></td><td>T1, T2, T4, T5, T6 (несколько задач на одно требование «domain counters»)</td></tr>
+      <tr><td>AC#2 — opt-in compose-профиль</td><td>T7</td></tr>
+      <tr><td>AC#3 — Langfuse off-by-default, generation-spans, устойчивость к сбою</td><td>T3, T4</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>фаза</th><th>секция</th><th>fragment</th><th>текст</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td><td>Task 1: реестр метрик</td>
+        <td><code>QUEUE_DEPTH = Gauge("paw_queue_depth", "arq queue depth")</code></td>
+        <td>Спека требует worker-метрику «queue depth». Gauge <code>paw_queue_depth</code> объявлен в Task 1, но ни один шаг (включая Task 5) его не заполняет — всегда читается 0. Требование названо, но не выполнено.</td>
+        <td>Добавить шаг (в Task 5), заполняющий <code>paw_queue_depth</code> длиной очереди arq, либо явно отложить и убрать всегда-нулевой gauge.</td>
+        <td><span class="badge b-warn">open</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td><td>Task 3: Langfuse-клиент</td>
+        <td><code>OpTrace.span(*, name, metadata) -&gt; None</code></td>
+        <td>Спека: «tool-call = span». <code>OpTrace.span()</code> существует и вызывается в no-op-тесте, но ни один шаг реализации не эмитит реальный tool-call span (<code>instrument_chat</code> вызывает только <code>trace.generation</code>; <code>loop.py</code> не трогается). Tool-call spans ни вшиты, ни явно отложены.</td>
+        <td>Вшить tool-call spans через hook <code>on_step</code> харнесса, либо добавить явную пометку об отложении в Risks.</td>
+        <td><span class="badge b-warn">open</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td><span class="badge b-info">INFO</span></td><td>verifiability</td><td>Task 6: cache + SSE</td>
+        <td><code>metrics.SSE_ACTIVE.inc()/.dec()</code></td>
+        <td>Task 6 добавляет gauge <code>paw_sse_active</code>, но единственный тест задачи проверяет cache-метрику; inc/dec SSE не имеет проверяющего ассерта.</td>
+        <td>Добавить delta-ассерт на <code>paw_sse_active</code> вокруг SSE-потока, либо пометить, что метрика проверяется только по дашборду.</td>
+        <td><span class="badge b-info">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><b>Сводка:</b> CRITICAL open = <b>0</b> · WARNING open = <b>2</b> · INFO open = <b>1</b>.</p>
+  <p class="verdict v-ok">Вердикт: OK — план проходит (нет CRITICAL). 2 WARNING и 1 INFO открыты; рекомендуется устранить перед реализацией.</p>
+
+  <p class="chain-line">
+    Хэши: plan_hash <code>92b62077e9a31ddb</code> · spec_hash <code>25f8d2e8b94c05a4</code> (спека не изменена / валидна).<br>
+    Цепочка: <em>intent: null</em> → <code>docs/superpowers/specs/2026-06-22-paw-phase-9-ops-hardening-design.md</code> → <code>docs/superpowers/plans/2026-06-26-paw-9a-observability.md</code>
+  </p>
+
+</section>
+<!-- TAB:plan END -->
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+
+</body>
+</html>
