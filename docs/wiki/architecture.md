@@ -2,7 +2,7 @@
 
 ## Overview
 
-`paw` ships as **one Docker image, two processes** — an `api` (uvicorn) and a `worker` (arq) — backed by Postgres+`pgvector` and Redis. `create_app()` wires routers, a CSP middleware and `/health`. Code is layered acyclically (api/web → services → repos/storage; worker → jobs → harness → leaves). Config layers env ⊕ DB; lazy process-global singletons are reset per test. Built in vertical phases: 1–6 merged, 7 on a branch, 8–10 design-only.
+`paw` ships as **one Docker image, two processes** — an `api` (uvicorn) and a `worker` (arq) — backed by Postgres+`pgvector` and Redis. `create_app()` wires routers, a CSP middleware, `MetricsMiddleware`, and the `/health` (liveness/readiness) + `/metrics` endpoints. Code is layered acyclically (api/web → services → repos/storage; worker → jobs → harness → leaves). Config layers env ⊕ DB; lazy process-global singletons are reset per test. Built in vertical phases; observability is centralised in `paw.obs` (see [[observability#Overview]]).
 
 ## Two processes, one image
 
@@ -22,9 +22,10 @@ The two processes share only Postgres and Redis state; they do not call each oth
 It performs, in order:
 1. `install_error_handlers(app)` — RFC 9457 `problem+json` responses (see [[api#Errors (problem+json)]]).
 2. An `@app.middleware("http")` named `csp` that stamps a strict `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`, `img-src 'self' data:`) on every response — part of [[security#Headers]].
-3. A `GET /health` returning `{"status": "ok"}` (used by the compose health check).
+3. A `GET /health` liveness probe returning `{"status": "ok"}` (used by the compose health check); readiness is split out to `/health?ready=1` and the `/ready` alias (DB + Redis checks, `503` when degraded), and `/metrics` exposes Prometheus exposition — see [[observability#Health & readiness]].
 4. Mounts every API router under `/api/v1`: `auth`, `domains`, `sources`, `articles`, `setup`, `settings`, `users`, `jobs`, `query`, `chat`, `graph`, `maintenance` — see [[api#App wiring]].
 5. Mounts the HTMX UI router (`api/web/routes.py`) at root and `StaticFiles` at `/static`.
+6. Adds `MetricsMiddleware`, which records HTTP RED metrics keyed by the route template — see [[observability#HTTP RED middleware]].
 
 ## Layered dependencies (no cycles)
 
@@ -89,5 +90,7 @@ Python 3.12, managed with `uv`; async top to bottom. All DB/IO is async (`asyncp
 The system was built as **vertical phases**, each a working end-to-end slice rather than a horizontal layer; specs/plans live under `docs/superpowers/`.
 
 - **Phases 1–6 — merged:** (1) walking skeleton, (2) ingest, (3) retrieval/query, (4) chat, (5) graph + article editing, (6) maintenance (lint/fix/format/reindex). The `worker.py` functions — `ingest_domain`, `lint_domain`, `fix_issues`, `format_articles`, `reindex_domain`, `gc_housekeeping`, plus `heartbeat` and startup `reconcile_jobs` — reflect this scope.
-- **Phase 7 — on a branch:** query cache, on `dev/paw-phase-7`, not yet merged.
-- **Phases 8–10 — design-only:** MCP server, ops hardening, and Apache AGE + GraphRAG — specs exist, no code yet.
+- **Phase 7 — merged:** query cache (see [[services#QueryCacheService]]).
+- **Phase 8 — merged:** read-only MCP server + api-keys (see [[mcp#Overview]]).
+- **Phase 9 — in progress:** ops + hardening, split into sub-plans; **9a observability** (this `paw.obs` work — metrics, health split, LLM cost, Langfuse, compose profile) is implemented (see [[observability#Overview]]). Sub-plans 9b (hardening/loaders), 9c (admin-ui/i18n), 9d (backups/deploy) follow.
+- **Phase 10 — design-only:** Apache AGE + GraphRAG — spec exists, no code yet.

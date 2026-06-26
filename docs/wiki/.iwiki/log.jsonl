@@ -23,3 +23,5 @@
 {"op":"ingest","source":"src/paw/security/api_keys.py","page":"security.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/paw/api/routers/api_keys.py","page":"api.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/paw/services/api_keys.py","page":"mcp.md","date":"2026-06-24"}
+{"op":"ingest","source":"src/paw/obs","page":"observability.md","date":"2026-06-26"}
+{"op":"ingest","source":"src/paw/services/langfuse_settings.py","page":"observability.md","date":"2026-06-26"}

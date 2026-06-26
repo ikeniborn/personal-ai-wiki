@@ -40,3 +40,6 @@ Each mutating job opens two sessions from the same maker: `async with maker() as
 
 ## Cancellation & reconcile
 Cancellation is cooperative: the API marks a job cancel-requested, and tasks poll `jobs.is_cancel_requested(jid)` at each step (`on_step` / per-issue / `on_batch`), raising `IngestCancelled` / `MaintenanceCancelled` to roll `data_s` back and set status `cancelled`. Liveness is enforced by heartbeats plus `JobRepo.reconcile_stuck(older_than_seconds=120)`, run on worker startup to fail jobs whose heartbeat went stale (e.g. a crashed worker). See [[db#Repo pattern]].
+
+## Metrics
+Each job body records `paw_job_total{kind,status}` + `paw_job_duration_seconds` (plus retries/dead-letter) via `_record_job`, wraps its chat/embedding provider per-op for LLM latency/cost/token metrics, and refreshes `paw_queue_depth`; `model_lock` observes acquisition wait. The worker starts a Prometheus HTTP server in `on_startup` when `worker_metrics_port > 0`. See [[observability#Worker & job metrics]].
