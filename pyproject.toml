@@ -26,7 +26,7 @@ dependencies = [
     "markdownify>=0.13",
     "mcp>=1.28",
     "prometheus-client>=0.21",
-    "langfuse>=2.50",
+    "langfuse>=4",
 ]
 
 [dependency-groups]
