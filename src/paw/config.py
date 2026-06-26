@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 10 * 1024 * 1024
     max_request_bytes: int = 12 * 1024 * 1024
     session_ttl_seconds: int = 60 * 60 * 24 * 7
+    worker_metrics_port: int = 0  # >0 starts a prometheus http server in the worker
 
 
 @lru_cache
