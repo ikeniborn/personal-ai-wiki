@@ -392,7 +392,7 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
             )
             try:
                 chat, embedder, _wiki, dim = await _build_providers(data_s, box)
-                chat = instrument_chat(chat, op="reindex", trace=trace)
+                embedder = instrument_embedding(embedder, op="reindex", trace=trace)
                 psvc = ProviderSettingsService(data_s, box=box)
                 target = await psvc.get_embedding_version()
                 mcfg = await psvc.get_maintenance()
