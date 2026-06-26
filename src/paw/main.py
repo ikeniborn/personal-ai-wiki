@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from paw.api.errors import install_error_handlers
@@ -23,6 +23,9 @@ from paw.api.routers import users as users_router
 from paw.api.web import routes as web_routes
 from paw.mcp.auth import MCPAuthMiddleware
 from paw.mcp.server import build_mcp
+from paw.obs import readiness as readiness_mod
+from paw.obs.http import MetricsMiddleware
+from paw.obs.metrics import render_metrics
 
 _STATIC_DIR = Path(__file__).parent / "api" / "web" / "static"
 
@@ -51,8 +54,23 @@ def create_app() -> FastAPI:
         return resp
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    async def health(ready: int = 0) -> Response:
+        if not ready:
+            return JSONResponse({"status": "ok"})
+        ok, components = await readiness_mod.check_readiness()
+        return JSONResponse(
+            {"ready": ok, "components": components},
+            status_code=200 if ok else 503,
+        )
+
+    @app.get("/ready")
+    async def ready() -> Response:
+        return await health(ready=1)
+
+    @app.get("/metrics")
+    async def metrics_endpoint() -> Response:
+        payload, content_type = render_metrics()
+        return Response(payload, media_type=content_type)
 
     for r in (
         auth_router,
@@ -74,6 +92,7 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.mount("/mcp", mcp_asgi)
     app.add_middleware(MCPAuthMiddleware)
+    app.add_middleware(MetricsMiddleware)
     return app
 
 

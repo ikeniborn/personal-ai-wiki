@@ -11,6 +11,7 @@ from paw.jobs.tasks import (
     lint_domain,
     reindex_domain,
 )
+from paw.obs import metrics
 
 
 async def heartbeat(ctx: dict[str, Any]) -> str:
@@ -23,6 +24,17 @@ async def heartbeat(ctx: dict[str, Any]) -> str:
 class _LazyRedisSettings:
     def __get__(self, obj: object, owner: type | None = None) -> RedisSettings:
         return RedisSettings.from_dsn(get_settings().redis_url)
+
+
+async def set_queue_depth(redis: Any) -> None:
+    """Refresh the QUEUE_DEPTH gauge from the live arq Redis sorted set."""
+    try:
+        import arq.constants
+
+        n = await redis.zcard(arq.constants.default_queue_name)
+        metrics.QUEUE_DEPTH.set(n)
+    except Exception:  # noqa: BLE001
+        pass  # gauge update must never fail startup or a job
 
 
 async def reconcile_jobs(ctx: dict[str, Any]) -> str:
@@ -49,5 +61,14 @@ class WorkerSettings:
 
     @staticmethod
     async def on_startup(ctx: dict[str, Any]) -> None:
+        port = get_settings().worker_metrics_port
+        if port > 0:
+            try:
+                from prometheus_client import start_http_server
+
+                start_http_server(port)
+            except Exception:  # noqa: BLE001
+                pass  # metrics server must never crash the worker
         await heartbeat(ctx)
         await reconcile_jobs(ctx)
+        await set_queue_depth(ctx["redis"])

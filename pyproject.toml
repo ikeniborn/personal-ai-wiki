@@ -25,6 +25,8 @@ dependencies = [
     "trafilatura>=1.12",
     "markdownify>=0.13",
     "mcp>=1.28",
+    "prometheus-client>=0.21",
+    "langfuse>=4",
 ]
 
 [dependency-groups]
@@ -66,4 +68,8 @@ explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = ["mcp.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["langfuse.*"]
 ignore_missing_imports = true

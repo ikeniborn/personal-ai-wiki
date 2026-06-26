@@ -14,6 +14,7 @@ from paw.api.pagination import decode_cursor, encode_cursor
 from paw.db.models import ChatSession, User
 from paw.harness.ops.chat import refs_payload
 from paw.harness.ops.query import DONT_KNOW
+from paw.obs import metrics
 from paw.services.chat import ChatService, PreparedTurn
 
 router = APIRouter(tags=["chat"])
@@ -65,25 +66,29 @@ class SessionDetail(BaseModel):
 async def _sse(
     svc: ChatService, sess: ChatSession, question: str, prepared: PreparedTurn
 ) -> AsyncIterator[str]:
-    if prepared.messages is None:
-        answer = DONT_KNOW
-        yield f"data: {json.dumps({'token': DONT_KNOW}, ensure_ascii=False)}\n\n"
-    else:
-        chunks: list[str] = []
-        async for tok in prepared.chat.stream(prepared.messages, model=prepared.model):
-            chunks.append(tok)
-            yield f"data: {json.dumps({'token': tok}, ensure_ascii=False)}\n\n"
-        answer = "".join(chunks) or DONT_KNOW
-    await svc.record_turn(
-        session=sess, question=question, answer_md=answer, refs=prepared.ctx.refs,
-        model=prepared.model, prompt_version=prepared.prompt_version, usage={},
-    )
-    done = {
-        "status": "done",
-        "session_id": str(sess.id),
-        "refs": refs_payload(prepared.ctx.refs),
-    }
-    yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
+    metrics.SSE_ACTIVE.inc()
+    try:
+        if prepared.messages is None:
+            answer = DONT_KNOW
+            yield f"data: {json.dumps({'token': DONT_KNOW}, ensure_ascii=False)}\n\n"
+        else:
+            chunks: list[str] = []
+            async for tok in prepared.chat.stream(prepared.messages, model=prepared.model):
+                chunks.append(tok)
+                yield f"data: {json.dumps({'token': tok}, ensure_ascii=False)}\n\n"
+            answer = "".join(chunks) or DONT_KNOW
+        await svc.record_turn(
+            session=sess, question=question, answer_md=answer, refs=prepared.ctx.refs,
+            model=prepared.model, prompt_version=prepared.prompt_version, usage={},
+        )
+        done = {
+            "status": "done",
+            "session_id": str(sess.id),
+            "refs": refs_payload(prepared.ctx.refs),
+        }
+        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
+    finally:
+        metrics.SSE_ACTIVE.dec()
 
 
 @router.post("/chat")

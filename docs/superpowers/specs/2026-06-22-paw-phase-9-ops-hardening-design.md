@@ -4,6 +4,47 @@ phase: 9
 status: design
 date: 2026-06-22
 depends_on: [1, 2, 3, 4, 5, 6, 7, 8]
+review:
+  spec_hash: 25f8d2e8b94c05a4
+  last_run: 2026-06-26
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: INFO
+      section: "Data model touched"
+      section_hash: 8e0df587893964cd
+      fragment: "`app_settings` gains Langfuse config keys."
+      text: "The Data-model section enumerates `app_settings` additions as Langfuse config keys only, but the Config section also adds a `ui_language` default key to `app_settings`. The two sections list different `app_settings` additions; reconcile so the data-model section names the `ui_language` default too (or notes it pre-exists from earlier UI i18n groundwork)."
+      fix: "In 'Data model touched', extend to: '`app_settings` gains Langfuse config keys + the `ui_language` default', or state explicitly that `ui_language` already exists."
+      verdict: open
+      verdict_at: null
+    - id: F-002
+      phase: coverage
+      severity: WARNING
+      section: "Out of scope (deferred — backlog/v2)"
+      section_hash: 2132cf80415d5adc
+      fragment: "scheduled cron jobs; per-domain ACL"
+      text: "Out-of-scope defers 'scheduled cron jobs', while the in-scope Backups item specifies 'scheduled `pg_dump` (cron/sidecar)'. The same 'scheduled/cron' wording sits on both sides without disambiguation in this spec. Overview §8 clarifies the deferred item as app-domain scheduled jobs (lint/reindex/GC), but a reader of this spec alone sees an apparent contradiction."
+      fix: "Disambiguate the Out-of-scope wording, e.g. 'scheduled application/maintenance cron jobs (lint/reindex/GC)', to distinguish it from the infra-level pg_dump cron/sidecar that is in scope."
+      verdict: open
+      verdict_at: null
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "Acceptance criteria (verifiable)"
+      section_hash: 39f53423f9fb672f
+      fragment: "**Resourcing/deploy (LLD §11):** per-service resource guidance, compose profiles, prod checklist (healthchecks, volumes, TLS/ACME)."
+      text: "Seven of the eight in-scope items each map to a numbered acceptance criterion (AC 1–7), but the in-scope 'Resourcing/deploy' item (resource guidance, compose profiles, prod checklist) has no corresponding acceptance criterion or verifiable DoD. It ships without a check."
+      fix: "Add an acceptance criterion for Resourcing/deploy, e.g. 'compose profiles documented; prod checklist (healthchecks/volumes/TLS-ACME) present and a fresh prod-profile boot passes healthchecks', or move the item to Out-of-scope if no DoD is intended."
+      verdict: open
+      verdict_at: null
+chain:
+  intent: null
 ---
 
 # Phase 9 — Ops + hardening

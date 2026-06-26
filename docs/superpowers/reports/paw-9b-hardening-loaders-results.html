@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAW 9b — Hardening + loaders · Цепочка IDD→SDD</title>
+<style>
+:root{
+  --bg:#0f1419; --surface:#1a2129; --surface2:#222b35; --border:#33404d;
+  --text:#e4e9ef; --muted:#94a3b8; --accent:#4ea1ff; --accent2:#6ee7b7;
+  --crit:#ff6b6b; --warn:#ffd166; --ok:#6ee7b7; --info:#9aa7b4;
+  --shadow:0 2px 10px rgba(0,0,0,.4);
+}
+body:has(#theme-toggle:checked){
+  --bg:#f6f8fa; --surface:#ffffff; --surface2:#eef2f6; --border:#d0d7de;
+  --text:#1f2328; --muted:#57606a; --accent:#0969da; --accent2:#1a7f37;
+  --crit:#cf222e; --warn:#9a6700; --ok:#1a7f37; --info:#57606a;
+  --shadow:0 2px 10px rgba(140,149,159,.25);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding:0 0 4rem}
+header{display:flex;align-items:center;gap:1rem;padding:1.2rem 2rem;border-bottom:1px solid var(--border);
+  background:var(--surface);position:sticky;top:0;z-index:5}
+header h1{font-size:1.25rem;margin:0;font-weight:650}
+.theme-btn{cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:.35rem .7rem;
+  background:var(--surface2);color:var(--text);user-select:none;font-size:.95rem}
+main{max-width:1080px;margin:0 auto;padding:1.6rem 2rem}
+.chain-tabs{display:flex;gap:.4rem;max-width:1080px;margin:1.2rem auto 0;padding:0 2rem;flex-wrap:wrap}
+.chain-tabs label{cursor:pointer;padding:.45rem 1rem;border:1px solid var(--border);border-bottom:none;
+  border-radius:9px 9px 0 0;background:var(--surface);color:var(--muted);font-size:.95rem}
+.tab-pane{display:none}
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{display:block}
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent);border-color:var(--accent);
+  background:var(--surface2);font-weight:650}
+h2{font-size:1.15rem;margin:1.8rem 0 .8rem;border-bottom:1px solid var(--border);padding-bottom:.35rem}
+h3{font-size:1rem;margin:1.4rem 0 .6rem;color:var(--accent)}
+table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem;background:var(--surface);
+  border:1px solid var(--border);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--surface2);font-weight:600;color:var(--muted)}
+tr:last-child td{border-bottom:none}
+code{background:var(--surface2);padding:.1rem .35rem;border-radius:5px;font-size:.85em;
+  font-family:"SFMono-Regular",Consolas,monospace}
+.note{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);
+  padding:.7rem 1rem;border-radius:6px;margin:1rem 0;color:var(--muted)}
+.badge{display:inline-block;padding:.12rem .5rem;border-radius:20px;font-size:.78rem;font-weight:600;
+  border:1px solid currentColor}
+.b-ok{color:var(--ok)} .b-crit{color:var(--crit)} .b-warn{color:var(--warn)} .b-info{color:var(--info)}
+.b-fixed{color:var(--accent2)}
+.summary-cards{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}
+.card{flex:1 1 150px;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:.9rem 1.1rem;box-shadow:var(--shadow)}
+.card .big{font-size:1.7rem;font-weight:700;display:block}
+.verdict-ok{color:var(--ok);font-weight:700}
+figure{margin:1.2rem 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:1rem;overflow-x:auto}
+figcaption{color:var(--muted);font-size:.85rem;margin-bottom:.6rem}
+.chain-flow{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.9rem}
+.chain-flow .node{padding:.4rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2)}
+.chain-flow .node.muted{color:var(--muted);opacity:.7}
+.chain-flow .arr{color:var(--accent)}
+ul.tight{margin:.4rem 0 .4rem 1.2rem;padding:0}
+ul.tight li{margin:.25rem 0}
+.dod{color:var(--muted);font-size:.86rem}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<header>
+  <label for="theme-toggle" class="theme-btn" title="Тёмная / светлая тема">🌙 / ☀️</label>
+  <h1>PAW Phase 9b — Hardening + loaders + bulk upload · Цепочка IDD→SDD</h1>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+<main>
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:spec END -->
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+
+  <h2>Резюме плана</h2>
+  <p>План: <code>docs/superpowers/plans/2026-06-26-paw-9b-hardening-loaders.md</code> —
+     <strong>Phase 9b: Security hardening + remaining loaders + bulk upload</strong>.
+     10 задач, каждая заканчивается зелёным (<code>ruff</code> + <code>mypy</code> + тесты задачи) и отдельным коммитом.</p>
+  <table>
+    <thead><tr><th>Задача</th><th>Суть</th><th>Definition of Done</th></tr></thead>
+    <tbody>
+      <tr><td><strong>T1</strong></td><td>Зависимости + конфиг-ручки</td>
+        <td class="dod"><code>uv add ebooklib/httpx</code>; поля <code>Settings</code> (url_allowlist, max_url_bytes, max_unzip_bytes, max_unzip_entries, max_compression_ratio) + <code>parse_allowlist</code>; <code>test_config.py</code> PASS</td></tr>
+      <tr><td><strong>T2</strong></td><td>Anti-zip-bomb guard <code>inspect_zip</code></td>
+        <td class="dod">Отклоняет небиблиотечный zip, превышение entries/total/ratio, traversal, absolute path, nested archive; <code>test_zipbomb.py</code> PASS (8)</td></tr>
+      <tr><td><strong>T3</strong></td><td>SSRF guard <code>security/ssrf.py</code></td>
+        <td class="dod">https-only, deny-диапазоны IPv4/IPv6, allowlist, resolve-then-check, size cap, re-validate каждого редиректа; <code>test_ssrf.py</code> PASS (8)</td></tr>
+      <tr><td><strong>T4</strong></td><td>Anti-zip-bomb в валидацию + epub/image</td>
+        <td class="dod"><code>validate_source_upload</code> принимает <code>.epub</code> (zip+inspect_zip) и image (magic jpg/png/webp); переписан pre-existing docx-тест на реальный zip; <code>test_uploads.py</code> PASS</td></tr>
+      <tr><td><strong>T5</strong></td><td>epub loader (ebooklib → markdown)</td>
+        <td class="dod"><code>load_source(data,"epub")</code> извлекает текст спайна; <code>test_loaders_extra.py -k epub</code> PASS (2)</td></tr>
+      <tr><td><strong>T6</strong></td><td>image loader + <code>VisionProvider.describe</code> + factory</td>
+        <td class="dod"><code>describe</code> строит image-message (base64 data URL, выбор vision_model→chat_model); <code>build_vision_provider</code>→None без vision_model; <code>StubVisionProvider</code>; <code>test_vision_provider.py</code> PASS</td></tr>
+      <tr><td><strong>T7</strong></td><td>url loader + <code>upload_url</code> + ветки воркера</td>
+        <td class="dod"><code>load_url</code> через <code>safe_get</code>; <code>upload_url</code> валидирует до записи; <code>_source_markdown</code> ветвится на url/image (pc локально в ingest_domain, арность <code>_build_providers</code> не меняется); unit + integration PASS</td></tr>
+      <tr><td><strong>T8</strong></td><td>Bulk upload (service + endpoint + UI)</td>
+        <td class="dod"><code>upload_bulk</code> (inspect_zip → валидация каждой записи → один commit); <code>POST …/sources/bulk</code> (csrf+role); per-source <code>start_ingest</code>; форма без inline JS; integration + api PASS</td></tr>
+      <tr><td><strong>T9</strong></td><td>Финализация CSP + маппинг <code>SsrfRejected</code></td>
+        <td class="dod"><code>_CSP</code> + frame-ancestors 'none', form-action 'self', object-src 'none', без 'unsafe-inline'; grep подтверждает отсутствие inline-обработчиков; <code>test_csp.py</code> PASS</td></tr>
+      <tr><td><strong>T10</strong></td><td>Полный CI + docs (iwiki) + PR</td>
+        <td class="dod"><code>ruff</code>+<code>mypy</code>+<code>pytest</code> зелёные; iwiki-ingest изменённых модулей + <code>/iwiki-lint</code> без битых ссылок; PR в master</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Схемы зависимостей и пересечений</h2>
+
+  <figure>
+    <figcaption>Граф зависимостей задач (ребро M→N: артефакт задачи M используется в N). Циклов нет, нарушений порядка нет.</figcaption>
+    <svg viewBox="0 0 760 360" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="inherit" font-size="13">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#4ea1ff"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.35"/>
+        </filter>
+      </defs>
+      <style>
+        .n rect{fill:#222b35;stroke:#33404d;rx:8;filter:url(#ds)}
+        .n text{fill:#e4e9ef}
+        .e{stroke:#4ea1ff;stroke-width:1.6;fill:none;marker-end:url(#arr)}
+        .ew{stroke:#94a3b8;stroke-dasharray:4 3}
+        body:has(#theme-toggle:checked) .n rect{fill:#eef2f6;stroke:#d0d7de}
+        body:has(#theme-toggle:checked) .n text{fill:#1f2328}
+      </style>
+      <!-- edges -->
+      <path class="e" d="M70 60 L250 60"/>
+      <path class="e" d="M70 70 L250 175"/>
+      <path class="e" d="M70 78 L250 290"/>
+      <path class="e" d="M70 130 L250 70"/>
+      <path class="e" d="M70 140 L250 285"/>
+      <path class="e" d="M70 205 L250 130"/>
+      <path class="e" d="M70 215 L420 200"/>
+      <path class="e ew" d="M250 60 L250 110"/>
+      <path class="e" d="M250 130 L420 145"/>
+      <path class="e" d="M250 290 L420 210"/>
+      <path class="e ew" d="M70 280 L250 135"/>
+      <path class="e" d="M540 175 L620 175"/>
+      <!-- producers col 1 -->
+      <g class="n"><rect x="10" y="45" width="60" height="30"/><text x="40" y="65" text-anchor="middle">T1</text></g>
+      <g class="n"><rect x="10" y="115" width="60" height="30"/><text x="40" y="135" text-anchor="middle">T2</text></g>
+      <g class="n"><rect x="10" y="190" width="60" height="30"/><text x="40" y="210" text-anchor="middle">T3</text></g>
+      <g class="n"><rect x="10" y="265" width="60" height="30"/><text x="40" y="285" text-anchor="middle">T5</text></g>
+      <!-- consumers col 2 -->
+      <g class="n"><rect x="250" y="45" width="60" height="30"/><text x="280" y="65" text-anchor="middle">T4</text></g>
+      <g class="n"><rect x="250" y="115" width="60" height="30"/><text x="280" y="135" text-anchor="middle">T6</text></g>
+      <g class="n"><rect x="250" y="160" width="60" height="30"/><text x="280" y="180" text-anchor="middle">T7</text></g>
+      <g class="n"><rect x="250" y="275" width="60" height="30"/><text x="280" y="295" text-anchor="middle">T8</text></g>
+      <!-- col 3 -->
+      <g class="n"><rect x="420" y="130" width="120" height="30"/><text x="480" y="150" text-anchor="middle">T7 / T8 / T9</text></g>
+      <g class="n"><rect x="420" y="185" width="120" height="30"/><text x="480" y="205" text-anchor="middle">T9 (CSP)</text></g>
+      <!-- col 4 -->
+      <g class="n"><rect x="620" y="160" width="120" height="30"/><text x="680" y="180" text-anchor="middle">T10 CI/PR</text></g>
+    </svg>
+    <p class="dod">Сводка рёбер: T1→{T4,T7,T8}; T2→{T4,T8}; T3→{T7,T9}; T6→T7; T5→T7 (слабая, через общий html-loader); T4→T8; T5..T9→T10.</p>
+  </figure>
+
+  <figure>
+    <figcaption>Пересечения по файлам — один артефакт редактируется несколькими задачами.</figcaption>
+    <table>
+      <thead><tr><th>Файл / артефакт</th><th>Задачи</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/paw/security/uploads.py</code></td><td>T2 (inspect_zip), T4 (epub/image + _guard_zip)</td></tr>
+        <tr><td><code>src/paw/ingest/loaders/__init__.py</code></td><td>T5 (epub dispatch), T6 (image guard)</td></tr>
+        <tr><td><code>src/paw/services/sources.py</code></td><td>T7 (upload_url), T8 (upload_bulk)</td></tr>
+        <tr><td><code>src/paw/api/routers/sources.py</code></td><td>T8 (bulk endpoint), T9 (SsrfRejected на upload_source)</td></tr>
+        <tr><td><code>src/paw/jobs/tasks.py</code></td><td>T7 (_source_markdown ветки + pc threading)</td></tr>
+        <tr><td><code>tests/unit/test_loaders_extra.py</code></td><td>T5 (epub), T6 (image), T7 (url)</td></tr>
+        <tr><td><code>src/paw/main.py</code></td><td>T9 (CSP)</td></tr>
+      </tbody>
+    </table>
+    <p class="dod">Покрытие приёмки: <strong>AC#5</strong> = T2+T3+T4+T8; <strong>AC#6</strong> = T5+T6+T7+T8; «finalize CSP» = T9.</p>
+  </figure>
+
+  <h2>Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings (все исправлены автором после ревью)</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Проблема</th><th>Исправление</th><th>Вердикт</th></tr></thead>
+    <tbody>
+      <tr><td>F-001</td><td><span class="badge b-crit">CRITICAL</span></td><td>Task 7 Step 4</td>
+        <td>План утверждал, что правка <code>_source_markdown</code> затрагивает одного вызывающего, и предлагал расширить кортеж <code>_build_providers</code>; реально у него 4 вызова (ingest_domain/fix_issues/format_articles/reindex_domain) — расширение ломает три.</td>
+        <td>Брать <code>pc</code> одной локальной строкой в <code>ingest_domain</code>; арность <code>_build_providers</code> не менять.</td>
+        <td><span class="badge b-fixed">fixed</span></td></tr>
+      <tr><td>F-002</td><td><span class="badge b-crit">CRITICAL</span></td><td>Task 4 Step 3</td>
+        <td>Добавление <code>inspect_zip</code> в ветку <code>.docx</code> ломает существующий тест <code>test_validate_source_accepts_docx_zip_magic</code> (усечённые байты PK не парсятся как zip) — падает CI-гейт <code>pytest</code>.</td>
+        <td>Переписать тест на реальный синтетический zip (добавлено в Task 4 Step 1).</td>
+        <td><span class="badge b-fixed">fixed</span></td></tr>
+      <tr><td>F-003</td><td><span class="badge b-warn">WARNING</span></td><td>Task 7 Step 4</td>
+        <td><code>pc</code> типизирован как <code>Any</code>, ослабляет mypy strict для <code>build_vision_provider(pc, box)</code>.</td>
+        <td><code>pc: ProviderConfig</code> + импорт в <code>tasks.py</code>.</td>
+        <td><span class="badge b-fixed">fixed</span></td></tr>
+      <tr><td>F-004</td><td><span class="badge b-warn">WARNING</span></td><td>Task 8 Step 3</td>
+        <td>Проза говорит ключ ответа <code>"jobs"</code>, а модель <code>BulkOut</code> и API-тест используют <code>"job_ids"</code>.</td>
+        <td>Привести прозу к <code>job_ids</code>.</td>
+        <td><span class="badge b-fixed">fixed</span></td></tr>
+      <tr><td>F-005</td><td><span class="badge b-warn">WARNING</span></td><td>Task 8 Step 1</td>
+        <td>Тест зип-бомбы не фиксирует, какой именно guard сработал.</td>
+        <td>Добавить <code>match="ratio"</code>.</td>
+        <td><span class="badge b-fixed">fixed</span></td></tr>
+      <tr><td>F-006</td><td><span class="badge b-warn">WARNING</span></td><td>Task 7 Step 1</td>
+        <td>monkeypatch <code>validate_url</code> зависит от функционально-локального импорта в <code>upload_url</code>.</td>
+        <td>Добавлена заметка сохранять local-import форму.</td>
+        <td><span class="badge b-fixed">fixed</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="summary-cards">
+    <div class="card"><span class="big" style="color:var(--crit)">0</span>CRITICAL open</div>
+    <div class="card"><span class="big" style="color:var(--warn)">0</span>WARNING open</div>
+    <div class="card"><span class="big b-fixed">6</span>findings fixed</div>
+    <div class="card"><span class="big verdict-ok">OK</span>Вердикт</div>
+  </div>
+
+  <p class="note">Вердикт: <span class="verdict-ok">OK</span> — все findings исправлены автором; 0 открытых CRITICAL/WARNING. План прошёл гейт IDD.</p>
+
+  <h3>Цепочка</h3>
+  <div class="chain-flow">
+    <span class="node muted">intent (нет)</span><span class="arr">→</span>
+    <span class="node">spec: 2026-06-22-paw-phase-9-ops-hardening-design.md</span><span class="arr">→</span>
+    <span class="node">plan: 2026-06-26-paw-9b-hardening-loaders.md</span>
+  </div>
+
+</section>
+<!-- TAB:plan END -->
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</main>
+</body>
+</html>
