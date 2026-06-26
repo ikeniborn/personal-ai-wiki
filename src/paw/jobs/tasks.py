@@ -10,13 +10,18 @@ from paw.db.repos.jobs import JobRepo
 from paw.db.repos.sources import SourceRepo
 from paw.db.session import get_sessionmaker
 from paw.harness.ops.ingest import run_ingest
+from paw.harness.prompts import PROMPT_VERSION
 from paw.ingest.loaders import load_source
 from paw.jobs.locks import domain_lock, model_lock
 from paw.jobs.progress import publish
+from paw.obs import metrics
+from paw.obs.instrument import instrument_chat, instrument_embedding
+from paw.obs.langfuse_client import trace_op
 from paw.providers.base import ChatProvider, EmbeddingProvider
 from paw.providers.config import WikiConfig
 from paw.providers.factory import build_chat_provider, build_embedding_provider
 from paw.security.secrets import SecretBox
+from paw.services.langfuse_settings import LangfuseSettingsService
 from paw.services.provider_settings import ProviderSettingsService
 from paw.storage.postgres import PostgresStorage
 
@@ -83,9 +88,16 @@ async def ingest_domain(
             await jobs.heartbeat(jid)
             await job_s.commit()
 
+            lf_cfg = await LangfuseSettingsService(data_s, box=box).load()
+            trace = trace_op(
+                lf_cfg, name="ingest", trace_id=job_id,
+                metadata={"domain_id": domain_id, "prompt_version": PROMPT_VERSION},
+            )
+
             async def on_step(msg: str) -> None:
                 if await jobs.is_cancel_requested(jid):
                     raise IngestCancelled()
+                trace.span(name=f"tool:{msg}", metadata={})
                 await jobs.heartbeat(jid)
                 await jobs.append_log(jid, {"step": msg})
                 await job_s.commit()
@@ -93,6 +105,8 @@ async def ingest_domain(
 
             try:
                 chat, embedder, wiki, dim = await _build_providers(data_s, box)
+                chat = instrument_chat(chat, op="ingest", trace=trace)
+                embedder = instrument_embedding(embedder, op="ingest", trace=trace)
                 source_md = (
                     await _source_markdown(data_s, source_id) if source_id else (topic or "")
                 )
@@ -113,6 +127,8 @@ async def ingest_domain(
                         timeout=wiki.request_timeout_s * wiki.max_steps,
                     )
                 await data_s.commit()
+                metrics.ARTICLES.inc()
+                metrics.CHUNKS.inc(result.chunk_count)
                 await jobs.set_status(jid, "succeeded", article_id=result.article_id)
                 await jobs.append_log(jid, {"step": "done"})
                 await job_s.commit()
@@ -134,6 +150,8 @@ async def ingest_domain(
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
+            finally:
+                trace.flush()
 
 
 async def gc_housekeeping(ctx: dict[str, Any]) -> str:
@@ -207,8 +225,14 @@ async def fix_issues(
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
+            lf_cfg = await LangfuseSettingsService(data_s, box=box).load()
+            trace = trace_op(
+                lf_cfg, name="fix", trace_id=job_id,
+                metadata={"domain_id": domain_id, "prompt_version": PROMPT_VERSION},
+            )
             try:
                 chat, _embedder, wiki, _dim = await _build_providers(data_s, box)
+                chat = instrument_chat(chat, op="fix", trace=trace)
                 psvc = ProviderSettingsService(data_s, box=box)
                 mcfg = await psvc.get_maintenance()
                 issues = (
@@ -250,6 +274,8 @@ async def fix_issues(
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
+            finally:
+                trace.flush()
 
 
 async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
@@ -273,8 +299,14 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
+            lf_cfg = await LangfuseSettingsService(data_s, box=box).load()
+            trace = trace_op(
+                lf_cfg, name="format", trace_id=job_id,
+                metadata={"domain_id": domain_id, "prompt_version": PROMPT_VERSION},
+            )
             try:
                 chat, _embedder, wiki, _dim = await _build_providers(data_s, box)
+                chat = instrument_chat(chat, op="format", trace=trace)
                 repo = ArticleRepo(data_s)
                 citations = CitationRepo(data_s)
                 articles = await repo.list_by_domain(did)
@@ -319,6 +351,8 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
+            finally:
+                trace.flush()
 
 
 async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
@@ -351,8 +385,14 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "batch", "done": done, "total": total})
 
+            lf_cfg = await LangfuseSettingsService(data_s, box=box).load()
+            trace = trace_op(
+                lf_cfg, name="reindex", trace_id=job_id,
+                metadata={"domain_id": domain_id, "prompt_version": PROMPT_VERSION},
+            )
             try:
                 chat, embedder, _wiki, dim = await _build_providers(data_s, box)
+                chat = instrument_chat(chat, op="reindex", trace=trace)
                 psvc = ProviderSettingsService(data_s, box=box)
                 target = await psvc.get_embedding_version()
                 mcfg = await psvc.get_maintenance()
@@ -383,6 +423,8 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
                 return "failed"
+            finally:
+                trace.flush()
 
 
 async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
