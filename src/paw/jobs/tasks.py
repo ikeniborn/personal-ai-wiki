@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import UTC
 from typing import Any
@@ -64,6 +65,20 @@ async def _source_markdown(session: Any, source_id: str) -> str:
     return load_source(data, src.type)
 
 
+def _record_job(kind: str, ctx: dict[str, Any], status: str, started: float) -> str:
+    """Record job completion metrics; returns `status` for use as `return _record_job(...)`."""
+    try_n = int(ctx.get("job_try", 1) or 1)
+    if try_n > 1:
+        metrics.JOB_RETRIES.labels(kind=kind).inc()
+    if status == "failed":
+        max_tries = int(ctx.get("max_tries", 5) or 5)
+        if try_n >= max_tries:
+            metrics.JOB_DEADLETTER.labels(kind=kind).inc()
+    metrics.JOB_DURATION.labels(kind=kind).observe(time.perf_counter() - started)
+    metrics.JOB_TOTAL.labels(kind=kind, status=status).inc()
+    return status
+
+
 async def ingest_domain(
     ctx: dict[str, Any],
     job_id: str,
@@ -71,7 +86,10 @@ async def ingest_domain(
     source_id: str | None = None,
     topic: str | None = None,
 ) -> str:
+    started = time.perf_counter()
     redis = ctx["redis"]
+    from paw.worker import set_queue_depth  # lazy: tasks is imported by worker (avoid cycle)
+    await set_queue_depth(redis)
     box = SecretBox(get_settings().fernet_key)
     jid = uuid.UUID(job_id)
     did = uuid.UUID(domain_id)
@@ -83,7 +101,7 @@ async def ingest_domain(
                 await jobs.set_status(jid, "failed", error="domain busy")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("ingest", ctx, "failed", started)
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
@@ -112,7 +130,7 @@ async def ingest_domain(
                 )
                 if not source_md.strip():
                     raise RuntimeError("empty source")
-                async with model_lock(redis, getattr(chat, "chat_model", "default")):
+                async with model_lock(redis, getattr(chat, "chat_model", "default"), kind="ingest"):
                     result = await asyncio.wait_for(
                         run_ingest(
                             data_s,
@@ -137,19 +155,19 @@ async def ingest_domain(
                     jid,
                     {"step": "done", "status": "succeeded", "article_id": str(result.article_id)},
                 )
-                return "succeeded"
+                return _record_job("ingest", ctx, "succeeded", started)
             except IngestCancelled:
                 await data_s.rollback()
                 await jobs.set_status(jid, "cancelled")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
-                return "cancelled"
+                return _record_job("ingest", ctx, "cancelled", started)
             except Exception as e:  # noqa: BLE001
                 await data_s.rollback()
                 await jobs.set_status(jid, "failed", error=str(e)[:500])
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("ingest", ctx, "failed", started)
             finally:
                 trace.flush()
 
@@ -169,6 +187,11 @@ async def gc_housekeeping(ctx: dict[str, Any]) -> str:
     from paw.services.query_cache import QueryCacheService
     from paw.services.retention import resolve_retention, select_sessions_to_prune
 
+    started = time.perf_counter()
+    if redis := ctx.get("redis"):
+        from paw.worker import set_queue_depth  # lazy: avoid import cycle
+
+        await set_queue_depth(redis)
     box = SecretBox(get_settings().fernet_key)
     pruned = 0
     async with get_sessionmaker()() as session:
@@ -196,6 +219,7 @@ async def gc_housekeeping(ctx: dict[str, Any]) -> str:
             cutoff = now - timedelta(seconds=qc_cfg.ttl_seconds)
             await qc_repo.delete_expired(cutoff=cutoff, domain_id=domain.id)
         await session.commit()
+    _record_job("gc", ctx, "succeeded", started)
     return f"gc:{pruned}"
 
 
@@ -208,7 +232,11 @@ async def fix_issues(
     from paw.harness.ops.lint import run_lint
     from paw.services.provider_settings import ProviderSettingsService
 
+    started = time.perf_counter()
     redis = ctx["redis"]
+    from paw.worker import set_queue_depth  # lazy: avoid import cycle
+
+    await set_queue_depth(redis)
     box = SecretBox(get_settings().fernet_key)
     jid = uuid.UUID(job_id)
     did = uuid.UUID(domain_id)
@@ -221,7 +249,7 @@ async def fix_issues(
                 await jobs.set_status(jid, "failed", error="domain busy")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("fix", ctx, "failed", started)
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
@@ -240,7 +268,7 @@ async def fix_issues(
                 ).issues
                 targets = [i for i in issues if i.id in selected]
                 fixed = 0
-                async with model_lock(redis, getattr(chat, "chat_model", "default")):
+                async with model_lock(redis, getattr(chat, "chat_model", "default"), kind="fix"):
                     for issue in targets:
                         if await jobs.is_cancel_requested(jid):
                             raise MaintenanceCancelled()
@@ -261,19 +289,19 @@ async def fix_issues(
                 await _safe_publish(
                     redis, jid, {"step": "done", "status": "succeeded", "count": fixed}
                 )
-                return "succeeded"
+                return _record_job("fix", ctx, "succeeded", started)
             except MaintenanceCancelled:
                 await data_s.rollback()
                 await jobs.set_status(jid, "cancelled")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
-                return "cancelled"
+                return _record_job("fix", ctx, "cancelled", started)
             except Exception as e:  # noqa: BLE001
                 await data_s.rollback()
                 await jobs.set_status(jid, "failed", error=str(e)[:500])
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("fix", ctx, "failed", started)
             finally:
                 trace.flush()
 
@@ -283,7 +311,11 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
     from paw.db.repos.citations import CitationRepo
     from paw.harness.ops.format import run_format_article
 
+    started = time.perf_counter()
     redis = ctx["redis"]
+    from paw.worker import set_queue_depth  # lazy: avoid import cycle
+
+    await set_queue_depth(redis)
     box = SecretBox(get_settings().fernet_key)
     jid = uuid.UUID(job_id)
     did = uuid.UUID(domain_id)
@@ -295,7 +327,7 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
                 await jobs.set_status(jid, "failed", error="domain busy")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("format", ctx, "failed", started)
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
@@ -311,7 +343,7 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
                 citations = CitationRepo(data_s)
                 articles = await repo.list_by_domain(did)
                 formatted = 0
-                async with model_lock(redis, getattr(chat, "chat_model", "default")):
+                async with model_lock(redis, getattr(chat, "chat_model", "default"), kind="format"):
                     for art in articles:
                         if await jobs.is_cancel_requested(jid):
                             raise MaintenanceCancelled()
@@ -338,19 +370,19 @@ async def format_articles(ctx: dict[str, Any], job_id: str, domain_id: str) -> s
                 await _safe_publish(
                     redis, jid, {"step": "done", "status": "succeeded", "count": formatted}
                 )
-                return "succeeded"
+                return _record_job("format", ctx, "succeeded", started)
             except MaintenanceCancelled:
                 await data_s.rollback()
                 await jobs.set_status(jid, "cancelled")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
-                return "cancelled"
+                return _record_job("format", ctx, "cancelled", started)
             except Exception as e:  # noqa: BLE001
                 await data_s.rollback()
                 await jobs.set_status(jid, "failed", error=str(e)[:500])
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("format", ctx, "failed", started)
             finally:
                 trace.flush()
 
@@ -360,7 +392,11 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
     from paw.services.provider_settings import ProviderSettingsService
     from paw.vector.reindex import reindex_domain_chunks
 
+    started = time.perf_counter()
     redis = ctx["redis"]
+    from paw.worker import set_queue_depth  # lazy: avoid import cycle
+
+    await set_queue_depth(redis)
     box = SecretBox(get_settings().fernet_key)
     jid = uuid.UUID(job_id)
     did = uuid.UUID(domain_id)
@@ -372,7 +408,7 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
                 await jobs.set_status(jid, "failed", error="domain busy")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("reindex", ctx, "failed", started)
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
@@ -397,7 +433,9 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
                 target = await psvc.get_embedding_version()
                 mcfg = await psvc.get_maintenance()
                 await ensure_embedding_column(data_s, dim)
-                async with model_lock(redis, getattr(chat, "chat_model", "default")):
+                async with model_lock(
+                    redis, getattr(chat, "chat_model", "default"), kind="reindex"
+                ):
                     count = await reindex_domain_chunks(
                         data_s, domain_id=did, target_version=target,
                         embedder=embedder, batch_size=mcfg.reindex_batch_size,
@@ -410,19 +448,19 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
                 await _safe_publish(
                     redis, jid, {"step": "done", "status": "succeeded", "count": count}
                 )
-                return "succeeded"
+                return _record_job("reindex", ctx, "succeeded", started)
             except MaintenanceCancelled:
                 await data_s.rollback()
                 await jobs.set_status(jid, "cancelled")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
-                return "cancelled"
+                return _record_job("reindex", ctx, "cancelled", started)
             except Exception as e:  # noqa: BLE001
                 await data_s.rollback()
                 await jobs.set_status(jid, "failed", error=str(e)[:500])
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("reindex", ctx, "failed", started)
             finally:
                 trace.flush()
 
@@ -433,7 +471,11 @@ async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
     from paw.harness.ops.lint import run_lint
     from paw.services.provider_settings import ProviderSettingsService
 
+    started = time.perf_counter()
     redis = ctx["redis"]
+    from paw.worker import set_queue_depth  # lazy: avoid import cycle
+
+    await set_queue_depth(redis)
     box = SecretBox(get_settings().fernet_key)
     jid = uuid.UUID(job_id)
     did = uuid.UUID(domain_id)
@@ -445,7 +487,7 @@ async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
                 await jobs.set_status(jid, "failed", error="domain busy")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("lint", ctx, "failed", started)
             await jobs.set_status(jid, "running")
             await jobs.heartbeat(jid)
             await job_s.commit()
@@ -473,14 +515,14 @@ async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
                 await _safe_publish(
                     redis, jid, {"step": "done", "status": "succeeded", "count": len(payload)}
                 )
-                return "succeeded"
+                return _record_job("lint", ctx, "succeeded", started)
             except MaintenanceCancelled:
                 await jobs.set_status(jid, "cancelled")
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
-                return "cancelled"
+                return _record_job("lint", ctx, "cancelled", started)
             except Exception as e:  # noqa: BLE001
                 await jobs.set_status(jid, "failed", error=str(e)[:500])
                 await job_s.commit()
                 await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
-                return "failed"
+                return _record_job("lint", ctx, "failed", started)
