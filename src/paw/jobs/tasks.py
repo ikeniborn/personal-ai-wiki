@@ -67,15 +67,18 @@ async def _source_markdown(session: Any, source_id: str) -> str:
 
 def _record_job(kind: str, ctx: dict[str, Any], status: str, started: float) -> str:
     """Record job completion metrics; returns `status` for use as `return _record_job(...)`."""
-    try_n = int(ctx.get("job_try", 1) or 1)
-    if try_n > 1:
-        metrics.JOB_RETRIES.labels(kind=kind).inc()
-    if status == "failed":
-        max_tries = int(ctx.get("max_tries", 5) or 5)
-        if try_n >= max_tries:
-            metrics.JOB_DEADLETTER.labels(kind=kind).inc()
-    metrics.JOB_DURATION.labels(kind=kind).observe(time.perf_counter() - started)
-    metrics.JOB_TOTAL.labels(kind=kind, status=status).inc()
+    try:
+        try_n = int(ctx.get("job_try", 1) or 1)
+        if try_n > 1:
+            metrics.JOB_RETRIES.labels(kind=kind).inc()
+        if status == "failed":
+            max_tries = int(ctx.get("max_tries", 5) or 5)
+            if try_n >= max_tries:
+                metrics.JOB_DEADLETTER.labels(kind=kind).inc()
+        metrics.JOB_DURATION.labels(kind=kind).observe(time.perf_counter() - started)
+        metrics.JOB_TOTAL.labels(kind=kind, status=status).inc()
+    except Exception:  # noqa: BLE001
+        pass  # metrics must never change a job's outcome
     return status
 
 
