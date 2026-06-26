@@ -17,8 +17,11 @@ v4 API notes
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from langfuse import Langfuse
 
 # Silence SDK background-transport noise at import time so unit-test output
 # stays clean when tests point at a deliberately-dead host.
@@ -35,11 +38,11 @@ class LangfuseConfig:
     host: str
     public_key: str
     secret_key: str
-    redact_input: bool = field(default=False)
-    sample_rate: float = field(default=1.0)
+    redact_input: bool = False
+    sample_rate: float = 1.0
 
 
-def get_langfuse(cfg: LangfuseConfig) -> Any | None:
+def get_langfuse(cfg: LangfuseConfig) -> Langfuse | None:
     """Return a memoised Langfuse client, or None when disabled/misconfigured.
 
     Never raises. Construction failures are logged once and return None.
@@ -51,12 +54,12 @@ def get_langfuse(cfg: LangfuseConfig) -> Any | None:
 
     cache_key = (cfg.host, cfg.public_key, cfg.secret_key)
     if cache_key in _CLIENT_CACHE:
-        return _CLIENT_CACHE[cache_key]
+        return _CLIENT_CACHE[cache_key]  # type: ignore[no-any-return]
 
     try:
-        from langfuse import Langfuse  # lazy import — only touched when enabled
+        from langfuse import Langfuse as LangfuseClient  # lazy import — only touched when enabled
 
-        client = Langfuse(
+        client = LangfuseClient(
             public_key=cfg.public_key,
             secret_key=cfg.secret_key,
             host=cfg.host,
@@ -155,6 +158,8 @@ class OpTrace:
 
     def flush(self) -> None:
         """Best-effort flush — fire-and-forget, never raises."""
+        if self._root is None:
+            return
         try:
             self._root.end()
             self._client.flush()
