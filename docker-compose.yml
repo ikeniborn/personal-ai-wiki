@@ -11,6 +11,9 @@ services:
       - "--certificatesresolvers.le.acme.tlschallenge=true"
       - "--certificatesresolvers.le.acme.email=${ACME_EMAIL:-admin@example.com}"
       - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entrypoint=metrics"
+      - "--entrypoints.metrics.address=:8082"
     ports: ["80:80", "443:443"]
     volumes:
       - "letsencrypt:/letsencrypt"
@@ -43,7 +46,7 @@ services:
     build: .
     command: ["alembic", "upgrade", "head"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw
+      DATABASE_URL: postgresql+asyncpg://MASKING@postgres:5432/paw
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
@@ -54,7 +57,7 @@ services:
     build: .
     command: ["uvicorn", "paw.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw
+      DATABASE_URL: postgresql+asyncpg://MASKING@postgres:5432/paw
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
@@ -78,15 +81,63 @@ services:
     build: .
     command: ["arq", "paw.worker.WorkerSettings"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw
+      DATABASE_URL: postgresql+asyncpg://MASKING@postgres:5432/paw
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
+      WORKER_METRICS_PORT: 9100
     depends_on:
       redis: { condition: service_healthy }
       init: { condition: service_completed_successfully }
+
+  # ---------------------------------------------------------------------------
+  # Observability stack — opt-in via: docker compose --profile observability up
+  # All services below are gated; plain `docker compose up` is unchanged.
+  # ---------------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    profiles: ["observability"]
+    volumes:
+      - "./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "promdata:/prometheus"
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    profiles: ["observability"]
+    environment:
+      # Required: set GRAFANA_ADMIN_PASSWORD before running --profile observability
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+    volumes:
+      - "./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro"
+      - "grafanadata:/var/lib/grafana"
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+    profiles: ["observability"]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw?sslmode=disable"
+
+  redis_exporter:
+    image: oliver006/redis_exporter
+    profiles: ["observability"]
+    environment:
+      REDIS_ADDR: redis://redis:6379
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor
+    profiles: ["observability"]
+    privileged: true
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
 
 volumes:
   pgdata:
   redisdata:
   letsencrypt:
+  promdata:
+  grafanadata:
