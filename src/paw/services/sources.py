@@ -41,5 +41,25 @@ class SourceService:
         await self._s.commit()
         return src
 
+    async def upload_url(self, *, domain_id: uuid.UUID, url: str) -> Source:
+        from paw.config import parse_allowlist
+        from paw.security.ssrf import validate_url
+
+        allow = parse_allowlist(get_settings().url_allowlist)
+        validate_url(url, allowlist=allow)
+        data = url.encode()
+        checksum = hashlib.sha256(data).hexdigest()
+        ref = await self._store.put(data, content_type="text/uri-list")
+        src = await self._repo.create(
+            domain_id=domain_id,
+            storage_ref=ref,
+            filename=url,
+            type="url",
+            checksum=checksum,
+            url=url,
+        )
+        await self._s.commit()
+        return src
+
     async def list(self, domain_id: uuid.UUID) -> list[Source]:
         return await self._repo.list_by_domain(domain_id)

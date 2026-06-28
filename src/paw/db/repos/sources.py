@@ -18,6 +18,7 @@ class SourceRepo:
         filename: str | None,
         type: str,
         checksum: str,
+        url: str | None = None,
     ) -> Source:
         s = Source(
             domain_id=domain_id,
@@ -25,6 +26,7 @@ class SourceRepo:
             filename=filename,
             type=type,
             checksum=checksum,
+            url=url,
         )
         self._s.add(s)
         await self._s.flush()

@@ -6,6 +6,7 @@ from tests.stubs import StubVisionProvider
 
 from paw.ingest.loaders import UnsupportedSource, load_source
 from paw.ingest.loaders.image import describe_image
+from paw.ingest.loaders.url import load_url
 
 
 def _minimal_epub(chapter_html: str) -> bytes:
@@ -103,3 +104,29 @@ async def test_describe_image_calls_vision():
     out = await describe_image(b"img", vis, prompt="Describe")
     assert "server rack" in out
     assert vis.prompts == ["Describe"]
+
+
+async def test_url_loads_html_via_safe_get(monkeypatch):
+    calls = []
+
+    async def fake_safe_get(url: str, *, max_bytes: int, allowlist: list[str]) -> bytes:
+        calls.append((url, max_bytes, allowlist))
+        return b"<html><body><h1>QUIC</h1><p>Fast transport.</p></body></html>"
+
+    monkeypatch.setattr("paw.ingest.loaders.url.safe_get", fake_safe_get)
+
+    out = await load_url("https://example.com/quic", allowlist=["example.com"], max_bytes=1024)
+
+    assert "QUIC" in out
+    assert "Fast transport" in out
+    assert calls == [("https://example.com/quic", 1024, ["example.com"])]
+
+
+async def test_url_empty_extract_raises(monkeypatch):
+    async def fake_safe_get(url: str, *, max_bytes: int, allowlist: list[str]) -> bytes:
+        return b""
+
+    monkeypatch.setattr("paw.ingest.loaders.url.safe_get", fake_safe_get)
+
+    with pytest.raises(ValueError, match="url produced no extractable text"):
+        await load_url("https://example.com/empty", allowlist=[], max_bytes=1024)
