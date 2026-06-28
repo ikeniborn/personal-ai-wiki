@@ -12,11 +12,22 @@
 <body>
   <div class="app">
     <nav class="rail">
-      <a href="/" title="Domains">🏠</a>
-      <a href="/" title="Articles">📚</a>
-      <a href="/chat" title="Chat">💬</a>
-      <a href="#" title="Graph (later)">🕸</a>
-      <a href="/settings" title="Settings">⚙</a>
+      <a href="/" title="{{ t('nav.domains') }}">🏠</a>
+      <a href="/" title="{{ t('nav.articles') }}">📚</a>
+      <a href="/chat" title="{{ t('nav.chat') }}">💬</a>
+      <a href="#" title="{{ t('nav.graph') }}">🕸</a>
+      <a href="/settings" title="{{ t('nav.settings') }}">⚙</a>
+      {% if user %}
+      <form class="lang-switch" hx-post="/api/v1/users/me/ui-language" hx-ext="json-enc"
+            hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-swap="none">
+        <label title="{{ t('lang.label') }}">
+          <select name="ui_language">
+            <option value="en" {% if ui_lang == 'en' %}selected{% endif %}>{{ t('lang.en') }}</option>
+            <option value="ru" {% if ui_lang == 'ru' %}selected{% endif %}>{{ t('lang.ru') }}</option>
+          </select>
+        </label>
+      </form>
+      {% endif %}
     </nav>
     <aside class="sidebar">{% block sidebar %}{% endblock %}</aside>
     <main class="content">{% block content %}{% endblock %}</main>

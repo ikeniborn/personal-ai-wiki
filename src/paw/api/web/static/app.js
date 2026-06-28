@@ -25,3 +25,9 @@ document.addEventListener("input", (e) => {
     li.style.display = li.dataset.title.includes(needle) ? "" : "none";
   });
 });
+
+// Language switcher (CSP-safe: external file, no inline handlers).
+document.addEventListener("change", (e) => {
+  if (e.target.name !== "ui_language") return;
+  e.target.form.requestSubmit();
+});
