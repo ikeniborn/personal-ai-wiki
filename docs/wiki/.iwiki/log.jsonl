@@ -32,3 +32,8 @@
 {"op":"ingest","source":"src/paw/services/sources.py","page":"services.md","date":"2026-06-28","note":"9b upload_url + upload_bulk"}
 {"op":"ingest","source":"src/paw/api/routers/sources.py","page":"api.md","date":"2026-06-28","note":"9b bulk endpoint + finalized CSP"}
 {"op":"ingest","source":"src/paw/config.py","page":"architecture.md","date":"2026-06-28","note":"9b hardening env knobs"}
+{"op":"ingest","source":"src/paw/api/web/i18n.py","page":"docs/wiki/web.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/api/web/routes.py","page":"docs/wiki/web.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/api/routers/users.py","page":"docs/wiki/api.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/db/repos/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}

@@ -50,9 +50,12 @@
 
 ## Users & domains routers
 
-`users.py` (`/users`, admin-only) lists and creates users; `domains.py` (`/domains`) lists and creates wiki domains. Both are thin wrappers over [[services#DomainService & UserService]] / [[services#DomainService & UserService]], with `require_csrf` + `require_role` on writes.
+`users.py` (`/users`, admin-only) lists, creates, updates and deletes users; `domains.py` (`/domains`) lists and creates wiki domains. Both are thin wrappers over [[services#DomainService & UserService]], with `require_csrf` + `require_role` on writes. See [[web#API]] for i18n-related endpoints.
 
 - `GET /users` (admin) · `POST /users` (admin) — create with role (`viewer` default).
+- `PATCH /users/{user_id}` (admin + CSRF) — body `{"role"}`; `UserService` validates `role ∈ USER_ROLES`, raises `ProblemError(422)` on invalid role; returns `UserOut`.
+- `DELETE /users/{user_id}` (admin + CSRF) — 204 on success; `UserService` raises `ProblemError(409)` on last-admin guard, 404 if not found.
+- `POST /users/me/ui-language` (CSRF + `current_user`) — body `{"ui_language"}`; validates `lang ∈ ("en", "ru")` in `UserService`; returns 204 + `HX-Refresh: true`. See [[web#UI language switch]].
 - `GET /domains` (any role, cursor-paginated) · `POST /domains` (admin/editor).
 
 ## Sources router
@@ -115,9 +118,12 @@
 
 ## Web UI (HTMX)
 
-`web/routes.py` serves the server-rendered HTMX app from Jinja2 templates: it guards pages on the session cookie (redirecting to `/login` or `/setup`), embeds the `paw_csrf` token into forms, and returns HTML partials that HTMX swaps in. Markdown is rendered with `render_markdown` + `resolve_wikilinks`. See [[security#CSRF]] and [[api#Web UI (HTMX)]].
+`web/routes.py` serves the server-rendered HTMX app from Jinja2 templates: it guards pages on the session cookie (redirecting to `/login` or `/setup`), embeds the `paw_csrf` token into forms, and returns HTML partials that HTMX swaps in. Markdown is rendered with `render_markdown` + `resolve_wikilinks`. See [[security#CSRF]], [[web#page_ctx seam]], and [[web#UI language switch]].
 
 - Pages: `/` dashboard, `/domains/{id}` (article tree + sources), `/domains/{id}/graph` (Cytoscape page seeded with a root), `/articles/{id}`, `/settings`, `/login`, `/setup`.
+- **i18n seam:** `page_ctx(request, user, app_settings, **extra)` injects `{"user", "csrf", "ui_lang", "t"}` into every converted page context; `t` is a `functools.partial` bound to the resolved UI language. English-bound globals on `templates.env.globals` keep unconverted routes rendering safely. See [[web#page_ctx seam]].
+- **Language switcher:** `base.html` `{% if user %}` block POSTs to `/api/v1/users/me/ui-language`; responds with `HX-Refresh: true`. CSP-safe: `static/app.js` delegated `change` listener calls `form.requestSubmit()` (no inline handlers). See [[web#UI language switch]].
+- **One-shot API key reveal:** `POST /api-keys/issue` (root-mounted web route, csrf-guarded) issues a key and renders `_apikey_issued.html` showing the full token once. See [[web#Admin UI sections]] and [[security#API keys]].
 - Article tree comes from `ArticleService.domain_tree`; the article page renders body, metadata and history (rollback posts `HX-Refresh`).
 - Domain actions `POST /domains/{id}/ingest|lint|format|reindex|fix` start jobs and return the `_job_drawer.html` SSE-wired progress partial; `/lint/{job_id}/results` lists issues with a fix form.
 - Query: `/domains/{id}/query` page + `POST` returning a `_query_result.html` answer partial. Phase 7 adds an as-you-type suggestions dropdown driven by `GET /domains/{id}/suggest?q=` via `hx-get` with ~300ms debounce (`_suggestions.html` partial). When the served answer is stale, the result partial renders a "may be outdated" badge and a Refresh form that re-posts with `refresh=1`. Cached markdown is sanitized at render via `render_markdown`.
