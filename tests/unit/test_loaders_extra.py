@@ -2,8 +2,10 @@ import io
 import zipfile
 
 import pytest
+from tests.stubs import StubVisionProvider
 
-from paw.ingest.loaders import load_source
+from paw.ingest.loaders import UnsupportedSource, load_source
+from paw.ingest.loaders.image import describe_image
 
 
 def _minimal_epub(chapter_html: str) -> bytes:
@@ -89,3 +91,15 @@ def test_epub_uses_spine_order_and_skips_non_spine_documents():
 def test_epub_empty_raises():
     with pytest.raises(ValueError):
         load_source(_minimal_epub("<body></body>"), "epub")
+
+
+def test_image_load_source_requires_vision_path():
+    with pytest.raises(UnsupportedSource, match="image sources require the vision path"):
+        load_source(b"img", "image")
+
+
+async def test_describe_image_calls_vision():
+    vis = StubVisionProvider(text="A photo of a server rack.")
+    out = await describe_image(b"img", vis, prompt="Describe")
+    assert "server rack" in out
+    assert vis.prompts == ["Describe"]

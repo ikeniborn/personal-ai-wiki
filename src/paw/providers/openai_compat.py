@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -37,6 +38,14 @@ def _tool_to_dict(t: ToolSpec) -> dict[str, Any]:
     }
 
 
+def _image_mime(data: bytes) -> str:
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
+
+
 class OpenAICompatProvider:
     def __init__(
         self,
@@ -45,11 +54,13 @@ class OpenAICompatProvider:
         api_key: str,
         chat_model: str,
         embedding_model: str,
+        vision_model: str | None = None,
         supports_tools: bool = True,
         client: Any | None = None,
     ) -> None:
         self.chat_model = chat_model
         self.embedding_model = embedding_model
+        self.vision_model = vision_model
         self.supports_tools = supports_tools
         if client is None:
             from openai import AsyncOpenAI
@@ -115,6 +126,26 @@ class OpenAICompatProvider:
             model=model or self.embedding_model, input=texts
         )
         return [list(d.embedding) for d in resp.data]
+
+    async def describe(self, image: bytes, *, prompt: str, model: str | None = None) -> str:
+        b64 = base64.b64encode(image).decode("ascii")
+        mime = _image_mime(image)
+        resp = await self._client.chat.completions.create(
+            model=model or self.vision_model or self.chat_model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime};base64,{b64}"},
+                        },
+                    ],
+                }
+            ],
+        )
+        return resp.choices[0].message.content or ""
 
     async def structured[M: BaseModel](
         self,

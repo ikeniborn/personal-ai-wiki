@@ -17,6 +17,10 @@ def load_source(data: bytes, source_type: str) -> str:
         from paw.ingest.loaders.html import load
     elif t == "epub":
         from paw.ingest.loaders.epub import load
+    elif t == "image":
+        raise UnsupportedSource(
+            "image sources require the vision path (see jobs.tasks._source_markdown)"
+        )
     else:
         raise UnsupportedSource(f"unsupported source type: {source_type}")
     out = load(data).strip()
