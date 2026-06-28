@@ -27,6 +27,8 @@ dependencies = [
     "mcp>=1.28",
     "prometheus-client>=0.21",
     "langfuse>=4",
+    "ebooklib>=0.20",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
@@ -72,4 +74,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["langfuse.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ebooklib.*"]
 ignore_missing_imports = true

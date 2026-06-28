@@ -1,7 +1,7 @@
 # Security
 
 ## Overview
-Security spans Redis-backed server-side sessions (opaque `paw_session` cookie), `require_role` RBAC and `require_csrf` double-submit CSRF (exempt for GET/HEAD/OPTIONS), argon2 password hashing, Fernet-encrypted secrets at rest via `SecretBox`, upload validation by extension/magic-bytes/UTF-8, nh3 HTML sanitization of rendered markdown, a CSP/security-headers middleware, and Bearer api-key auth for the MCP endpoint. Enforcement is wired through FastAPI dependencies in [[api#Dependency helpers (deps.py)]].
+Security spans Redis-backed server-side sessions (opaque `paw_session` cookie), `require_role` RBAC and `require_csrf` double-submit CSRF (exempt for GET/HEAD/OPTIONS), argon2 password hashing, Fernet-encrypted secrets at rest via `SecretBox`, upload validation by extension/magic-bytes/UTF-8, a metadata-only anti-zip-bomb / path-traversal guard, an SSRF-guarded URL fetcher, nh3 HTML sanitization of rendered markdown, a CSP/security-headers middleware, and Bearer api-key auth for the MCP endpoint. Enforcement is wired through FastAPI dependencies in [[api#Dependency helpers (deps.py)]].
 
 ## Sessions
 `SessionStore` (`security/sessions.py`) keeps sessions server-side in Redis under the `session:` prefix; the `paw_session` cookie holds only an opaque `secrets.token_urlsafe(32)` id. `create` writes `user_id` with a TTL, `get` reads it, `delete` revokes it. The cookie is `SameSite=Lax`.
@@ -43,8 +43,16 @@ Provider API keys and other secrets are encrypted at rest with Fernet via `Secre
 ## Uploads
 `security/uploads.py` validates uploads before they are stored. `validate_text_upload` enforces an extension allow-list (`.md/.txt/.markdown`), a `max_bytes` cap, and UTF-8 decodability. `validate_source_upload` covers more types, returning a `kind`, and raises `UploadRejected` on any failure.
 
-- Text/HTML extensions must decode as UTF-8; `.pdf` must start with `%PDF-`; `.docx` must start with the ZIP magic `PK\x03\x04`.
-- Empty or oversized files are rejected. The returned `kind` drives the loader choice in [[ingest#Loaders]].
+- Text/HTML extensions must decode as UTF-8; `.pdf` must start with `%PDF-`; `.docx` / `.epub` must start with the ZIP magic `PK\x03\x04` (and then pass the zip guard below).
+- Images (`.jpg/.jpeg/.png/.webp`) are checked by magic bytes (`_IMAGE_MAGIC`: JFIF/PNG signatures, `RIFF…WEBP` container) and return `kind="image"`, routed to the vision path rather than a text loader.
+- Empty or oversized files are rejected. The returned `kind` (`md`/`pdf`/`docx`/`html`/`epub`/`image`) drives the loader choice in [[ingest#Loaders]].
+
+## Zip guard
+`inspect_zip(data, *, max_total, max_entries, max_ratio)` is a **metadata-only** anti-zip-bomb and path-traversal guard: it reads only the central-directory entries via `zipfile.infolist()` and **never decompresses**. It runs on every zip-backed upload (`.docx`, `.epub`, and bulk `.zip`) through the `_guard_zip` helper, which pulls the `max_unzip_bytes` / `max_unzip_entries` / `max_compression_ratio` caps from [[architecture#Config layering (env ⊕ DB)]].
+
+- Rejects archives over `max_entries`, whose summed `file_size` exceeds `max_total`, or whose per-entry `file_size / compress_size` ratio exceeds `max_ratio` (decompression-bomb signal).
+- Rejects absolute paths (leading `/` or a Windows drive prefix), `..` path-traversal segments, and **nested archives** (`.zip/.docx/.epub` members).
+- Bulk uploads call `inspect_zip` once up front, then re-open the archive to register each member as a source — see [[services#SourceService]].
 
 ## Sanitize
 `security/sanitize.py` renders user markdown and then strips dangerous HTML. `render_markdown` runs mistune (tables + strikethrough) and passes the result through `nh3.clean` with a strict tag/attribute allow-list (`_ALLOWED_TAGS`, `_ALLOWED_ATTRS` — only `href/title` on `a`, `src/alt/title` on `img`).
@@ -60,5 +68,11 @@ Provider API keys and other secrets are encrypted at rest with Fernet via `Secre
 - `ApiKeyService` (`services/api_keys.py`) is the commit boundary: `issue` and `revoke` each call `session.commit()` once; `authenticate` also commits after `touch_last_used`. `list` is read-only.
 - `MCPAuthMiddleware` gates all `/mcp` requests: 401 if authentication fails, 403 if `"read"` scope is absent. See [[mcp#Auth & mount]] and [[api#Api-keys router]].
 
+## SSRF guard
+`security/ssrf.py` makes server-side URL fetches safe for the `url` source type ([[ingest#Loaders]], [[services#SourceService]]). `validate_url(url, *, allowlist)` enforces **https-only**, an optional host-suffix allowlist (`host == s or host.endswith("." + s)`), then resolves the host with `socket.getaddrinfo` and rejects any address that `_ip_is_blocked` flags — non-global, private, loopback, link-local, reserved, multicast or unspecified. It returns the validated host or raises `SsrfRejected`.
+
+- `safe_get(url, *, max_bytes, allowlist)` streams the body with `httpx` and `follow_redirects=False`: it **re-validates every hop** (max `_MAX_HOPS=5`), rejects non-2xx, and aborts once the streamed size would exceed `max_bytes` — so a redirect cannot bounce the fetch to an internal address and a large body cannot exhaust memory.
+- Caps come from the env layer: `url_allowlist` (parsed by `config.parse_allowlist`) and `max_url_bytes`. `SsrfRejected` surfaces at the router as a 422 — see [[api#Sources router]].
+
 ## Headers
-A CSP / security-headers middleware is wired in `main.py::create_app()` alongside the routers and `/health`, so every response carries a Content-Security-Policy and related hardening headers. See [[architecture#create_app() wiring]] for where the middleware sits in the stack and [[api#Dependency helpers (deps.py)]] for the per-route guards above.
+A CSP / security-headers middleware is wired in `main.py::create_app()` alongside the routers and `/health`, so every response carries a Content-Security-Policy and related hardening headers. The finalized policy is `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'` — clickjacking-proof (`frame-ancestors 'none'`), forms pinned to same-origin (`form-action 'self'`), and plugins disabled (`object-src 'none'`). See [[architecture#create_app() wiring]] for where the middleware sits in the stack and [[api#Dependency helpers (deps.py)]] for the per-route guards above.

@@ -6,7 +6,7 @@ Long-running LLM work runs out-of-band in the `arq` worker. `worker.py::WorkerSe
 ## Worker jobs
 `WorkerSettings.functions` (`worker.py`) registers the arq tasks; `on_startup` runs `heartbeat` then `reconcile_jobs`, and `redis_settings` is a lazy descriptor reading `get_settings().redis_url`.
 
-- `ingest_domain` — load a source/topic, run `run_ingest`, write the article ([[harness#Ops]]).
+- `ingest_domain` — load a source/topic, run `run_ingest`, write the article ([[harness#Ops]]). Source bytes become markdown via `_source_markdown`, which branches on `src.type`: `url` is fetched through the [[security#SSRF guard]] (`load_url`); `image` is OCR/captioned by a [[providers#Vision provider]] under a per-model `model_lock` (failing if `vision_model` is unconfigured); everything else goes through the sync `load_source` loaders ([[ingest#Loaders]]).
 - `lint_domain` — run `run_lint`, log the issue list (read-only, no `data_s.commit`).
 - `fix_issues` — re-lint, then `run_fix_issue` for each selected issue id.
 - `format_articles` — `run_format_article` over every article in the domain.

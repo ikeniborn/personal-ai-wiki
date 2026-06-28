@@ -84,3 +84,15 @@ class StubEmbeddingProvider:
 
     async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         return [self._vec(t) for t in texts]
+
+
+class StubVisionProvider:
+    def __init__(self, text: str = "described") -> None:
+        self._text = text
+        self.prompts: list[str] = []
+
+    async def describe(
+        self, image: bytes, *, prompt: str, model: str | None = None
+    ) -> str:
+        self.prompts.append(prompt)
+        return self._text

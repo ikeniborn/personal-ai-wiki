@@ -25,3 +25,10 @@
 {"op":"ingest","source":"src/paw/services/api_keys.py","page":"mcp.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/paw/obs","page":"observability.md","date":"2026-06-26"}
 {"op":"ingest","source":"src/paw/services/langfuse_settings.py","page":"observability.md","date":"2026-06-26"}
+{"op":"ingest","source":"src/paw/security/ssrf.py","page":"security.md","date":"2026-06-28","note":"9b SSRF guard + zip-bomb + CSP + image magic"}
+{"op":"ingest","source":"src/paw/ingest/loaders/","page":"ingest.md","date":"2026-06-28","note":"9b epub/url/image loaders"}
+{"op":"ingest","source":"src/paw/providers/openai_compat.py","page":"providers.md","date":"2026-06-28","note":"9b vision describe + build_vision_provider"}
+{"op":"ingest","source":"src/paw/jobs/tasks.py","page":"jobs.md","date":"2026-06-28","note":"9b _source_markdown url/image branches"}
+{"op":"ingest","source":"src/paw/services/sources.py","page":"services.md","date":"2026-06-28","note":"9b upload_url + upload_bulk"}
+{"op":"ingest","source":"src/paw/api/routers/sources.py","page":"api.md","date":"2026-06-28","note":"9b bulk endpoint + finalized CSP"}
+{"op":"ingest","source":"src/paw/config.py","page":"architecture.md","date":"2026-06-28","note":"9b hardening env knobs"}

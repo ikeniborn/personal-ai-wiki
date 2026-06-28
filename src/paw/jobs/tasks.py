@@ -13,14 +13,20 @@ from paw.db.session import get_sessionmaker
 from paw.harness.ops.ingest import run_ingest
 from paw.harness.prompts import PROMPT_VERSION
 from paw.ingest.loaders import load_source
+from paw.ingest.loaders.image import describe_image
+from paw.ingest.loaders.url import load_url
 from paw.jobs.locks import domain_lock, model_lock
 from paw.jobs.progress import publish
 from paw.obs import metrics
 from paw.obs.instrument import instrument_chat, instrument_embedding
 from paw.obs.langfuse_client import trace_op
 from paw.providers.base import ChatProvider, EmbeddingProvider
-from paw.providers.config import WikiConfig
-from paw.providers.factory import build_chat_provider, build_embedding_provider
+from paw.providers.config import ProviderConfig, WikiConfig
+from paw.providers.factory import (
+    build_chat_provider,
+    build_embedding_provider,
+    build_vision_provider,
+)
 from paw.security.secrets import SecretBox
 from paw.services.langfuse_settings import LangfuseSettingsService
 from paw.services.provider_settings import ProviderSettingsService
@@ -57,11 +63,42 @@ async def _build_providers(
     return chat, embedder, wiki, pc.embedding_dim
 
 
-async def _source_markdown(session: Any, source_id: str) -> str:
+async def _source_markdown(
+    session: Any,
+    source_id: str,
+    *,
+    box: SecretBox,
+    wiki: WikiConfig,
+    redis: Any,
+    pc: ProviderConfig | None = None,
+) -> str:
     src = await SourceRepo(session).get(uuid.UUID(source_id))
     if src is None:
         raise RuntimeError("source not found")
+    if src.type == "url":
+        if not src.url:
+            raise RuntimeError("url source missing url")
+        from paw.config import parse_allowlist
+
+        settings = get_settings()
+        allow = parse_allowlist(settings.url_allowlist)
+        return await load_url(src.url, allowlist=allow, max_bytes=settings.max_url_bytes)
+
     data = await PostgresStorage(session).get(src.storage_ref)
+    if src.type == "image":
+        if pc is None:
+            pc = await ProviderSettingsService(session, box=box).get_provider()
+        if pc is None:
+            raise RuntimeError("provider not configured")
+        vision = build_vision_provider(pc, box)
+        if vision is None:
+            raise RuntimeError("vision_model not configured; cannot OCR image source")
+        prompt = (
+            "Transcribe all text in this image and briefly describe any diagrams. "
+            f"Respond in {wiki.reasoning_language}."
+        )
+        async with model_lock(redis, pc.vision_model or "default", kind="ingest"):
+            return await describe_image(data, vision, prompt=prompt)
     return load_source(data, src.type)
 
 
@@ -129,7 +166,9 @@ async def ingest_domain(
                 chat = instrument_chat(chat, op="ingest", trace=trace)
                 embedder = instrument_embedding(embedder, op="ingest", trace=trace)
                 source_md = (
-                    await _source_markdown(data_s, source_id) if source_id else (topic or "")
+                    await _source_markdown(data_s, source_id, box=box, wiki=wiki, redis=redis)
+                    if source_id
+                    else (topic or "")
                 )
                 if not source_md.strip():
                     raise RuntimeError("empty source")
