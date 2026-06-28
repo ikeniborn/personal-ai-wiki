@@ -30,7 +30,9 @@ from paw.obs.metrics import render_metrics
 _STATIC_DIR = Path(__file__).parent / "api" / "web" / "static"
 
 _CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'"
+    "default-src 'self'; script-src 'self'; style-src 'self'; "
+    "img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; "
+    "form-action 'self'; object-src 'none'"
 )
 
 

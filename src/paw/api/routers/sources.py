@@ -44,7 +44,7 @@ async def upload_source(
             data=data,
             content_type=file.content_type,
         )
-    except UploadRejected as e:
+    except (UploadRejected, SsrfRejected) as e:
         raise ProblemError(status=422, title="Upload rejected", detail=str(e)) from e
     return SourceOut(id=str(src.id), filename=src.filename, type=src.type)
 
