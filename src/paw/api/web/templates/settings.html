@@ -1,23 +1,114 @@
 {% extends "base.html" %}
-{% block title %}Settings · Personal AI Wiki{% endblock %}
+{% block title %}{{ t('settings.title') }} · {{ t('app.name') }}{% endblock %}
 {% block sidebar %}
-<nav><a href="#connection">Connection</a><br><a href="#users">Users</a></nav>
+<nav>
+  <a href="#connection">{{ t('settings.connection') }}</a><br>
+  <a href="#apikeys">{{ t('apikeys.title') }}</a><br>
+  {% if user and user.role == 'admin' %}<a href="#users">{{ t('users.title') }}</a>{% endif %}
+</nav>
 {% endblock %}
 {% block content %}
-<h1>Settings</h1>
+<h1>{{ t('settings.title') }}</h1>
+
 <section id="connection">
-  <h2>Connection</h2>
+  <h2>{{ t('settings.connection') }}</h2>
   <form hx-post="/api/v1/settings/provider" hx-ext="json-enc"
         hx-headers='{"x-csrf-token": "{{ csrf }}"}'>
-    <label>Base URL <input name="base_url" required></label>
-    <label>API key <input name="api_key" type="password"></label>
-    <label>Chat model <input name="chat_model" required></label>
-    <label>Embedding model <input name="embedding_model" required></label>
-    <label>Vision model <input name="vision_model"></label>
-    <label>Embedding dim <input name="embedding_dim" type="number" required></label>
+    <label>{{ t('settings.base_url') }} <input name="base_url" required></label>
+    <label>{{ t('settings.api_key') }} <input name="api_key" type="password"></label>
+    <label>{{ t('settings.chat_model') }} <input name="chat_model" required></label>
+    <label>{{ t('settings.embedding_model') }} <input name="embedding_model" required></label>
+    <label>{{ t('settings.vision_model') }} <input name="vision_model"></label>
+    <label>{{ t('settings.embedding_dim') }} <input name="embedding_dim" type="number" required></label>
     <p class="warning">Changing the embedding dimension requires an ALTER + HNSW rebuild + reindex.</p>
-    <button type="submit">Save connection</button>
+    <button type="submit">{{ t('settings.save_connection') }}</button>
   </form>
 </section>
-<section id="users"><h2>Users</h2></section>
+
+<section id="apikeys">
+  <h2>{{ t('apikeys.title') }}</h2>
+  <form hx-post="/api-keys/issue"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+        hx-target="#apikey-issued" hx-swap="innerHTML">
+    <label>{{ t('apikeys.scopes') }}
+      <select name="scopes">
+        <option value="read" selected>read</option>
+      </select>
+    </label>
+    <button type="submit">{{ t('apikeys.issue') }}</button>
+  </form>
+  <div id="apikey-issued"></div>
+  <table>
+    <thead><tr>
+      <th>{{ t('apikeys.prefix') }}</th><th>{{ t('apikeys.scopes') }}</th>
+      <th>{{ t('apikeys.created') }}</th><th>{{ t('apikeys.last_used') }}</th>
+      <th>{{ t('apikeys.status') }}</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for k in api_keys %}
+      <tr>
+        <td>{{ k.prefix }}</td>
+        <td>{{ k.scopes | join(', ') }}</td>
+        <td>{{ k.created_at }}</td>
+        <td>{{ k.last_used or '—' }}</td>
+        <td>{% if k.revoked_at %}{{ t('apikeys.revoked') }}{% else %}{{ t('apikeys.active') }}{% endif %}</td>
+        <td>
+          {% if not k.revoked_at %}
+          <button hx-delete="/api/v1/api-keys/{{ k.id }}"
+                  hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+                  hx-target="closest tr" hx-swap="outerHTML">{{ t('apikeys.revoke') }}</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if user and user.role == 'admin' %}
+<section id="users">
+  <h2>{{ t('users.title') }}</h2>
+  <form hx-post="/api/v1/users" hx-ext="json-enc"
+        hx-headers='{"x-csrf-token": "{{ csrf }}"}'>
+    <label>{{ t('users.email') }} <input name="email" type="email" required></label>
+    <label>{{ t('users.new_password') }} <input name="password" type="password" required></label>
+    <label>{{ t('users.role') }}
+      <select name="role">
+        <option value="viewer">{{ t('users.role_viewer') }}</option>
+        <option value="editor">{{ t('users.role_editor') }}</option>
+        <option value="admin">{{ t('users.role_admin') }}</option>
+      </select>
+    </label>
+    <button type="submit">{{ t('users.create') }}</button>
+  </form>
+  <table>
+    <thead><tr>
+      <th>{{ t('users.email') }}</th><th>{{ t('users.role') }}</th>
+      <th>{{ t('users.created') }}</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.email }}</td>
+        <td>
+          <select name="role"
+                  hx-patch="/api/v1/users/{{ u.id }}" hx-ext="json-enc"
+                  hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-swap="none">
+            <option value="viewer" {% if u.role == 'viewer' %}selected{% endif %}>{{ t('users.role_viewer') }}</option>
+            <option value="editor" {% if u.role == 'editor' %}selected{% endif %}>{{ t('users.role_editor') }}</option>
+            <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>{{ t('users.role_admin') }}</option>
+          </select>
+        </td>
+        <td>{{ u.created_at }}</td>
+        <td>
+          <button hx-delete="/api/v1/users/{{ u.id }}"
+                  hx-headers='{"x-csrf-token": "{{ csrf }}"}'
+                  hx-target="closest tr" hx-swap="outerHTML">{{ t('users.remove') }}</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 {% endblock %}

@@ -415,6 +415,21 @@ async def web_rollback(
     return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 
+@router.post("/api-keys/issue", response_class=HTMLResponse)
+async def web_issue_api_key(
+    request: Request,
+    session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin", "editor", "viewer")),
+    _: None = Depends(require_csrf),
+) -> Response:
+    issued = await ApiKeyService(session).issue(user_id=user.id, scopes=["read"])
+    app_settings = await SettingsService(session).get()
+    return templates.TemplateResponse(
+        request, "_apikey_issued.html",
+        page_ctx(request, user, app_settings, token=issued.token, prefix=issued.prefix),
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(
     request: Request,
