@@ -1,7 +1,7 @@
 # Providers
 
 ## Overview
-The providers layer is the LLM/embedding boundary. `base.py` defines `ChatProvider`, `EmbeddingProvider` and `VisionProvider` as structural Protocols; `openai_compat.py` is the single concrete impl against any OpenAI-compatible endpoint; `factory.py` builds it from a stored `ProviderConfig`; `structured.py` coerces JSON/tool output into Pydantic models; `config.py` holds the typed per-section DB-config schema. API keys are Fernet-encrypted at rest. See [[harness#The agentic loop]], [[security#Secrets]].
+The providers layer is the LLM/embedding boundary. `base.py` defines `ChatProvider`, `EmbeddingProvider` and `VisionProvider` as structural Protocols; `openai_compat.py` is the single concrete impl (chat, embed and image `describe`) against any OpenAI-compatible endpoint; `factory.py` builds it from a stored `ProviderConfig`; `structured.py` coerces JSON/tool output into Pydantic models; `config.py` holds the typed per-section DB-config schema. API keys are Fernet-encrypted at rest. See [[harness#The agentic loop]], [[security#Secrets]].
 
 ## Chat provider
 `ChatProvider` (`base.py`) is a `typing.Protocol` with `chat(messages, *, tools=None, model=None, json_mode=False) -> ChatResult` and `stream(messages, *, model=None) -> AsyncIterator[str]`. Messages, tool specs and results are plain dataclasses (`Message`, `ToolSpec`, `ToolCall`, `ChatResult`).
@@ -11,10 +11,15 @@ The providers layer is the LLM/embedding boundary. `base.py` defines `ChatProvid
 - Being a Protocol, any object with these methods qualifies — tests can supply fakes.
 
 ## Embedding provider
-`EmbeddingProvider` (`base.py`) is a one-method Protocol: `embed(texts, *, model=None) -> list[list[float]]`. It is what chunking and reindex call to vectorize text. `VisionProvider.describe(image, …)` is defined for future image captioning. See [[vector#Embeddings]].
+`EmbeddingProvider` (`base.py`) is a one-method Protocol: `embed(texts, *, model=None) -> list[list[float]]`. It is what chunking and reindex call to vectorize text. See [[vector#Embeddings]].
+
+## Vision provider
+`VisionProvider` (`base.py`) is a one-method Protocol: `describe(image, *, prompt, model=None) -> str`, used to OCR/caption `image` sources during ingest ([[ingest#Loaders]]). `OpenAICompatProvider.describe` implements it: it base64-encodes the bytes, sniffs the MIME type with `_image_mime` (JPEG/WEBP signatures, else `image/png`), and sends a single multimodal user turn (a `text` part plus an `image_url` `data:` URI) to `model or self.vision_model or self.chat_model`, returning the reply content.
+
+- The model lives on the provider as `self.vision_model`; the worker wraps each call in a per-model `model_lock` ([[jobs#Locks]]) and prompts in the domain's `reasoning_language`.
 
 ## Factory
-`factory.py` builds providers from a stored `ProviderConfig` plus a `SecretBox`. `build_chat_provider(pc, box)` instantiates `OpenAICompatProvider` with `pc.base_url`, the **decrypted** `pc.api_key_enc`, `pc.chat_model` and `pc.embedding_model`. `build_embedding_provider` is the same object — `embed()` simply defaults to `pc.embedding_model`. See [[security#Secrets]].
+`factory.py` builds providers from a stored `ProviderConfig` plus a `SecretBox`. `build_chat_provider(pc, box)` instantiates `OpenAICompatProvider` with `pc.base_url`, the **decrypted** `pc.api_key_enc`, `pc.chat_model` and `pc.embedding_model`. `build_embedding_provider` is the same object — `embed()` simply defaults to `pc.embedding_model`. `build_vision_provider(pc, box)` returns an `OpenAICompatProvider` carrying `pc.vision_model`, or **`None` when `vision_model` is unset** — callers treat `None` as "vision not configured" and fail the image source. See [[security#Secrets]].
 
 ## Structured output
 `structured.py::coerce_structured` forces a model to return schema-valid JSON for a Pydantic `model_cls`. It builds an `emit_result` tool from `model.model_json_schema()` (`schema_tool`) and loops up to `retries + 1` times, re-validating each reply and feeding the validation error back as a corrective user turn.

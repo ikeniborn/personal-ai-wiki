@@ -10,7 +10,7 @@
 
 - One include loop adds all thirteen API routers under `/api/v1` (auth, domains, sources, articles, setup, settings, users, api-keys, jobs, query, chat, graph, maintenance).
 - `app.mount("/mcp", mcp_asgi)` mounts the MCP ASGI app; `app.add_middleware(MCPAuthMiddleware)` wraps the whole app with Bearer api-key auth. `mcp.streamable_http_app()` must be called before `mcp.session_manager` is accessed; the lifespan runs `mcp.session_manager.run()`. See [[mcp#Auth & mount]].
-- CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'`.
+- CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'`. See [[security#Headers]].
 - `app = create_app()` is the module-level ASGI entrypoint (`uvicorn paw.main:app`).
 - Observability endpoints: `GET /health` (liveness), `GET /health?ready=1` + `GET /ready` (readiness: DB + Redis, `503` when degraded), `GET /metrics` (Prometheus). `MetricsMiddleware` records HTTP RED metrics by route template. See [[observability#Health & readiness]].
 
@@ -57,7 +57,9 @@
 
 ## Sources router
 
-`sources.py` (`/domains/{domain_id}/sources`) handles file uploads. `POST` reads the `UploadFile`, hands bytes to [[services#SourceService]], which validates and stores them; an `UploadRejected` is mapped to a 422 `ProblemError`. Returns `{id, filename, type}`. See [[security#Uploads]] and [[security#Uploads]].
+`sources.py` (`/domains/{domain_id}/sources`) handles file uploads. `POST` reads the `UploadFile`, hands bytes to [[services#SourceService]], which validates and stores them; `UploadRejected` **and** `SsrfRejected` are mapped to a 422 `ProblemError`. Returns `{id, filename, type}`. See [[security#Uploads]].
+
+- `POST /bulk` (201, admin/editor + CSRF) — accepts one zip `UploadFile`, calls `SourceService.upload_bulk` to register every valid member as a source ([[services#SourceService]]), then fans out one ingest job per source via `JobService.start_ingest`. Returns `BulkOut {sources: [{id, filename, type}], job_ids: [...]}`; a bad archive surfaces as a 422. The HTMX bulk-upload form on the domain page posts here.
 
 ## Articles router
 

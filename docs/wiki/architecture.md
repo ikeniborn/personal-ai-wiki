@@ -55,7 +55,7 @@ The precedence, narrowest wins:
 env  ⊕  app_settings.config  ⊕  domains.config  ⊕  users.chat_prefs
 ```
 
-- **`env`** — `Settings`: `database_url`, `redis_url`, `session_secret`, `fernet_key` (no defaults, all required), plus byte/TTL limits (`max_upload_bytes`, `max_request_bytes`, `session_ttl_seconds`).
+- **`env`** — `Settings`: `database_url`, `redis_url`, `session_secret`, `fernet_key` (no defaults, all required), plus byte/TTL limits (`max_upload_bytes`, `max_request_bytes`, `session_ttl_seconds`) and the Phase-9b hardening knobs (`url_allowlist` comma-separated host suffixes, `max_url_bytes`, `max_unzip_bytes`, `max_unzip_entries`, `max_compression_ratio`) consumed by the [[security#SSRF guard]] and [[security#Zip guard]].
 - **`app_settings.config`** — global defaults, a singleton DB row.
 - **`domains.config`** — per-domain overrides.
 - **`users.chat_prefs`** — per-user chat preferences.
