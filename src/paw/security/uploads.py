@@ -25,6 +25,12 @@ _HTML_EXT = {".html": "html", ".htm": "html"}
 _TEXT_LIKE_EXT = {**_TEXT_EXT, **_HTML_EXT}  # utf-8-validated extensions
 _PDF_MAGIC = b"%PDF-"
 _ZIP_MAGIC = b"PK\x03\x04"
+_IMAGE_MAGIC = {
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".webp": (),
+}
 _NESTED_ARCHIVE_SUFFIXES = (".zip", ".docx", ".epub")
 
 
@@ -59,6 +65,18 @@ def inspect_zip(data: bytes, *, max_total: int, max_entries: int, max_ratio: flo
             raise UploadRejected(f"suspicious compression ratio: {name}")
 
 
+def _guard_zip(data: bytes) -> None:
+    from paw.config import get_settings
+
+    s = get_settings()
+    inspect_zip(
+        data,
+        max_total=s.max_unzip_bytes,
+        max_entries=s.max_unzip_entries,
+        max_ratio=s.max_compression_ratio,
+    )
+
+
 def validate_source_upload(filename: str, data: bytes, *, max_bytes: int) -> str:
     lower = filename.lower()
     if len(data) > max_bytes:
@@ -79,5 +97,19 @@ def validate_source_upload(filename: str, data: bytes, *, max_bytes: int) -> str
     if lower.endswith(".docx"):
         if not data.startswith(_ZIP_MAGIC):
             raise UploadRejected("not a valid DOCX (magic bytes)")
+        _guard_zip(data)
         return "docx"
+    if lower.endswith(".epub"):
+        if not data.startswith(_ZIP_MAGIC):
+            raise UploadRejected("not a valid EPUB (magic bytes)")
+        _guard_zip(data)
+        return "epub"
+    for ext, magics in _IMAGE_MAGIC.items():
+        if lower.endswith(ext):
+            ok = (ext in (".jpg", ".jpeg", ".png") and data.startswith(magics[0])) or (
+                ext == ".webp" and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+            )
+            if not ok:
+                raise UploadRejected(f"not a valid image (magic bytes): {filename}")
+            return "image"
     raise UploadRejected(f"extension not allowed: {filename}")
