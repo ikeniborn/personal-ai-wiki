@@ -15,6 +15,8 @@ def load_source(data: bytes, source_type: str) -> str:
         from paw.ingest.loaders.docx import load
     elif t in ("html", "htm"):
         from paw.ingest.loaders.html import load
+    elif t == "epub":
+        from paw.ingest.loaders.epub import load
     else:
         raise UnsupportedSource(f"unsupported source type: {source_type}")
     out = load(data).strip()

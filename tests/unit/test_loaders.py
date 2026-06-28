@@ -75,7 +75,7 @@ def test_docx_empty_raises():
 
 def test_unsupported_type():
     with pytest.raises(UnsupportedSource):
-        load_source(b"x", "epub")
+        load_source(b"x", "unknown")
 
 
 def test_empty_extraction_raises():
