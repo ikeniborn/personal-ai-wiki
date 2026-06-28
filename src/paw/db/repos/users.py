@@ -1,6 +1,7 @@
 import uuid
+from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.db.models import User
@@ -24,11 +25,36 @@ class UserRepo:
         return await self._s.get(User, user_id)
 
     async def count(self) -> int:
-        from sqlalchemy import func
-
         res = await self._s.execute(select(func.count()).select_from(User))
         return int(res.scalar_one())
 
     async def list(self) -> list[User]:
         res = await self._s.execute(select(User).order_by(User.created_at))
         return list(res.scalars().all())
+
+    async def set_role(self, user_id: uuid.UUID, role: str) -> bool:
+        res = cast(
+            CursorResult[Any],
+            await self._s.execute(
+                update(User).where(User.id == user_id).values(role=role)
+            ),
+        )
+        return bool(res.rowcount)
+
+    async def delete(self, user_id: uuid.UUID) -> bool:
+        res = cast(
+            CursorResult[Any],
+            await self._s.execute(delete(User).where(User.id == user_id)),
+        )
+        return bool(res.rowcount)
+
+    async def count_admins(self) -> int:
+        res = await self._s.execute(
+            select(func.count()).select_from(User).where(User.role == "admin")
+        )
+        return int(res.scalar_one())
+
+    async def set_chat_prefs(self, user_id: uuid.UUID, prefs: dict[str, Any]) -> None:
+        await self._s.execute(
+            update(User).where(User.id == user_id).values(chat_prefs=prefs)
+        )
