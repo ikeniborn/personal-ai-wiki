@@ -62,7 +62,7 @@ and for `docker ps` / `docker inspect` status reporting.
 | `postgres` | `pg_isready -U paw` | 5s / 10 |
 | `redis` | `redis-cli ping` | 5s / 10 |
 | `api` | HTTP GET `http://localhost:8000/health` → 200 | 10s / 5 |
-| `worker` | `redis.exists('paw:worker:heartbeat')` (key TTL 120s) | 30s start + 30s / 3 |
+| `worker` | `redis.exists('paw:worker:heartbeat')` (key TTL 120s) | interval: 30s / retries: 3 / start_period: 30s |
 
 The `worker` healthcheck passes only while the `heartbeat` job is writing the
 `paw:worker:heartbeat` key to Redis every cycle (`ex=120`). If the worker stops, the key
@@ -137,7 +137,7 @@ Dumps are custom-format (`pg_restore` required — `psql` won't work).
 
 ```bash
 docker compose exec postgres createdb -U paw paw_restore
-RESTORE_DB=paw_restore docker compose run --rm \
+docker compose run --rm \
   -e RESTORE_DB=paw_restore \
   backup /scripts/restore.sh /backups/paw-<timestamp>.dump
 docker compose exec postgres psql -U paw paw_restore \
