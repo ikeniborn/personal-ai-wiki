@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -34,6 +35,8 @@ from paw.services.graph import GraphService
 from paw.services.langfuse_settings import LangfuseSettingsService
 from paw.services.provider_settings import ProviderSettingsService
 from paw.storage.postgres import PostgresStorage
+
+logger = logging.getLogger(__name__)
 
 
 class IngestCancelled(Exception):
@@ -191,7 +194,18 @@ async def ingest_domain(
                     )
                 gcfg = await GraphService(data_s).config_for(did)
                 if gcfg.engine == "age":
-                    await project_article(data_s, domain_id=did, article_id=result.article_id)
+                    try:
+                        async with data_s.begin_nested():  # SAVEPOINT
+                            await project_article(
+                                data_s, domain_id=did, article_id=result.article_id
+                            )
+                    except Exception:  # noqa: BLE001 — best-effort; never fail the relational write
+                        logger.warning(
+                            "AGE projection failed for article %s; relational write proceeds, "
+                            "graph will sync on next graph_rebuild",
+                            result.article_id,
+                            exc_info=True,
+                        )
                 await data_s.commit()
                 metrics.ARTICLES.inc()
                 metrics.CHUNKS.inc(result.chunk_count)
