@@ -71,8 +71,8 @@
   <input type="checkbox" id="theme-toggle" hidden>
   <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
   <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-  <input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-  <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+  <input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+  <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
   <header>
     <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
     <h1>Цепочка IDD → SDD · <code>paw-phase-10-age-graphrag</code></h1>
@@ -314,7 +314,66 @@
 
   <!-- TAB:result START -->
   <section class="tab-pane" id="pane-result">
-    <main><p class="note">Этап ещё не проверен.</p></main>
+    <main>
+      <p class="note">Result Check <b>2026-06-29</b> · сверка реализации (branch <code>dev-phase-10-age-graphrag</code>,
+        18 коммитов от <code>24ff5a5</code>) с планом. Вердикт:
+        <span class="badge b-ok">OK</span> — все 16 задач выполнены, 0 MISSING-шагов.</p>
+
+      <h2>Покрытие шагов плана</h2>
+      <div class="summary">
+        <div class="stat"><b class="v-fixed">16</b>DONE задач</div>
+        <div class="stat"><b>0</b>PARTIAL</div>
+        <div class="stat"><b>0</b>MISSING</div>
+      </div>
+      <table>
+        <thead><tr><th>Задача</th><th>Коммит(ы)</th><th>Статус</th></tr></thead>
+        <tbody>
+          <tr><td>T1 образ AGE</td><td><code>dc9efea</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T2 миграция</td><td><code>e9ff140</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T3 connect_args</td><td><code>31ff7a7</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T4 GraphConfig</td><td><code>c0e3c26</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T5 naming</td><td><code>f1ee3f8</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T6 cypher</td><td><code>00a21e8</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T7 schema</td><td><code>5892ed5</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T8 projection</td><td><code>a8c5f50</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T9 bootstrap</td><td><code>a902461</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T10 ingest projection</td><td><code>c5d156b</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T11 edit/rollback</td><td><code>266031a</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T12 graph_expand</td><td><code>5fc0716</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T13 retrieve branch</td><td><code>441b6d4</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T14 rebuild job + UI</td><td><code>31225b4</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T15 E2E</td><td><code>49e8173</code></td><td class="v-fixed">DONE</td></tr>
+          <tr><td>T16 docs (iwiki)</td><td><code>52bffac</code></td><td class="v-fixed">DONE</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Покрытие spec (acceptance #1–#7)</h2>
+      <table>
+        <thead><tr><th>Критерий</th><th>Свидетельство в diff</th></tr></thead>
+        <tbody>
+          <tr><td>#1 образ + create_graph</td><td><code>docker/postgres/Dockerfile</code>, <code>test_age_schema.py</code></td></tr>
+          <tr><td>#2 in-txn проекция + rollback без сирот</td><td><code>test_ingest_projection.py::test_rollback_leaves_no_orphan_graph_nodes</code></td></tr>
+          <tr><td>#3 entity-bridge + ранжирование + provenance</td><td><code>query.py</code>, <code>test_age_graph_expand.py</code></td></tr>
+          <tr><td>#4 изоляция доменов</td><td><code>test_age_graph_expand.py::test_cross_domain_isolation</code></td></tr>
+          <tr><td>#5 инъекция инертна</td><td><code>test_age_graph_expand.py::test_injection_title_is_inert</code></td></tr>
+          <tr><td>#6 cte идентичен baseline</td><td><code>test_graphrag_retrieve.py</code>, E2E flip-back</td></tr>
+          <tr><td>#7 rebuild идемпотентен + backfill</td><td><code>test_graph_rebuild.py</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2>Качество и проверки</h2>
+      <ul>
+        <li>Per-task review (spec + quality) для всех 16 задач — Approved.</li>
+        <li>Финальный whole-branch review (opus): нашёл 1 Important (write-path проекция падала на отсутствующем графе) → исправлено <code>48708fe</code> (best-effort через SAVEPOINT, деградирует как retrieval) + regression-тест. 7 Minor — OK-TO-DEFER.</li>
+        <li>CI-гейт: <code>ruff check .</code> 0 · <code>mypy src</code> 0 (140 файлов) · <code>pytest -q</code> <b>509 passed</b>.</li>
+      </ul>
+
+      <h2>Excess / отклонения</h2>
+      <p class="note">Один файл вне исходного плана — <code>tests/integration/test_age_projection_degrades.py</code> (regression к Important-находке финального ревью). Обоснованное добавление, не дрейф scope. Документация (<code>docs/wiki/*</code>) — Task 16. 3 stale wiki-страницы (web/api/services ← i18n/users) — pre-existing долг 9c, вне scope.</p>
+
+      <h3>Итог</h3>
+      <p><span class="badge b-ok">OK</span> — реализация полностью соответствует плану; 0 MISSING, все acceptance-критерии покрыты тестами, полный suite зелёный.</p>
+    </main>
   </section>
   <!-- TAB:result END -->
 </body>

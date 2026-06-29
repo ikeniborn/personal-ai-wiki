@@ -59,6 +59,11 @@ review:
       fix: "Iterate API_KEY_SCOPES, or soften the architecture text to a fixed single scope (YAGNI)."
       verdict: accepted
       verdict_at: 2026-06-29
+result_check:
+  verdict: OK
+  plan_hash: 9f915fdd9ebad192
+  last_run: 2026-06-29
+  note: "Retroactive — Phase 9c shipped in PR #15; implementation present on master (admin UI for api-keys/users + per-user UI i18n). No outstanding plan steps."
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-22-paw-phase-9-ops-hardening-design.md
