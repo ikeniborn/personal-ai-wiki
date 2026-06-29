@@ -10,6 +10,7 @@ from paw.config import get_settings
 from paw.db.repos.jobs import JobRepo
 from paw.db.repos.sources import SourceRepo
 from paw.db.session import get_sessionmaker
+from paw.graph.age.projection import project_article
 from paw.harness.ops.ingest import run_ingest
 from paw.harness.prompts import PROMPT_VERSION
 from paw.ingest.loaders import load_source
@@ -28,6 +29,7 @@ from paw.providers.factory import (
     build_vision_provider,
 )
 from paw.security.secrets import SecretBox
+from paw.services.graph import GraphService
 from paw.services.langfuse_settings import LangfuseSettingsService
 from paw.services.provider_settings import ProviderSettingsService
 from paw.storage.postgres import PostgresStorage
@@ -186,6 +188,9 @@ async def ingest_domain(
                         ),
                         timeout=wiki.request_timeout_s * wiki.max_steps,
                     )
+                gcfg = await GraphService(data_s).config_for(did)
+                if gcfg.engine == "age":
+                    await project_article(data_s, domain_id=did, article_id=result.article_id)
                 await data_s.commit()
                 metrics.ARTICLES.inc()
                 metrics.CHUNKS.inc(result.chunk_count)
