@@ -119,6 +119,9 @@ seconds (default 86400 = daily). Each run:
 2. Writes `paw-<timestamp>.dump` (e.g. `paw-20260629T120000Z.dump`) to the `backups` volume
    at `/backups/`.
 3. Prunes dumps older than `BACKUP_RETENTION_DAYS` days (default 7) using `find -mtime`.
+   Note: `find -mtime +N` matches files whose age is **strictly greater than** N×24h, so a
+   dump is pruned only once it is older than roughly `N+1` days — retention errs toward
+   keeping one extra day, never fewer.
 
 The sidecar depends on `postgres: service_healthy`, so it waits for Postgres to be ready
 before each dump cycle.
