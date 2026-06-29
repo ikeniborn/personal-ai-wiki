@@ -75,6 +75,12 @@ class ArticleService:
         await self._repo.add_revision(
             article_id=art.id, rev_no=new_rev, storage_ref=ref, author_id=author_id, origin="user"
         )
+        from paw.graph.age.projection import project_article
+        from paw.services.graph import GraphService
+
+        gcfg = await GraphService(self._s).config_for(art.domain_id)
+        if gcfg.engine == "age":
+            await project_article(self._s, domain_id=art.domain_id, article_id=art.id)
         await self._s.commit()
         return art
 
@@ -98,6 +104,12 @@ class ArticleService:
             author_id=author_id,
             origin="user",
         )
+        from paw.graph.age.projection import project_article
+        from paw.services.graph import GraphService
+
+        gcfg = await GraphService(self._s).config_for(art.domain_id)
+        if gcfg.engine == "age":
+            await project_article(self._s, domain_id=art.domain_id, article_id=art.id)
         await self._s.commit()
         return art
 

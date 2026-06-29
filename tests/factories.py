@@ -6,6 +6,21 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def _set_domain_engine_age(s: AsyncSession, domain_id: uuid.UUID) -> None:
+    # NB: a fresh domain has config = {} (server_default). jsonb_set with a 2-level path
+    # is a no-op when the 'graph' parent is missing, so merge the parent explicitly.
+    await s.execute(
+        text(
+            "UPDATE domains SET config = jsonb_set("
+            "config, '{graph}', "
+            "COALESCE(config->'graph', '{}'::jsonb) || '{\"engine\":\"age\"}'::jsonb, true) "
+            "WHERE id = :id"
+        ),
+        {"id": str(domain_id)},
+    )
+    await s.flush()
+
+
 async def seed_article_with_entities(s: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
     """Insert a domain + article + 2 chunks + 2 entities + mention rows.
 
