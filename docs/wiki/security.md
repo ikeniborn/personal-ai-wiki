@@ -76,3 +76,10 @@ Provider API keys and other secrets are encrypted at rest with Fernet via `Secre
 
 ## Headers
 A CSP / security-headers middleware is wired in `main.py::create_app()` alongside the routers and `/health`, so every response carries a Content-Security-Policy and related hardening headers. The finalized policy is `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'` — clickjacking-proof (`frame-ancestors 'none'`), forms pinned to same-origin (`form-action 'self'`), and plugins disabled (`object-src 'none'`). See [[architecture#create_app() wiring]] for where the middleware sits in the stack and [[api#Dependency helpers (deps.py)]] for the per-route guards above.
+
+## Cypher injection
+The optional Apache AGE graph engine (see [[graph#AGE graph engine]]) executes Cypher against per-domain graphs, so it adds a query-injection surface that `graph/age/cypher.py` closes by construction. The Cypher body is always a fixed dollar-quoted literal; every user-derived value (article titles, entity names, seed ids) is passed through AGE's `parameters` agtype argument (`agtype_params` → `json.dumps` → `CAST(:p AS agtype)`), never string-interpolated. A malicious title such as `$$ ) MATCH (x) DETACH DELETE x //` is therefore stored and returned as inert data — proven by test.
+
+- The only code-interpolated values are the graph name (validated by `naming.py::assert_graph_name` against `^g_[0-9a-f]{32}$` before any f-string) and the integer `expand_depth` bound; both are derived, never user input.
+- One AGE graph per domain means there is no `domain_id` filter to forget — a domain's Cypher cannot reach another domain's nodes, closing cross-domain leakage by construction.
+- Graph DDL (`create_graph`, labels) is committed separately at domain creation / rebuild, never mid-write, avoiding AGE's non-autocommit visibility pitfall. Any AGE failure degrades to the CTE retrieval path — the API never surfaces a graph-engine error.

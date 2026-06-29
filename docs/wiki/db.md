@@ -68,7 +68,7 @@ A few repos drop to `text()` SQL where ORM mapping is awkward — chiefly for co
 
 `db/session.py` holds the async engine and sessionmaker as lazy process-global singletons (`_engine`, `_sessionmaker`), matching the [[architecture#Lazy process-global singletons]] pattern.
 
-- `get_engine()` builds `create_async_engine(database_url, pool_pre_ping=True)` once.
+- `get_engine()` builds `create_async_engine(database_url, pool_pre_ping=True)` once, with asyncpg `connect_args` for Apache AGE: `server_settings={"search_path": 'ag_catalog,"$user",public'}` (so `cypher()` resolves at connection startup) and `statement_cache_size=0` (the prepared-statement cache collides with AGE's `cypher(cstring)` parse hook). See [[graph#AGE graph engine]].
 - `get_sessionmaker()` builds `async_sessionmaker(engine, expire_on_commit=False)` once.
 - `get_session()` is an async-generator dependency yielding a session per request/op.
 - Tests reset these globals to `None` (mirror that for any new cached global).

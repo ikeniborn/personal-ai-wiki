@@ -38,3 +38,9 @@
 {"op":"ingest","source":"src/paw/services/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/db/repos/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/api/web/static/app.js","page":"docs/wiki/web.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/cypher.py","page":"docs/wiki/security.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/providers/config.py","page":"docs/wiki/providers.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/db/session.py","page":"docs/wiki/db.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/harness/retrieve.py","page":"docs/wiki/harness.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/jobs/tasks.py","page":"docs/wiki/jobs.md","date":"2026-06-29"}
