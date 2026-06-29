@@ -57,6 +57,9 @@ class QueryService:
             else global_retr
         )
 
+        from paw.services.graph import GraphService
+
+        graph_cfg = await GraphService(self._s).config_for(domain_id)
         chat = build_chat_provider(pc, self._box)
         embedder: EmbeddingProvider = build_embedding_provider(pc, self._box)
         ctx = await retrieve(
@@ -68,6 +71,7 @@ class QueryService:
             embedding_version=await psvc.get_embedding_version(),
             redis=self._redis,
             embed_model=pc.embedding_model,
+            graph_cfg=graph_cfg,
         )
         messages = build_messages(question, ctx, wiki) if ctx.passages else None
         return Prepared(chat=chat, messages=messages, ctx=ctx, chat_model=pc.chat_model)

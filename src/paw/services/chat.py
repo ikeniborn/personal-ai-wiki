@@ -124,6 +124,9 @@ class ChatService:
         configured_model = config.get("chat_model")
         model = configured_model if isinstance(configured_model, str) else pc.chat_model
 
+        from paw.services.graph import GraphService
+
+        graph_cfg = await GraphService(self._s).config_for(dom.id)
         chat = build_chat_provider(pc, self._box)
         embedder: EmbeddingProvider = build_embedding_provider(pc, self._box)
         ctx = await retrieve(
@@ -135,6 +138,7 @@ class ChatService:
             embedding_version=await psvc.get_embedding_version(),
             redis=self._redis,
             embed_model=pc.embedding_model,
+            graph_cfg=graph_cfg,
         )
         messages = build_chat_messages(question, history, ctx, wiki) if ctx.passages else None
         return PreparedTurn(
