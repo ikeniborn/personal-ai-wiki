@@ -20,7 +20,9 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
   postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: docker/postgres
+    image: paw/postgres:pg16-age
     environment:
       POSTGRES_USER: paw
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paw}

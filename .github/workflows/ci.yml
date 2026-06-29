@@ -9,4 +9,5 @@ jobs:
       - run: uv sync --dev
       - run: uv run ruff check .
       - run: uv run mypy src
+      - run: docker build -t paw/postgres:pg16-age docker/postgres
       - run: uv run pytest -q
