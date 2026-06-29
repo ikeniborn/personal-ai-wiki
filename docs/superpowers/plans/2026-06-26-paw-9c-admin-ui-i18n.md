@@ -2,6 +2,63 @@
 title: "Phase 9c — Admin UI polish + UI i18n Implementation Plan"
 phase: 9
 state: draft
+review:
+  plan_hash: 9f915fdd9ebad192
+  spec_hash: 25f8d2e8b94c05a4
+  last_run: 2026-06-29
+  note: "Retroactive validation — Phase 9c shipped in PR #15; the realized code already resolves the WARNING contradictions below, so findings are accepted without retrofitting the plan body."
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      phase: consistency
+      severity: WARNING
+      section: "Task 3 Step 2"
+      fragment: "from paw.api.web.i18n import SUPPORTED_LANGS … Use the literal."
+      text: "Code block imports SUPPORTED_LANGS (api.web -> services cycle) while the adjacent note prescribes the literal ('en','ru'); block contradicts its own note."
+      fix: "Use the literal ('en','ru') in the block; drop the import."
+      verdict: accepted
+      verdict_at: 2026-06-29
+    - id: F-002
+      phase: dependencies
+      severity: WARNING
+      section: "Task 4 Step 3"
+      fragment: "from paw.api.web.i18n import SUPPORTED_LANGS  # only for the request schema's doc"
+      text: "Router block imports SUPPORTED_LANGS but never uses it; would fail ruff F401 the step aims to pass. Realized code dropped it."
+      fix: "Remove the unused import from the block."
+      verdict: accepted
+      verdict_at: 2026-06-29
+    - id: F-003
+      phase: verifiability
+      severity: WARNING
+      section: "Task 5 Step 3/5"
+      fragment: "Decide at implementation time"
+      text: "Token-reveal mechanism left as an unresolved either/or; conditional DoD. Realized code took /api-keys/issue + _apikey_issued.html."
+      fix: "Fix one path; make Task 5 DoD unconditional."
+      verdict: accepted
+      verdict_at: 2026-06-29
+    - id: F-004
+      phase: verifiability
+      severity: INFO
+      section: "Task 7 Step 2"
+      fragment: "Run the lint skill: /iwiki-lint"
+      text: "Docs DoD is prose-only (no concrete pass artifact)."
+      fix: "State the exact iwiki-lint success line as the pass condition."
+      verdict: accepted
+      verdict_at: 2026-06-29
+    - id: F-005
+      phase: coverage
+      severity: INFO
+      section: "Global Constraints / Task 5 Step 3"
+      fragment: "scope selector limited to API_KEY_SCOPES"
+      text: "Template hard-codes a single read option rather than iterating API_KEY_SCOPES; equivalent today (only 'read' exists)."
+      fix: "Iterate API_KEY_SCOPES, or soften the architecture text to a fixed single scope (YAGNI)."
+      verdict: accepted
+      verdict_at: 2026-06-29
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-22-paw-phase-9-ops-hardening-design.md
