@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -8,6 +9,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.graph.age.naming import assert_graph_name
+
+# SQLAlchemy's text() parser treats `:name` as a bind parameter even inside
+# Postgres dollar-quoted strings.  Cypher edge-label syntax `[:LABEL]` and
+# `[var:LABEL]` contains such patterns, so we escape the colon with a
+# backslash before embedding the body in the SQL text string.  SQLAlchemy
+# strips the leading backslash before sending the string to the driver, so
+# Postgres (and AGE) receive the original `[:LABEL]` form unchanged.
+_EDGE_LABEL_RE = re.compile(r"\[(\w*):(\w)")
+
+
+def _escape_body(body: str) -> str:
+    """Escape Cypher edge-label colons so SQLAlchemy does not parse them as bind params."""
+    return _EDGE_LABEL_RE.sub(r"[\1\:\2", body)
 
 
 def agtype_params(params: Mapping[str, Any]) -> str:
@@ -43,8 +57,9 @@ async def run_cypher(
     is bound as a single agtype argument.
     """
     g = assert_graph_name(graph)
+    safe = _escape_body(body)
     sql = text(
-        f"SELECT * FROM cypher('{g}', $cy${body}$cy$, CAST(:p AS agtype)) AS ({columns})"
+        f"SELECT * FROM cypher('{g}', $cy${safe}$cy$, CAST(:p AS agtype)) AS ({columns})"
     )
     res = await session.execute(sql, {"p": agtype_params(params or {})})
     return [tuple(_load(c) for c in row) for row in res.all()]
@@ -60,8 +75,9 @@ async def exec_cypher(
     """Run a write Cypher statement; AGE still requires a result column, so we
     append `RETURN 1` projected as a single discarded column."""
     g = assert_graph_name(graph)
+    safe = _escape_body(body)
     sql = text(
-        f"SELECT * FROM cypher('{g}', $cy${body}\nRETURN 1$cy$, CAST(:p AS agtype)) AS (ok agtype)"
+        f"SELECT * FROM cypher('{g}', $cy${safe}\nRETURN 1$cy$, CAST(:p AS agtype)) AS (ok agtype)"
     )
     await session.execute(sql, {"p": agtype_params(params or {})})
 
