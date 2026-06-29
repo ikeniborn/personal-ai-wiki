@@ -37,3 +37,4 @@
 {"op":"ingest","source":"src/paw/api/routers/users.py","page":"docs/wiki/api.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/services/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/db/repos/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/api/web/static/app.js","page":"docs/wiki/web.md","date":"2026-06-29"}
