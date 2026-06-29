@@ -133,7 +133,8 @@ docker compose run --rm backup ls /backups
 
 Dumps are custom-format (`pg_restore` required — `psql` won't work).
 
-### Safe path: restore into a scratch database first
+**Safe path — restore into a scratch database first.** Recommended: this verifies a dump
+without touching live data.
 
 ```bash
 docker compose exec postgres createdb -U paw paw_restore
@@ -153,8 +154,7 @@ the scratch database when done:
 docker compose exec postgres dropdb -U paw paw_restore
 ```
 
-### In-place restore (overwrites live data — use with caution)
-
+**In-place restore — overwrites live data; use with caution.**
 **Warning: this OVERWRITES all data in the live `paw` database. Stop the api and worker
 first to avoid write conflicts.**
 

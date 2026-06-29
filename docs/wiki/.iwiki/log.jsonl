@@ -38,3 +38,7 @@
 {"op":"ingest","source":"src/paw/services/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/db/repos/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/api/web/static/app.js","page":"docs/wiki/web.md","date":"2026-06-29"}
+{"op":"ingest","source":"docs/wiki/ops.md","page":"docs/wiki/ops.md","date":"2026-06-29","note":"phase 9d ops runbook"}
+{"op":"ingest","source":"docker-compose.yml","page":"docs/wiki/ops.md","date":"2026-06-29","note":"phase 9d backup profile + restart/healthcheck/resources"}
+{"op":"ingest","source":"deploy/backup/backup.sh","page":"docs/wiki/ops.md","date":"2026-06-29"}
+{"op":"ingest","source":"deploy/backup/restore.sh","page":"docs/wiki/ops.md","date":"2026-06-29"}
