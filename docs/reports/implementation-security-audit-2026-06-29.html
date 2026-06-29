@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аудит реализации, покрытия и безопасности — Personal AI Wiki</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#252733; --muted:#666b7d;
+  --accent:#4f67c8; --border:#d8dbea; --zebra:#f0f2fa;
+  --ok:#2e7d32; --warn:#b26a00; --danger:#b3261e; --info:#255da8;
+  --shadow:rgba(35,45,90,.14);
+}
+body{ margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px;
+  font:16px/1.55 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--fg); }
+h1{ font-size:1.9rem; margin:.2rem 0 .25rem; }
+h2{ font-size:1.28rem; margin:2.1rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; }
+h3{ font-size:1.04rem; margin:1.2rem 0 .35rem; color:var(--accent); }
+code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; background:#eef1fb; padding:.05rem .32rem; border-radius:5px; font-size:.88em; }
+pre{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.75rem .9rem; overflow:auto; box-shadow:0 1px 8px var(--shadow); }
+.sub{ color:var(--muted); font-size:.94rem; }
+.lead{ font-size:1.06rem; }
+.note{ border-left:4px solid var(--accent); background:var(--surface); padding:.7rem 1rem; margin:1rem 0; box-shadow:0 1px 8px var(--shadow); }
+.grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:.8rem; margin:1rem 0; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.8rem .9rem; box-shadow:0 1px 8px var(--shadow); }
+.metric{ font-size:1.55rem; font-weight:700; color:var(--accent); }
+table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface); margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:8px; overflow:hidden; box-shadow:0 1px 8px var(--shadow); }
+th,td{ border-bottom:1px solid var(--border); padding:.5rem .65rem; text-align:left; vertical-align:top; }
+tr:last-child td{ border-bottom:none; }
+thead th{ background:var(--accent); color:white; }
+tbody tr:nth-child(even){ background:var(--zebra); }
+.sev{ display:inline-block; min-width:4.6rem; text-align:center; border-radius:999px; padding:.06rem .45rem; font-size:.76rem; font-weight:700; }
+.high{ color:#fff; background:var(--danger); }
+.med{ color:#fff; background:var(--warn); }
+.low{ color:#fff; background:var(--info); }
+.ok{ color:#fff; background:var(--ok); }
+ul.tight li{ margin:.25rem 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Аудит реализации, покрытия и безопасности</h1>
+<p class="sub">Personal AI Wiki · дата проверки: 2026-06-29 · ветка: <code>master</code></p>
+<p class="lead">Проверены реализация, тестовое покрытие, security controls, Docker/deploy и зависимости. В ходе аудита код проекта не менялся; создан только этот отчет.</p>
+
+<section>
+<h2>Итог</h2>
+<div class="grid">
+  <div class="card"><div class="metric">509 / 1</div><div>тестов passed / skipped</div></div>
+  <div class="card"><div class="metric">88%</div><div>line coverage по <code>src/paw</code></div></div>
+  <div class="card"><div class="metric">0 CVE</div><div><code>pip-audit</code> не нашел известных уязвимостей</div></div>
+  <div class="card"><div class="metric">15</div><div><code>bandit</code>: 0 high, 4 medium, 11 low</div></div>
+</div>
+<div class="note">
+Главные риски: web GET-маршруты доверяют существованию Redis session id без повторной проверки пользователя; upload endpoints читают весь файл в память до применения лимитов; Docker build не использует <code>uv.lock</code>; SSRF-защита имеет DNS TOCTOU окно; <code>/metrics</code> открыт на уровне приложения.
+</div>
+</section>
+
+<section>
+<h2>Проверки</h2>
+<table>
+<thead><tr><th>Команда</th><th>Результат</th></tr></thead>
+<tbody>
+<tr><td><code>uv run ruff check .</code></td><td><span class="sev ok">PASS</span> All checks passed.</td></tr>
+<tr><td><code>uv run mypy src</code></td><td><span class="sev ok">PASS</span> no issues found in 140 source files.</td></tr>
+<tr><td><code>uv run --with coverage coverage run --source=src/paw -m pytest -q</code></td><td><span class="sev ok">PASS</span> 509 passed, 1 skipped, 5 warnings in 113.13s.</td></tr>
+<tr><td><code>uv run --with coverage coverage report --show-missing --skip-covered</code></td><td><span class="sev low">INFO</span> total coverage 88%, 620 missed statements, 73 files fully covered.</td></tr>
+<tr><td><code>uv run --with pip-audit pip-audit --progress-spinner off</code></td><td><span class="sev ok">PASS</span> No known vulnerabilities found. Local package <code>paw</code> skipped because it is not on PyPI.</td></tr>
+<tr><td><code>uv run --with bandit bandit -r src -q -f txt</code></td><td><span class="sev med">WARN</span> 4 medium, 11 low. Medium findings require triage but most are constrained dynamic SQL helpers.</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Выявленные проблемы</h2>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Проблема</th><th>Доказательство</th><th>Рекомендация</th></tr></thead>
+<tbody>
+<tr>
+<td>SEC-01</td><td><span class="sev high">HIGH</span></td>
+<td>HTML GET-маршруты авторизуют по наличию session id, не проверяя существование пользователя.</td>
+<td><code>src/paw/api/web/routes.py:173</code> возвращает uid из Redis; <code>dashboard</code>, <code>domain_page</code>, <code>article_page</code>, <code>query_page</code> и др. проверяют только uid. Если пользователь удален, его Redis-сессия до TTL продолжает читать web-страницы. API dependency <code>current_user</code> такой проблемы не имеет.</td>
+<td>Заменить проверки <code>_current_uid</code> на обязательный helper, который загружает <code>User</code>, удаляет/игнорирует stale session при отсутствии пользователя и применяет role check для read pages.</td>
+</tr>
+<tr>
+<td>SEC-02</td><td><span class="sev high">HIGH</span></td>
+<td>Upload endpoints читают весь request body в память до проверки лимитов.</td>
+<td><code>src/paw/api/routers/sources.py:39</code> и <code>:63</code> вызывают <code>await file.read()</code>; <code>validate_source_upload</code> проверяет размер уже после чтения. <code>max_request_bytes</code> задан в <code>src/paw/config.py:34</code>, но не используется.</td>
+<td>Добавить middleware/ASGI guard по <code>Content-Length</code> и streaming read с hard cap. Для multipart ограничить размер на уровне reverse proxy и приложения, не полагаясь только на post-read validation.</td>
+</tr>
+<tr>
+<td>SEC-03</td><td><span class="sev med">MED</span></td>
+<td>Docker build не воспроизводит lockfile, несмотря на наличие <code>uv.lock</code>.</td>
+<td><code>Dockerfile:5-9</code> копирует только <code>pyproject.toml</code> и запускает <code>uv pip install --system .</code>. В <code>pyproject.toml</code> зависимости заданы lower-bound диапазонами, значит production image может получить версии, отличающиеся от CI/local lock.</td>
+<td>Копировать <code>uv.lock</code> и ставить зависимости через locked/frozen workflow, например <code>uv sync --frozen --no-dev</code> или эквивалентный locked install для image.</td>
+</tr>
+<tr>
+<td>SEC-04</td><td><span class="sev med">MED</span></td>
+<td>SSRF-защита валидирует DNS отдельно от фактического подключения.</td>
+<td><code>src/paw/security/ssrf.py:52</code> проверяет <code>socket.getaddrinfo</code>, затем <code>httpx</code> на <code>:70</code> заново резолвит адрес при запросе. При DNS rebinding между check/use возможно подключение к внутреннему адресу.</td>
+<td>Пиннить проверенный IP в transport/connection layer или использовать resolver/transport, который подключается к уже проверенному адресу с сохранением Host/SNI. Повторять проверку для каждого redirect уже делается, но TOCTOU остается.</td>
+</tr>
+<tr>
+<td>SEC-05</td><td><span class="sev med">MED</span></td>
+<td><code>/metrics</code> открыт без app-level auth.</td>
+<td><code>src/paw/main.py:72</code> публикует метрики всем, кто достиг API. Traefik rule в <code>docker-compose.yml:88-91</code> маршрутизирует весь host на API без path deny/basic auth для <code>/metrics</code>.</td>
+<td>Ограничить <code>/metrics</code> отдельной internal-only сетью, auth middleware, Traefik middleware по IP allowlist или убрать endpoint из публичного router.</td>
+</tr>
+<tr>
+<td>SEC-06</td><td><span class="sev med">MED</span></td>
+<td>Нет rate limiting для login/setup и нет минимальной password policy.</td>
+<td><code>src/paw/api/routers/auth.py:21</code> и <code>src/paw/api/routers/setup.py:86</code> принимают пароли без throttling/lockout; <code>src/paw/security/passwords.py</code> надежно хеширует Argon2, но не валидирует силу пароля.</td>
+<td>Добавить Redis-backed throttling по IP/email, задержку на неверный login, минимальную длину и проверку слабых паролей для setup/users.</td>
+</tr>
+<tr>
+<td>SEC-07</td><td><span class="sev low">LOW</span></td>
+<td>Audit log объявлен, но не подключен к чувствительным операциям.</td>
+<td>Есть модель <code>AuditLog</code> и helper <code>src/paw/audit/log.py</code>, но <code>grep</code> не нашел вызовов <code>record(...)</code> в сервисах/API.</td>
+<td>Логировать login/logout, setup, user/role changes, API key issue/revoke, provider settings changes, ingest/rollback/delete operations.</td>
+</tr>
+<tr>
+<td>OPS-01</td><td><span class="sev med">MED</span></td>
+<td>Compose defaults допускают слабый Postgres password.</td>
+<td><code>docker-compose.yml:34</code>, <code>:157</code>, <code>:189</code> используют fallback <code>POSTGRES_PASSWORD:-paw</code>; <code>.env.example:19</code> также содержит <code>POSTGRES_PASSWORD=paw</code>.</td>
+<td>Убрать production fallback, требовать explicit secret, добавить fail-fast проверку в compose/init docs.</td>
+</tr>
+<tr>
+<td>FUNC-01</td><td><span class="sev med">MED</span></td>
+<td>Bulk upload UI ожидает HTML drawer, но вызывает JSON API.</td>
+<td><code>src/paw/api/web/templates/domain.html:12-14</code> отправляет HTMX в <code>/api/v1/.../sources/bulk</code> с <code>hx-target="#job-drawer"</code>. Endpoint <code>src/paw/api/routers/sources.py:52</code> возвращает JSON <code>BulkOut</code>, не <code>_job_drawer.html</code>.</td>
+<td>Сделать web endpoint для bulk upload, который возвращает drawer/список jobs, либо изменить UI на обработку JSON и отдельный запуск drawer.</td>
+</tr>
+<tr>
+<td>QUAL-01</td><td><span class="sev low">LOW</span></td>
+<td>В репозитории есть generated bytecode вне <code>.venv</code>.</td>
+<td><code>find</code> обнаружил <code>__pycache__</code>/<code>*.pyc</code> в <code>src/</code>, <code>tests/</code>, <code>alembic/</code>. Они игнорируются git, но засоряют рабочее дерево и могут попадать в сторонние архивы, если не использовать <code>.dockerignore</code>.</td>
+<td>Очистить рабочее дерево командой удаления pycache перед упаковкой/релизом; оставить ignore rules.</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Покрытие тестами</h2>
+<p>Фактическое покрытие хорошее для текущего размера проекта: 140 Python source files, 162 test files, примерно 10.2k строк исходников и 10.1k строк тестов. Но 100% покрытия нет: общий показатель 88%, branch coverage не включен.</p>
+<table>
+<thead><tr><th>Файл</th><th>Coverage</th><th>Комментарий</th></tr></thead>
+<tbody>
+<tr><td><code>src/paw/obs/readiness.py</code></td><td>24%</td><td>Почти не покрыты degraded/readiness ветки.</td></tr>
+<tr><td><code>src/paw/worker.py</code></td><td>54%</td><td>Мало проверены startup/shutdown и metrics server ветки.</td></tr>
+<tr><td><code>src/paw/services/maintenance.py</code></td><td>59%</td><td>Недостаточно покрыты maintenance orchestration paths.</td></tr>
+<tr><td><code>src/paw/api/web/routes.py</code></td><td>60%</td><td>Главные web workflow частично покрыты; auth edge cases и HTMX mismatch не пойманы.</td></tr>
+<tr><td><code>src/paw/services/setup.py</code></td><td>60%</td><td>Нужны негативные и race/error сценарии setup.</td></tr>
+<tr><td><code>src/paw/services/users.py</code></td><td>65%</td><td>Нужны edge cases по deleted/stale users, last-admin и validation.</td></tr>
+<tr><td><code>src/paw/jobs/tasks.py</code></td><td>67%</td><td>Большой orchestration module; нужны сценарии cancel/fail/retry/error telemetry.</td></tr>
+<tr><td><code>src/paw/services/articles.py</code></td><td>68%</td><td>Rollback/meta/error paths покрыты неполно.</td></tr>
+</tbody>
+</table>
+<p>Рекомендации по покрытию: добавить regression-тест для stale web session после удаления пользователя; тесты лимита request body до чтения файла; тест для bulk upload HTMX; branch coverage для security helpers; negative tests для readiness/worker/maintenance.</p>
+</section>
+
+<section>
+<h2>Bandit triage</h2>
+<table>
+<thead><tr><th>Finding</th><th>Оценка</th></tr></thead>
+<tbody>
+<tr><td><code>B608</code> в <code>query_cache.py</code></td><td>Скорее false positive: динамическая часть <code>_SELECT</code> является константой, значения bind-параметризованы. Можно добавить комментарий/<code># nosec</code> после review.</td></tr>
+<tr><td><code>B608</code> в <code>graph/age/cypher.py</code></td><td>Риск ограничен: graph name валидируется regex <code>g_[0-9a-f]{32}</code>, параметры сериализуются как agtype. Но <code>body</code>/<code>columns</code> должны оставаться только внутренними code literals; это стоит закрепить тестом/typing wrapper.</td></tr>
+<tr><td><code>B105</code> в i18n</td><td>False positive: строки "Password"/"Пароль" являются UI-labels.</td></tr>
+<tr><td><code>B110</code> silent except в jobs/obs/worker</td><td>Часть оправдана best-effort telemetry, но желательно логировать debug/warning, иначе диагностика деградаций затруднена.</td></tr>
+<tr><td><code>B101</code> assert в production code</td><td>Низкий риск, но лучше заменить на явную проверку/исключение, так как <code>assert</code> исчезает под <code>python -O</code>.</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Зависимости</h2>
+<ul class="tight">
+<li><code>pip-audit</code>: известных уязвимостей в установленной среде не найдено.</li>
+<li>Основной supply-chain риск не CVE, а разрыв между <code>uv.lock</code> и Docker build.</li>
+<li>В CI используется <code>uv sync --dev</code>, а Dockerfile делает отдельный resolve/install из <code>pyproject.toml</code>.</li>
+<li>Dev tooling временно запускался через <code>uv run --with ...</code>, проектные зависимости не менялись.</li>
+</ul>
+</section>
+
+</main>
+</body>
+</html>
