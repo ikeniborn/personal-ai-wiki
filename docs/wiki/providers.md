@@ -35,7 +35,7 @@ The providers layer is the LLM/embedding boundary. `base.py` defines `ChatProvid
 - `WikiConfig` — generation/harness budgets and chunking knobs (`chunk_target_size`, `chunk_overlap_sentences`, `max_steps`, `token_budget`, `link_types`…), consumed by [[ingest#Chunking]].
 - `RetrievalConfig` — hybrid-search knobs (`k1`, `k2`, `top_n`, `rrf_k`, weights, `bfs_depth`, `fts_regconfig`).
 - `ChatConfig` — chat history depth and session retention limits.
-- `GraphConfig` — graph-view `default_depth`/`max_depth` and link types, plus the Phase-10 graph engine knobs: `engine` (`cte` default | `age`), `expand_depth` (AGE `LINKS` hops), `max_entities`, `max_neighbors` (entity-bridge/neighbour caps). See [[graph#AGE graph engine]].
+- `GraphConfig` — graph-view `default_depth`/`max_depth` and link types, plus the Phase-10 graph engine knobs: `engine` (`cte` default | `age`), `expand_depth` (AGE `LINKS` hops), `max_entities`, `max_neighbors` (entity-bridge/neighbour caps). Resolved global ⊕ per-domain, so AGE can be enabled on one domain while others stay on the CTE path. See [[graph#AGE graph engine]].
 - `MaintenanceConfig` — `enabled_ops`, `reindex_batch_size`, `stale_days`.
 - `EmbeddingConfig` — the `version` int that search filters on, bumped on a model/dim change.
 - `QueryCacheConfig` (Phase 7, `query_cache` key) — `enabled` (bool, default `True`) gates the cache globally; `sim_threshold` (float, default `0.92`) is the cosine-similarity floor for an ANN hit to count as a cache hit; `ttl_seconds` (int, default 30 days) controls how long idle entries survive GC; `suggest_top_k` (int, default `5`) caps as-you-type suggestions. Resolved global ⊕ per-domain from `app_settings.config`.

@@ -44,6 +44,7 @@ A language switcher in `base.html` (gated `{% if user %}`) lets authenticated us
 The Phase 9c endpoints added to the users router and web routes layer. Validation logic lives in `UserService` (see [[services#DomainService & UserService]]). Cross-link: [[api#Users & domains routers]].
 
 - `PATCH /api/v1/users/{user_id}` — body `{"role"}`, requires admin + CSRF; validates `role ∈ USER_ROLES`, raises `ProblemError(422)` otherwise; returns `UserOut`.
+- **Maintenance actions (domain page):** `routes.py` mounts HTMX twins of the maintenance endpoints (lint/format/reindex and, in Phase 10, `POST /domains/{id}/rebuild-graph`) via the shared `_web_start_maintenance` helper; each returns the job-progress drawer. The "Rebuild graph" button in `domain.html` (admin/editor + CSRF) triggers the AGE [[graph#Graph rebuild job]].
 - `DELETE /api/v1/users/{user_id}` — requires admin + CSRF; returns 204 on success, 409 if deleting the last admin, 404 if user not found.
 - `POST /api/v1/users/me/ui-language` — body `{"ui_language"}`, requires CSRF + `current_user`; validates `lang ∈ ("en", "ru")`; returns 204 + `HX-Refresh: true` response header.
 - `POST /api-keys/issue` (web route, root-mounted) — self-scoped key issuance; csrf-guarded; renders `_apikey_issued.html` partial with the one-time token.

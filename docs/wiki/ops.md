@@ -5,7 +5,10 @@
 `paw` ships as one Docker image running two processes (`api` + `worker`) — see
 [[architecture#Two processes, one image]]. Production deployment uses Docker Compose with
 Traefik as the TLS-terminating reverse proxy. `docker compose up` starts all core services;
-opt-in profiles (`backup`, `observability`) are off by default.
+opt-in profiles (`backup`, `observability`) are off by default. As of Phase 10 the `postgres`
+service builds a repo-owned image `paw/postgres:pg16-age` (`docker/postgres/Dockerfile`:
+`pgvector/pgvector:pg16` + Apache AGE 1.5.0) instead of the stock pgvector image — both the
+runtime and the CI/testcontainers suite use it. See [[graph#AGE graph engine]].
 
 ## Required environment
 

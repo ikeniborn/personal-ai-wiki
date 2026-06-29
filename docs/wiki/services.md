@@ -14,6 +14,7 @@ Every service's `__init__(self, session)` stores the `AsyncSession` as `self._s`
 
 - `get_body` decodes the stored markdown; `get_meta` gathers backlinks, outgoing links, citations and revisions.
 - `domain_tree` builds a parent/child tree from typed links via `build_tree`; `slug_map` returns slug→id.
+- When the domain's effective graph engine is `age`, `update` and `rollback` re-project the article into the AGE graph before the single commit (best-effort, never failing the relational write) — see [[graph#AGE graph engine]].
 
 ## ChatService
 `chat.py` — multi-turn chat over a domain, split into prepare/complete/record so the LLM call sits outside the DB transaction. `resolve_session` reuses an owned `ChatSession` or creates+commits a new one. `prepare_turn` resolves provider + per-domain `WikiConfig`/`RetrievalConfig` overrides, windows history by retention depth, runs [[harness#Retrieve]] `retrieve`, and builds messages (or `None` → don't-know).

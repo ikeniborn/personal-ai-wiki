@@ -48,3 +48,29 @@
 {"op":"ingest","source":"src/paw/db/session.py","page":"docs/wiki/db.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/harness/retrieve.py","page":"docs/wiki/harness.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/paw/jobs/tasks.py","page":"docs/wiki/jobs.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/api/web/routes.py","page":"docs/wiki/web.md","date":"2026-06-29","note":"phase10 rebuild-graph web route"}
+{"op":"ingest","source":"src/paw/api/web/i18n.py","page":"docs/wiki/web.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/api/routers/users.py","page":"docs/wiki/api.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/users.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"docker-compose.yml","page":"docs/wiki/ops.md","date":"2026-06-29","note":"phase10 custom AGE postgres image"}
+{"op":"ingest","source":"src/paw/db/session.py","page":"docs/wiki/db.md","date":"2026-06-29"}
+{"op":"ingest","source":"alembic/versions/0006_phase10_age.py","page":"docs/wiki/db.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/harness/retrieve.py","page":"docs/wiki/harness.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/harness/ops/ingest.py","page":"docs/wiki/harness.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/jobs/tasks.py","page":"docs/wiki/jobs.md","date":"2026-06-29","note":"phase10 graph_rebuild + best-effort projection"}
+{"op":"ingest","source":"src/paw/jobs/queue.py","page":"docs/wiki/jobs.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/worker.py","page":"docs/wiki/jobs.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/providers/config.py","page":"docs/wiki/providers.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/cypher.py","page":"docs/wiki/security.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/api/routers/maintenance.py","page":"docs/wiki/api.md","date":"2026-06-29","note":"phase10 rebuild-graph endpoint"}
+{"op":"ingest","source":"src/paw/graph/age/__init__.py","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/naming.py","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/schema.py","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/projection.py","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/query.py","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/articles.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/chat.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/domains.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/maintenance.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/provider_settings.py","page":"docs/wiki/services.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/services/query.py","page":"docs/wiki/services.md","date":"2026-06-29"}

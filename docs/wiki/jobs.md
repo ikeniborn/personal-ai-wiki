@@ -11,7 +11,7 @@ Long-running LLM work runs out-of-band in the `arq` worker. `worker.py::WorkerSe
 - `fix_issues` — re-lint, then `run_fix_issue` for each selected issue id.
 - `format_articles` — `run_format_article` over every article in the domain.
 - `reindex_domain` — re-embed chunks to the target embedding version in batches.
-- `graph_rebuild` — full rebuild of a domain's Apache AGE graph (`_rebuild_domain_graph`: `drop_graph` + `ensure_graph` + project every article in batches), domain-locked and idempotent; backfills an existing domain when the AGE engine flag is enabled — see [[graph#Graph rebuild job]].
+- `graph_rebuild` — full rebuild of a domain's Apache AGE graph (`_rebuild_domain_graph`: `drop_graph` + `ensure_graph` + project every article in batches), domain-locked and idempotent; backfills an existing domain when the AGE engine flag is enabled — see [[graph#Graph rebuild job]]. `ingest_domain` also projects the new article into the graph (when `engine=age`) before its single commit, best-effort under a SAVEPOINT so a graph error never fails the ingest — see [[graph#AGE graph engine]].
 - `gc_housekeeping` — prune chat sessions past each user's retention; Phase 7 adds a query-cache TTL sweep that loops over domains and calls `QueryCacheRepo.delete_expired(cutoff, domain_id=...)` with each domain's resolved `ttl_seconds` (global ⊕ per-domain), so per-domain TTL overrides are honored (see [[db#Repo pattern]]). Return value `"gc:{pruned}"` is unchanged.
 - `heartbeat` — write `paw:worker:heartbeat` to Redis (`ex=120`) as a liveness marker.
 - `reconcile_jobs` — `JobRepo.reconcile_stuck` to fail jobs with stale heartbeats.
