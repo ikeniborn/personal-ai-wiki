@@ -5,7 +5,7 @@ from paw.main import create_app
 
 
 @pytest.fixture
-async def client(db_session, redis_container):
+async def client(wired_settings):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         yield c

@@ -1,5 +1,7 @@
 import uuid
+from functools import partial
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -15,14 +17,18 @@ from paw.api.deps import (
     require_csrf,
     require_role,
 )
+from paw.api.web.i18n import resolve_ui_lang
+from paw.api.web.i18n import t as _t
 from paw.db.models import User
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.chat import ChatRepo
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.jobs import JobRepo
 from paw.db.repos.sources import SourceRepo
+from paw.db.repos.users import UserRepo
 from paw.security.sanitize import render_markdown, resolve_wikilinks
 from paw.security.sessions import SessionStore
+from paw.services.api_keys import ApiKeyService
 from paw.services.articles import ArticleService
 from paw.services.chat import ChatService
 from paw.services.domains import DomainService
@@ -31,10 +37,37 @@ from paw.services.jobs import JobService
 from paw.services.maintenance import MaintenanceService
 from paw.services.query import QueryService
 from paw.services.query_cache import QueryCacheService
+from paw.services.settings import SettingsService
 from paw.services.setup import SetupService
+from paw.services.users import UserService
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+# Safe defaults so the shared base.html shell never depends on a route passing
+# them. page_ctx still overrides these per-request on converted pages (context
+# vars shadow env globals); unconverted pages get English nav + hidden switcher.
+templates.env.globals["t"] = partial(_t, lang="en")
+templates.env.globals["user"] = None
+templates.env.globals["ui_lang"] = "en"
+
+
+def page_ctx(
+    request: Request, user: User | None, app_settings: dict[str, Any], **extra: Any
+) -> dict[str, Any]:
+    """Build a template context with i18n + the current user injected.
+
+    `t` is a one-arg callable bound to the active language so templates call
+    `t("settings.title")`. `ui_lang` feeds `<html lang="...">`.
+    """
+    lang = resolve_ui_lang(user, app_settings)
+    return {
+        "user": user,
+        "csrf": request.cookies.get(CSRF_COOKIE, ""),
+        "ui_lang": lang,
+        "t": partial(_t, lang=lang),
+        **extra,
+    }
+
 
 router = APIRouter(tags=["web"])
 
@@ -43,9 +76,23 @@ async def _current_uid(request: Request, store: SessionStore) -> str | None:
     return await store.get(request.cookies.get(SESSION_COOKIE, ""))
 
 
+async def _current_user_opt(
+    request: Request, session: AsyncSession, store: SessionStore
+) -> User | None:
+    uid = await _current_uid(request, store)
+    if not uid:
+        return None
+    return await UserRepo(session).get(uuid.UUID(uid))
+
+
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "login.html")
+async def login_page(
+    request: Request, session: AsyncSession = Depends(db)
+) -> HTMLResponse:
+    app_settings = await SettingsService(session).get()
+    return templates.TemplateResponse(
+        request, "login.html", page_ctx(request, None, app_settings)
+    )
 
 
 @router.get("/setup", response_class=HTMLResponse)
@@ -63,9 +110,12 @@ async def dashboard(
         return RedirectResponse("/setup", status_code=307)
     if not await _current_uid(request, store):
         return RedirectResponse("/login", status_code=307)
+    user = await _current_user_opt(request, session, store)
     domains = await DomainService(session).list()
-    csrf = request.cookies.get(CSRF_COOKIE, "")
-    return templates.TemplateResponse(request, "dashboard.html", {"domains": domains, "csrf": csrf})
+    app_settings = await SettingsService(session).get()
+    return templates.TemplateResponse(
+        request, "dashboard.html", page_ctx(request, user, app_settings, domains=domains)
+    )
 
 
 @router.get("/domains/{domain_id}", response_class=HTMLResponse)
@@ -82,18 +132,17 @@ async def domain_page(
     sources = await SourceRepo(session).list_by_domain(domain_id)
     tree = await ArticleService(session).domain_tree(domain_id)
     latest_source_id = str(sources[-1].id) if sources else None
-    csrf = request.cookies.get(CSRF_COOKIE, "")
+    user = await _current_user_opt(request, session, store)
+    app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
         request,
         "domain.html",
-        {
-            "domain": domain,
-            "articles": articles,
-            "tree": tree,
-            "domain_name": domain.name if domain else "",
-            "csrf": csrf,
-            "latest_source_id": latest_source_id,
-        },
+        page_ctx(
+            request, user, app_settings,
+            domain=domain, articles=articles, tree=tree,
+            domain_name=domain.name if domain else "",
+            latest_source_id=latest_source_id,
+        ),
     )
 
 
@@ -366,6 +415,21 @@ async def web_rollback(
     return Response(status_code=204, headers={"HX-Refresh": "true"})
 
 
+@router.post("/api-keys/issue", response_class=HTMLResponse)
+async def web_issue_api_key(
+    request: Request,
+    session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin", "editor", "viewer")),
+    _: None = Depends(require_csrf),
+) -> Response:
+    issued = await ApiKeyService(session).issue(user_id=user.id, scopes=["read"])
+    app_settings = await SettingsService(session).get()
+    return templates.TemplateResponse(
+        request, "_apikey_issued.html",
+        page_ctx(request, user, app_settings, token=issued.token, prefix=issued.prefix),
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(
     request: Request,
@@ -374,8 +438,14 @@ async def settings_page(
 ) -> Response:
     if not await _current_uid(request, store):
         return RedirectResponse("/login", status_code=307)
-    csrf = request.cookies.get(CSRF_COOKIE, "")
-    return templates.TemplateResponse(request, "settings.html", {"csrf": csrf})
+    user = await _current_user_opt(request, session, store)
+    app_settings = await SettingsService(session).get()
+    users = await UserService(session).list() if user and user.role == "admin" else []
+    keys = await ApiKeyService(session).list(user.id) if user else []
+    return templates.TemplateResponse(
+        request, "settings.html",
+        page_ctx(request, user, app_settings, users=users, api_keys=keys),
+    )
 
 
 @router.get("/chat", response_class=HTMLResponse)

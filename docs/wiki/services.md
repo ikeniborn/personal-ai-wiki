@@ -40,7 +40,16 @@ Both enqueue background work via [[jobs#Queue]] after committing a `Job` row. `m
 `graph.py` — read-only subgraph extraction for the [[graph#Subgraph]] view. `config_for` resolves the effective `GraphConfig` (global ⊕ per-domain `config["graph"]`). `subgraph` validates the root belongs to the domain, clamps `depth` to `[0, max_depth]`, filters `types` against `cfg.link_types`, and delegates to `GraphRepo.subgraph`, returning a `SubgraphPayload`.
 
 ## DomainService & UserService
-`domains.py` — `DomainService.create` slugifies the name, creates the `Domain` with `source_prefix`/`wiki_prefix`, and commits; `list` enumerates domains. `users.py` — `UserService.create` argon2-hashes the password (`hash_password`) and creates the `User`, committing once; `list` enumerates users. Both are thin wrappers over their repos. See [[security#Passwords]].
+`domains.py` — `DomainService.create` slugifies the name, creates the `Domain` with `source_prefix`/`wiki_prefix`, and commits; `list` enumerates domains. `users.py` — `UserService.create` argon2-hashes the password (`hash_password`) and creates the `User`, committing once; `list` enumerates users. Both are thin wrappers over their repos. See [[security#Passwords]] and [[web#Admin UI sections]].
+
+Phase 9c adds four new `UserService` methods, each a single commit boundary:
+
+- `get(user_id)` — loads the `User` by id via `UserRepo`; raises `ProblemError(404)` if not found.
+- `set_role(*, user_id, role)` — validates `role ∈ USER_ROLES` (raises `ProblemError(422)` on invalid), then delegates to `UserRepo.set_role` and commits.
+- `delete(*, user_id)` — loads the user (404 guard), calls `UserRepo.count_admins` and raises `ProblemError(409)` if the target is the last admin, then delegates to `UserRepo.delete` and commits.
+- `set_ui_language(*, user_id, lang)` — validates `lang ∈ ("en", "ru")` (raises `ProblemError(422)`; note: validates against the literal tuple, **not** by importing `paw.api.web.i18n`, to keep `services` a clean lower layer), loads `chat_prefs`, merges `{"ui_language": lang}` into a copy, and calls `UserRepo.set_chat_prefs` then commits.
+
+Supporting `UserRepo` methods added: `set_role(user_id, role)`, `delete(user_id)`, `count_admins()`, `set_chat_prefs(user_id, prefs)`.
 
 ## SettingsService & SetupService
 `settings.py` — `SettingsService` reads/writes the raw singleton settings JSON blob (`get`/`update`, committing on update). `setup.py` — `SetupService` drives first-run bootstrap: `needs_setup` is true when no users exist; `complete` creates the admin user, seeds the settings row, persists the provider config and ensures the embedding column, all committed atomically in one transaction. See [[architecture#Config layering (env ⊕ DB)]].
