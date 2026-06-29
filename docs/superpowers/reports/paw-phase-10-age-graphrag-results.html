@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цепочка IDD — paw-phase-10-age-graphrag</title>
+<style>
+  :root{
+    --bg:#0f1419; --surface:#1a2129; --surface2:#222b35; --border:#313c48;
+    --text:#e6edf3; --muted:#9aa7b4; --accent:#58b0d6;
+    --ok:#3fb950; --warn:#d29922; --crit:#f85149; --info:#8b949e;
+    --chip:#243240;
+  }
+  body:has(#theme-toggle:checked){
+    --bg:#f6f8fa; --surface:#ffffff; --surface2:#eef2f6; --border:#d0d7de;
+    --text:#1f2328; --muted:#5a6675; --accent:#0969da;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --info:#57606a;
+    --chip:#eaeef2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.6rem;border-bottom:1px solid var(--border);}
+  header h1{font-size:1.15rem;margin:0;font-weight:650;}
+  .theme-btn{cursor:pointer;font-size:1.1rem;padding:.25rem .6rem;border:1px solid var(--border);
+    border-radius:8px;background:var(--surface);user-select:none;}
+  main{padding:1.4rem 1.6rem;max-width:1280px;margin:0 auto;}
+  h2{font-size:1.05rem;margin:1.8rem 0 .7rem;padding-bottom:.35rem;border-bottom:1px solid var(--border);}
+  h3{font-size:.95rem;margin:1.3rem 0 .5rem;color:var(--muted);font-weight:600;}
+  table{border-collapse:collapse;width:100%;margin:.6rem 0 1rem;font-size:.86rem;}
+  th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left;vertical-align:top;}
+  th{background:var(--surface2);font-weight:600;}
+  tr:nth-child(even) td{background:var(--surface);}
+  code{background:var(--chip);padding:.05rem .35rem;border-radius:5px;font-size:.85em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+    padding:.7rem .9rem;border-radius:8px;color:var(--muted);}
+  .badge{display:inline-block;padding:.08rem .5rem;border-radius:20px;font-size:.74rem;font-weight:650;
+    border:1px solid var(--border);}
+  .b-crit{color:var(--crit);border-color:var(--crit);}
+  .b-warn{color:var(--warn);border-color:var(--warn);}
+  .b-info{color:var(--info);border-color:var(--info);}
+  .b-ok{color:var(--ok);border-color:var(--ok);}
+  .v-fixed{color:var(--ok);font-weight:650;}
+  .v-accepted{color:var(--accent);font-weight:650;}
+  .pill{display:inline-block;min-width:1.6rem;text-align:center;background:var(--chip);
+    border:1px solid var(--border);border-radius:6px;padding:.05rem .35rem;font-weight:650;font-size:.8rem;}
+  .chain-tabs{display:flex;gap:.3rem;padding:0 1.6rem;border-bottom:1px solid var(--border);}
+  .chain-tabs label{cursor:pointer;padding:.45rem 1rem;border:1px solid var(--border);border-bottom:none;
+    border-radius:8px 8px 0 0;background:var(--surface);color:var(--muted);font-size:.9rem;}
+  .tab-radio{position:absolute;left:-9999px;}
+  .tab-pane{display:none;}
+  body:has(#tab-intent:checked) #pane-intent,
+  body:has(#tab-spec:checked)   #pane-spec,
+  body:has(#tab-plan:checked)   #pane-plan,
+  body:has(#tab-result:checked) #pane-result{display:block;}
+  body:has(#tab-intent:checked) label[for="tab-intent"],
+  body:has(#tab-spec:checked)   label[for="tab-spec"],
+  body:has(#tab-plan:checked)   label[for="tab-plan"],
+  body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent);border-color:var(--accent);font-weight:650;}
+  figure{margin:.5rem 0 1rem;}
+  .svgwrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:.5rem;}
+  .legend{font-size:.8rem;color:var(--muted);margin-top:.3rem;}
+  .summary{display:flex;gap:1rem;flex-wrap:wrap;margin:.6rem 0;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem 1rem;min-width:120px;}
+  .stat b{display:block;font-size:1.4rem;}
+  .nodebox text{font-family:inherit;}
+</style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+  <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+  <input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
+  <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+  <header>
+    <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
+    <h1>Цепочка IDD → SDD · <code>paw-phase-10-age-graphrag</code></h1>
+  </header>
+  <nav class="chain-tabs">
+    <label for="tab-intent">Intent</label>
+    <label for="tab-spec">Spec</label>
+    <label for="tab-plan">Plan</label>
+    <label for="tab-result">Result</label>
+  </nav>
+
+  <!-- TAB:intent START -->
+  <section class="tab-pane" id="pane-intent">
+    <main><p class="note">Этап ещё не проверен.</p></main>
+  </section>
+  <!-- TAB:intent END -->
+
+  <!-- TAB:spec START -->
+  <section class="tab-pane" id="pane-spec">
+    <main><p class="note">Этап ещё не проверен.</p></main>
+  </section>
+  <!-- TAB:spec END -->
+
+  <!-- TAB:plan START -->
+  <section class="tab-pane" id="pane-plan">
+    <main>
+      <p class="note">Проверка плана <b>2026-06-29</b> · план
+        <code>docs/superpowers/plans/2026-06-29-paw-phase-10-age-graphrag.md</code>
+        (plan_hash <code>0b15e79bee45e863</code>) против спеки
+        <code>docs/superpowers/specs/2026-06-24-paw-phase-10-age-graphrag-design.md</code>
+        (spec_hash <code>e8888cb9f04d62ce</code>). Вердикт: <span class="badge b-ok">OK</span> —
+        1 CRITICAL и 4 WARNING исправлены, 2 INFO приняты.</p>
+
+      <h2>1. Резюме плана — задачи и критерии готовности (DoD)</h2>
+      <table>
+        <thead><tr><th>№</th><th>Задача</th><th>Ключевые файлы</th><th>DoD (проверка)</th></tr></thead>
+        <tbody>
+          <tr><td>T1</td><td>Кастомный образ Postgres (pgvector + AGE 1.5.0)</td><td><code>docker/postgres/Dockerfile</code>, <code>docker-compose.yml</code>, <code>tests/conftest.py</code>, CI</td><td>образ собирается; <code>SELECT</code> показывает <code>age</code>+<code>vector</code>; <code>pytest tests/integration</code> зелёный</td></tr>
+          <tr><td>T2</td><td>Миграция <code>CREATE EXTENSION age</code></td><td><code>alembic/versions/0006_phase10_age.py</code></td><td><code>pytest tests/integration/test_graph_repo.py</code> проходит миграцию на AGE-образе</td></tr>
+          <tr><td>T3</td><td><code>connect_args</code> движка (search_path + statement_cache_size=0)</td><td><code>src/paw/db/session.py</code></td><td>smoke-тест: <code>cypher('g_smoke', $$RETURN 1$$)</code> → <code>["1"]</code></td></tr>
+          <tr><td>T4</td><td>Расширение <code>GraphConfig</code> (engine/expand_depth/max_entities/max_neighbors)</td><td><code>src/paw/providers/config.py</code></td><td><code>pytest -k engine</code>: default <code>cte</code>, merge <code>age</code> поверх defaults</td></tr>
+          <tr><td>T5</td><td><code>graph/age/naming.py</code> (domain_id → имя графа)</td><td><code>src/paw/graph/age/naming.py</code></td><td>детерминизм <code>g_&lt;hex&gt;</code>; <code>assert_graph_name</code> отвергает инъекции</td></tr>
+          <tr><td>T6</td><td><code>graph/age/cypher.py</code> (безопасный executor + agtype-параметры)</td><td><code>src/paw/graph/age/cypher.py</code></td><td>unit: вредоносная строка → JSON-данные; integration: param-bound round-trip</td></tr>
+          <tr><td>T7</td><td><code>graph/age/schema.py</code> (ensure/drop + labels + property-индексы)</td><td><code>src/paw/graph/age/schema.py</code></td><td>идемпотентный <code>ensure_graph</code>; ≥7 labels в каталоге AGE</td></tr>
+          <tr><td>T8</td><td><code>graph/age/projection.py</code> (in-txn проекция статьи)</td><td><code>src/paw/graph/age/projection.py</code>, <code>tests/factories.py</code></td><td>проекция статьи → узлы Article/Chunk/Entity + рёбра в графе</td></tr>
+          <tr><td>T9</td><td>Bootstrap графа при создании домена (отдельный commit, по флагу)</td><td><code>src/paw/services/domains.py</code>, <code>provider_settings.py</code></td><td><code>age</code> → граф создан; <code>cte</code> (default) → графа нет</td></tr>
+          <tr><td>T10</td><td>Проекция при ingest (in-txn) + откат без сирот</td><td><code>src/paw/jobs/tasks.py</code></td><td>rollback не оставляет узлов; ingest с флагом проецирует статью</td></tr>
+          <tr><td>T11</td><td>Проекция при edit / rollback / add-link</td><td><code>src/paw/services/articles.py</code>, <code>harness/ops/ingest.py</code></td><td>edit с <code>age</code> → заголовок узла обновлён («Beta»)</td></tr>
+          <tr><td>T12</td><td><code>graph/age/query.py</code> — <code>graph_expand</code> (entity-bridge + link-expand)</td><td><code>src/paw/graph/age/query.py</code></td><td>unit-merge порядок/cap; integration: bridge-сосед + provenance; изоляция; инъекция инертна</td></tr>
+          <tr><td>T13</td><td>Ветка AGE в <code>retrieve.py</code> + provenance + fallback</td><td><code>harness/retrieve.py</code>, <code>services/query.py</code>, <code>chat.py</code></td><td><code>cte</code> идентичен baseline; <code>age</code> → «via concepts» в контексте</td></tr>
+          <tr><td>T14</td><td>Job <code>graph_rebuild</code> + enqueue + service + routes + UI</td><td><code>jobs/tasks.py</code>, <code>worker.py</code>, <code>queue.py</code>, <code>maintenance.py</code>, routers, <code>domain.html</code></td><td>rebuild идемпотентен + backfill; <code>202</code>+job_id для admin, <code>403</code> иначе</td></tr>
+          <tr><td>T15</td><td>E2E: флаг on → rebuild → entity-bridge → флаг off идентичен</td><td><code>tests/e2e/test_age_graphrag_e2e.py</code></td><td>полный прогон + <code>ruff</code>/<code>mypy</code>/<code>pytest</code> зелёные</td></tr>
+          <tr><td>T16</td><td>Документация через iwiki</td><td><code>docs/wiki/*</code></td><td><code>iwiki-ingest</code> по изменённым source; <code>/iwiki-lint</code> чист</td></tr>
+        </tbody>
+      </table>
+
+      <h2>2. Схемы зависимостей и пересечений</h2>
+      <h3>Граф зависимостей шагов (M→N: результат M используется в N, M&lt;N)</h3>
+      <figure>
+        <div class="svgwrap">
+        <svg viewBox="0 0 1240 560" width="1240" height="560" role="img" aria-label="Граф зависимостей задач">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#7d8da0"/>
+            </marker>
+            <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <g stroke="#7d8da0" stroke-width="1.4" fill="none" marker-end="url(#arrow)" opacity="0.85">
+            <line x1="118" y1="280" x2="162" y2="128"/>   <!-- T1->T2 -->
+            <line x1="118" y1="288" x2="312" y2="120"/>   <!-- T1->T3 -->
+            <line x1="258" y1="120" x2="312" y2="120"/>   <!-- T2->T3 -->
+            <line x1="258" y1="280" x2="472" y2="252"/>   <!-- T4->T9 -->
+            <line x1="258" y1="286" x2="632" y2="152"/>   <!-- T4->T10 -->
+            <line x1="258" y1="288" x2="632" y2="270"/>   <!-- T4->T11 -->
+            <line x1="258" y1="292" x2="632" y2="404"/>   <!-- T4->T12 -->
+            <line x1="258" y1="296" x2="792" y2="358"/>   <!-- T4->T13 -->
+            <line x1="246" y1="440" x2="318" y2="368"/>   <!-- T5->T6 -->
+            <line x1="246" y1="448" x2="318" y2="468"/>   <!-- T5->T7 -->
+            <line x1="252" y1="446" x2="476" y2="418"/>   <!-- T5->T8 -->
+            <line x1="252" y1="452" x2="634" y2="414"/>   <!-- T5->T12 -->
+            <line x1="404" y1="362" x2="476" y2="412"/>   <!-- T6->T8 -->
+            <line x1="406" y1="360" x2="634" y2="410"/>   <!-- T6->T12 -->
+            <line x1="404" y1="468" x2="476" y2="424"/>   <!-- T7->T8 -->
+            <line x1="404" y1="462" x2="476" y2="258"/>   <!-- T7->T9 -->
+            <line x1="406" y1="470" x2="792" y2="486"/>   <!-- T7->T14 -->
+            <line x1="566" y1="418" x2="634" y2="160"/>   <!-- T8->T10 -->
+            <line x1="566" y1="420" x2="634" y2="272"/>   <!-- T8->T11 -->
+            <line x1="566" y1="422" x2="634" y2="410"/>   <!-- T8->T12 -->
+            <line x1="566" y1="426" x2="792" y2="482"/>   <!-- T8->T14 -->
+            <line x1="726" y1="152" x2="952" y2="352"/>   <!-- T10->T15 -->
+            <line x1="726" y1="410" x2="792" y2="362"/>   <!-- T12->T13 -->
+            <line x1="886" y1="360" x2="952" y2="360"/>   <!-- T13->T15 -->
+            <line x1="886" y1="480" x2="952" y2="368"/>   <!-- T14->T15 -->
+            <line x1="1046" y1="360" x2="1092" y2="360"/> <!-- T15->T16 -->
+          </g>
+          <g class="nodebox" font-size="12" text-anchor="middle">
+            <!-- node helper: rect + 2 lines -->
+            <g><rect x="22" y="262" width="96" height="38" rx="8" fill="#58b0d6" filter="url(#ds)"/><text x="70" y="278" fill="#06222e" font-weight="700">T1</text><text x="70" y="292" fill="#06222e">Образ AGE</text></g>
+            <g><rect x="162" y="101" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="210" y="117" fill="#e6edf3" font-weight="700">T2</text><text x="210" y="131" fill="#9aa7b4">Миграция</text></g>
+            <g><rect x="162" y="261" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="210" y="277" fill="#e6edf3" font-weight="700">T4</text><text x="210" y="291" fill="#9aa7b4">GraphConfig</text></g>
+            <g><rect x="162" y="421" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="210" y="437" fill="#e6edf3" font-weight="700">T5</text><text x="210" y="451" fill="#9aa7b4">naming</text></g>
+            <g><rect x="312" y="101" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="360" y="117" fill="#e6edf3" font-weight="700">T3</text><text x="360" y="131" fill="#9aa7b4">connect_args</text></g>
+            <g><rect x="312" y="341" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="360" y="357" fill="#e6edf3" font-weight="700">T6</text><text x="360" y="371" fill="#9aa7b4">cypher</text></g>
+            <g><rect x="312" y="451" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="360" y="467" fill="#e6edf3" font-weight="700">T7</text><text x="360" y="481" fill="#9aa7b4">schema</text></g>
+            <g><rect x="472" y="401" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="520" y="417" fill="#e6edf3" font-weight="700">T8</text><text x="520" y="431" fill="#9aa7b4">projection</text></g>
+            <g><rect x="472" y="231" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="520" y="247" fill="#e6edf3" font-weight="700">T9</text><text x="520" y="261" fill="#9aa7b4">bootstrap</text></g>
+            <g><rect x="632" y="131" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="680" y="147" fill="#e6edf3" font-weight="700">T10</text><text x="680" y="161" fill="#9aa7b4">ingest</text></g>
+            <g><rect x="632" y="251" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="680" y="267" fill="#e6edf3" font-weight="700">T11</text><text x="680" y="281" fill="#9aa7b4">edit/rollback</text></g>
+            <g><rect x="632" y="391" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="680" y="407" fill="#e6edf3" font-weight="700">T12</text><text x="680" y="421" fill="#9aa7b4">graph_expand</text></g>
+            <g><rect x="792" y="341" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="840" y="357" fill="#e6edf3" font-weight="700">T13</text><text x="840" y="371" fill="#9aa7b4">retrieve</text></g>
+            <g><rect x="792" y="461" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="840" y="477" fill="#e6edf3" font-weight="700">T14</text><text x="840" y="491" fill="#9aa7b4">rebuild job</text></g>
+            <g><rect x="952" y="341" width="96" height="38" rx="8" fill="#3fb950" filter="url(#ds)"/><text x="1000" y="357" fill="#06220c" font-weight="700">T15</text><text x="1000" y="371" fill="#06220c">E2E</text></g>
+            <g><rect x="1092" y="341" width="96" height="38" rx="8" fill="#1a2129" stroke="#313c48" filter="url(#ds)"/><text x="1140" y="357" fill="#e6edf3" font-weight="700">T16</text><text x="1140" y="371" fill="#9aa7b4">docs</text></g>
+          </g>
+        </svg>
+        </div>
+        <div class="legend">Без циклов и нарушений порядка (фаза <code>dependencies</code> — passed). Голубой — корневой инфра-узел (T1), зелёные — терминальные (T15→T16).</div>
+      </figure>
+
+      <h3>Пересечения по артефактам (один файл — несколько задач)</h3>
+      <table>
+        <thead><tr><th>Артефакт / файл</th><th>Задачи</th><th>Характер пересечения</th></tr></thead>
+        <tbody>
+          <tr><td><code>src/paw/jobs/tasks.py</code></td><td>T10, T14</td><td>T10 — проекция в <code>ingest_domain</code>; T14 — новый job <code>graph_rebuild</code> + <code>_rebuild_domain_graph</code></td></tr>
+          <tr><td><code>tests/factories.py</code></td><td>T8, T11, T12</td><td>растущий набор seed-фабрик (single → linked → cross-domain)</td></tr>
+          <tr><td><code>tests/integration/test_age_smoke.py</code></td><td>T3, T6</td><td>T3 — raw cypher; T6 — param-bound round-trip</td></tr>
+          <tr><td><code>tests/api/test_graphrag_retrieve.py</code></td><td>T13, T14</td><td>T13 — provenance/regression; T14 — endpoint <code>rebuild-graph</code></td></tr>
+          <tr><td><code>tests/conftest.py</code></td><td>T1</td><td>переключение образа (единственная правка)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Покрытие требований несколькими задачами</h3>
+      <table>
+        <thead><tr><th>Требование спеки</th><th>Задачи</th></tr></thead>
+        <tbody>
+          <tr><td>Acceptance #1 (образ + create_graph)</td><td>T1, T9</td></tr>
+          <tr><td>Acceptance #6 (cte идентичен baseline)</td><td>T4, T10, T13, T15</td></tr>
+          <tr><td>Безопасный Cypher / инъекция (#5)</td><td>T6, T12</td></tr>
+          <tr><td>Проекция in-txn (#2)</td><td>T8, T10, T11</td></tr>
+          <tr><td>F-002 (<code>chunks.ord</code> существует)</td><td>Global Constraints (подтверждено: <code>models.py:257</code>)</td></tr>
+        </tbody>
+      </table>
+
+      <h2>3. Результаты проверки</h2>
+      <div class="summary">
+        <div class="stat"><b>0</b>CRITICAL open</div>
+        <div class="stat"><b>0</b>WARNING open</div>
+        <div class="stat"><b class="v-fixed">6</b>fixed</div>
+        <div class="stat"><b class="v-accepted">2</b>accepted</div>
+      </div>
+
+      <h3>Статус фаз</h3>
+      <table>
+        <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+        <tbody>
+          <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>нет placeholder'ов, разрывов нумерации, дублей заголовков</td></tr>
+          <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>все требования + F-001/F-002/F-003 покрыты; без «лишних» задач</td></tr>
+          <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>после фикса F-001/F-003 — без нарушений порядка и недостающих артефактов</td></tr>
+          <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>у каждого шага команда + ожидаемый результат (F-005 уточнён)</td></tr>
+          <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>сигнатуры символов согласованы; сверено с исходниками</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Находки</h3>
+      <table>
+        <thead><tr><th>id</th><th>severity</th><th>фаза</th><th>секция</th><th>проблема</th><th>фикс</th><th>вердикт</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>F-001</td><td><span class="badge b-crit">CRITICAL</span></td><td>dependencies</td>
+            <td>T11 Step 1a / T15 Step 1</td>
+            <td><code>jsonb_set(config,'{graph,engine}',…,true)</code> на <code>config={}</code> — no-op (родитель <code>graph</code> отсутствует), <code>engine=age</code> не выставляется; T11/T13/T15 тестировали бы CTE-путь</td>
+            <td>merge родителя: <code>jsonb_set(config,'{graph}',COALESCE(config-&gt;'graph','{}')||'{"engine":"age"}',true)</code></td>
+            <td class="v-fixed">fixed</td>
+          </tr>
+          <tr>
+            <td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>consistency</td>
+            <td>T9 Step 1a</td>
+            <td>неоднозначность метода записи репозитория (upsert/set/save)</td>
+            <td>подтверждён <code>SettingsRepo.upsert(dict)</code>; убрана неоднозначность</td>
+            <td class="v-fixed">fixed</td>
+          </tr>
+          <tr>
+            <td>F-003</td><td><span class="badge b-warn">WARNING</span></td><td>dependencies</td>
+            <td>T12 Step 5a</td>
+            <td>у <code>links</code> NOT-NULL <code>domain_id</code> (<code>models.py:208</code>); фабрика-шаблон его не вставляет</td>
+            <td>явный <code>INSERT INTO links (domain_id, src_article_id, dst_article_id, type)</code></td>
+            <td class="v-fixed">fixed</td>
+          </tr>
+          <tr>
+            <td>F-004</td><td><span class="badge b-warn">WARNING</span></td><td>coverage</td>
+            <td>T14 Step 5</td>
+            <td>«mirror start_reindex» вводит в заблуждение рядом с намеренным пропуском <code>_require_enabled</code></td>
+            <td>переформулировано: «mirror start_reindex MINUS <code>_require_enabled</code>»</td>
+            <td class="v-fixed">fixed</td>
+          </tr>
+          <tr>
+            <td>F-005</td><td><span class="badge b-warn">WARNING</span></td><td>verifiability</td>
+            <td>T13 Step 1 / T15 Step 1</td>
+            <td>DoD тестов мягче: не назван точный endpoint/поле JSON</td>
+            <td>назван <code>POST /api/v1/query</code> (по <code>test_query_api.py</code>) и поле контекста</td>
+            <td class="v-fixed">fixed</td>
+          </tr>
+          <tr>
+            <td>F-006</td><td><span class="badge b-info">INFO</span></td><td>consistency</td>
+            <td>T2 Step 2</td>
+            <td>дрейф ссылки: <code>_migrate</code> на <code>conftest.py:36</code>, не <code>:35</code></td>
+            <td>ссылка обновлена на <code>:36</code></td>
+            <td class="v-fixed">fixed</td>
+          </tr>
+          <tr>
+            <td>F-007</td><td><span class="badge b-info">INFO</span></td><td>dependencies</td>
+            <td>Global / <code>_clean_db</code></td>
+            <td><code>_clean_db</code> не дропает AGE-графы; возможна аккумуляция (ограничена uuid4-доменами)</td>
+            <td>добавлена заметка об изоляции (T8); каждый AGE-тест дропает свой граф</td>
+            <td class="v-accepted">accepted</td>
+          </tr>
+          <tr>
+            <td>F-008</td><td><span class="badge b-info">INFO</span></td><td>verifiability</td>
+            <td>T12 Step 3</td>
+            <td>интерполяция <code>depth</code> в Cypher — проверено: безопасно (валидированный int)</td>
+            <td>дефекта нет</td>
+            <td class="v-accepted">accepted</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Итоговый вердикт</h3>
+      <p><span class="badge b-ok">OK</span> — план прошёл гейт: 0 открытых CRITICAL/WARNING, все 5 фаз <code>passed</code>.</p>
+
+      <h3>Цепочка</h3>
+      <p class="note"><b>intent</b> <code>null</code> → <b>spec</b>
+        <code>docs/superpowers/specs/2026-06-24-paw-phase-10-age-graphrag-design.md</code> →
+        <b>plan</b> <code>docs/superpowers/plans/2026-06-29-paw-phase-10-age-graphrag.md</code></p>
+    </main>
+  </section>
+  <!-- TAB:plan END -->
+
+  <!-- TAB:result START -->
+  <section class="tab-pane" id="pane-result">
+    <main><p class="note">Этап ещё не проверен.</p></main>
+  </section>
+  <!-- TAB:result END -->
+</body>
+</html>
