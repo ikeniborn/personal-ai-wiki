@@ -172,6 +172,14 @@ class ProviderSettingsService:
         await self._repo.upsert(settings)
         return nxt
 
+    async def set_graph_engine(self, engine: str) -> None:
+        data = await self._all()
+        raw = data.get("graph")
+        graph: dict[str, object] = dict(raw) if isinstance(raw, dict) else {}
+        graph["engine"] = engine
+        data["graph"] = graph
+        await self._repo.upsert(data)
+
     async def set_wiki(self, cfg: WikiConfig) -> WikiConfig:
         settings = await self._all()
         settings[WIKI_KEY] = cfg.model_dump()

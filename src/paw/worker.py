@@ -7,6 +7,7 @@ from paw.jobs.tasks import (
     fix_issues,
     format_articles,
     gc_housekeeping,
+    graph_rebuild,
     ingest_domain,
     lint_domain,
     reindex_domain,
@@ -56,6 +57,7 @@ class WorkerSettings:
         fix_issues,
         format_articles,
         reindex_domain,
+        graph_rebuild,
     ]
     redis_settings = _LazyRedisSettings()
 

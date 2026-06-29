@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC
 from typing import Any
 
@@ -10,6 +12,7 @@ from paw.config import get_settings
 from paw.db.repos.jobs import JobRepo
 from paw.db.repos.sources import SourceRepo
 from paw.db.session import get_sessionmaker
+from paw.graph.age.projection import project_article
 from paw.harness.ops.ingest import run_ingest
 from paw.harness.prompts import PROMPT_VERSION
 from paw.ingest.loaders import load_source
@@ -28,9 +31,12 @@ from paw.providers.factory import (
     build_vision_provider,
 )
 from paw.security.secrets import SecretBox
+from paw.services.graph import GraphService
 from paw.services.langfuse_settings import LangfuseSettingsService
 from paw.services.provider_settings import ProviderSettingsService
 from paw.storage.postgres import PostgresStorage
+
+logger = logging.getLogger(__name__)
 
 
 class IngestCancelled(Exception):
@@ -186,6 +192,20 @@ async def ingest_domain(
                         ),
                         timeout=wiki.request_timeout_s * wiki.max_steps,
                     )
+                gcfg = await GraphService(data_s).config_for(did)
+                if gcfg.engine == "age":
+                    try:
+                        async with data_s.begin_nested():  # SAVEPOINT
+                            await project_article(
+                                data_s, domain_id=did, article_id=result.article_id
+                            )
+                    except Exception:  # noqa: BLE001 — best-effort; never fail the relational write
+                        logger.warning(
+                            "AGE projection failed for article %s; relational write proceeds, "
+                            "graph will sync on next graph_rebuild",
+                            result.article_id,
+                            exc_info=True,
+                        )
                 await data_s.commit()
                 metrics.ARTICLES.inc()
                 metrics.CHUNKS.inc(result.chunk_count)
@@ -505,6 +525,87 @@ async def reindex_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> st
                 return _record_job("reindex", ctx, "failed", started)
             finally:
                 trace.flush()
+
+
+async def _rebuild_domain_graph(
+    data_s: Any,
+    domain_id: uuid.UUID,
+    *,
+    on_batch: Callable[[int, int], Awaitable[None]] | None,
+    batch_size: int = 50,
+) -> int:
+    """Full rebuild of one domain's AGE graph. Caller owns the commit."""
+    from paw.graph.age.projection import project_article
+    from paw.graph.age.schema import drop_graph, ensure_graph
+
+    await drop_graph(data_s, domain_id)
+    await ensure_graph(data_s, domain_id)
+    from sqlalchemy import text as _text
+
+    res = await data_s.execute(
+        _text("SELECT id::text FROM articles WHERE domain_id = :d ORDER BY id"),
+        {"d": str(domain_id)},
+    )
+    ids = [uuid.UUID(r[0]) for r in res.all()]
+    total = len(ids)
+    for i, aid in enumerate(ids, start=1):
+        await project_article(data_s, domain_id=domain_id, article_id=aid)
+        if on_batch is not None and (i % batch_size == 0 or i == total):
+            await on_batch(i, total)
+    return total
+
+
+async def graph_rebuild(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:
+    started = time.perf_counter()
+    redis = ctx["redis"]
+    from paw.worker import set_queue_depth  # lazy: avoid import cycle
+
+    await set_queue_depth(redis)
+    jid = uuid.UUID(job_id)
+    did = uuid.UUID(domain_id)
+    maker = get_sessionmaker()
+    async with maker() as job_s, maker() as data_s:
+        jobs = JobRepo(job_s)
+        async with domain_lock(redis, domain_id) as got:
+            if not got:
+                await jobs.set_status(jid, "failed", error="domain busy")
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
+                return _record_job("graph_rebuild", ctx, "failed", started)
+            await jobs.set_status(jid, "running")
+            await jobs.heartbeat(jid)
+            await job_s.commit()
+
+            async def on_batch(done: int, total: int) -> None:
+                if await jobs.is_cancel_requested(jid):
+                    raise MaintenanceCancelled()
+                await jobs.heartbeat(jid)
+                await jobs.append_log(jid, {"step": "batch", "done": done, "total": total})
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "batch", "done": done, "total": total})
+
+            try:
+                count = await _rebuild_domain_graph(data_s, did, on_batch=on_batch)
+                await data_s.commit()
+                await jobs.set_status(jid, "succeeded")
+                await jobs.append_log(jid, {"step": "rebuilt", "count": count})
+                await job_s.commit()
+                await _safe_publish(
+                    redis, jid, {"step": "done", "status": "succeeded", "count": count}
+                )
+                return _record_job("graph_rebuild", ctx, "succeeded", started)
+            except MaintenanceCancelled:
+                await data_s.rollback()
+                await jobs.set_status(jid, "cancelled")
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "cancelled", "status": "cancelled"})
+                return _record_job("graph_rebuild", ctx, "cancelled", started)
+            except Exception as e:  # noqa: BLE001
+                await data_s.rollback()
+                await jobs.set_status(jid, "failed", error=str(e)[:500])
+                await job_s.commit()
+                await _safe_publish(redis, jid, {"step": "error", "status": "failed"})
+                return _record_job("graph_rebuild", ctx, "failed", started)
 
 
 async def lint_domain(ctx: dict[str, Any], job_id: str, domain_id: str) -> str:

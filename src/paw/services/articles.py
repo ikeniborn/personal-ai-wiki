@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -10,6 +11,8 @@ from paw.db.repos.citations import CitationRepo, CitationView
 from paw.db.repos.links import LinkedArticle, LinkRepo
 from paw.graph.tree import TreeNode, build_tree, normalize_parent_child
 from paw.storage.postgres import PostgresStorage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -75,6 +78,21 @@ class ArticleService:
         await self._repo.add_revision(
             article_id=art.id, rev_no=new_rev, storage_ref=ref, author_id=author_id, origin="user"
         )
+        from paw.graph.age.projection import project_article
+        from paw.services.graph import GraphService
+
+        gcfg = await GraphService(self._s).config_for(art.domain_id)
+        if gcfg.engine == "age":
+            try:
+                async with self._s.begin_nested():  # SAVEPOINT
+                    await project_article(self._s, domain_id=art.domain_id, article_id=art.id)
+            except Exception:  # noqa: BLE001 — best-effort; never fail the relational write
+                logger.warning(
+                    "AGE projection failed for article %s; relational write proceeds, "
+                    "graph will sync on next graph_rebuild",
+                    art.id,
+                    exc_info=True,
+                )
         await self._s.commit()
         return art
 
@@ -98,6 +116,21 @@ class ArticleService:
             author_id=author_id,
             origin="user",
         )
+        from paw.graph.age.projection import project_article
+        from paw.services.graph import GraphService
+
+        gcfg = await GraphService(self._s).config_for(art.domain_id)
+        if gcfg.engine == "age":
+            try:
+                async with self._s.begin_nested():  # SAVEPOINT
+                    await project_article(self._s, domain_id=art.domain_id, article_id=art.id)
+            except Exception:  # noqa: BLE001 — best-effort; never fail the relational write
+                logger.warning(
+                    "AGE projection failed for article %s; relational write proceeds, "
+                    "graph will sync on next graph_rebuild",
+                    art.id,
+                    exc_info=True,
+                )
         await self._s.commit()
         return art
 

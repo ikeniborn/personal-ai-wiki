@@ -25,7 +25,9 @@ services:
         reservations: { memory: 64m,  cpus: "0.1" }
 
   postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: docker/postgres
+    image: paw/postgres:pg16-age
     restart: unless-stopped
     environment:
       POSTGRES_USER: paw

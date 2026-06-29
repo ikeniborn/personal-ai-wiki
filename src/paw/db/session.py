@@ -16,7 +16,16 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
-        _engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+        _engine = create_async_engine(
+            get_settings().database_url,
+            pool_pre_ping=True,
+            connect_args={
+                # AGE: resolve cypher()/agtype without a per-call LOAD, and avoid the
+                # prepared-statement cache colliding with AGE's cypher(cstring) parse hook.
+                "server_settings": {"search_path": 'ag_catalog,"$user",public'},
+                "statement_cache_size": 0,
+            },
+        )
     return _engine
 
 

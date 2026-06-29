@@ -143,6 +143,8 @@ async def run_ingest(
             domain_id=domain_id, src_article_id=art.id, dst_article_id=target, type="related"
         ):
             link_count += 1
+    # NOTE: links created here are mirrored into AGE by project_article() in ingest_domain
+    # (it projects all LINKS touching this article). No separate merge_link call needed.
 
     # Stage E — chunking + embedding
     await _emit(on_step, "embed")

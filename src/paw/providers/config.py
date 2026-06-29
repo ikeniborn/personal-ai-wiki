@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 PROVIDER_KEY = "provider"
@@ -64,6 +66,11 @@ class GraphConfig(BaseModel):
     link_types: list[str] = Field(
         default_factory=lambda: ["related", "parent", "child", "references", "depends_on"]
     )
+    # Phase 10 — engine selection + GraphRAG bounds:
+    engine: Literal["cte", "age"] = "cte"  # default OFF -> zero regression until enabled
+    expand_depth: int = 1  # AGE LINKS hops in graph_expand
+    max_entities: int = 8  # AGE-only: entity-bridge cap (reserved for tuning)
+    max_neighbors: int = 12  # AGE-only: neighbour cap
 
 
 class MaintenanceConfig(BaseModel):

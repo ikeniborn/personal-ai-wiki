@@ -42,3 +42,9 @@
 {"op":"ingest","source":"docker-compose.yml","page":"docs/wiki/ops.md","date":"2026-06-29","note":"phase 9d backup profile + restart/healthcheck/resources"}
 {"op":"ingest","source":"deploy/backup/backup.sh","page":"docs/wiki/ops.md","date":"2026-06-29"}
 {"op":"ingest","source":"deploy/backup/restore.sh","page":"docs/wiki/ops.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/","page":"docs/wiki/graph.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/graph/age/cypher.py","page":"docs/wiki/security.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/providers/config.py","page":"docs/wiki/providers.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/db/session.py","page":"docs/wiki/db.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/harness/retrieve.py","page":"docs/wiki/harness.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/paw/jobs/tasks.py","page":"docs/wiki/jobs.md","date":"2026-06-29"}

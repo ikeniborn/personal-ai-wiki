@@ -73,3 +73,10 @@ async def enqueue_reindex(
 ) -> None:
     pool = redis or await get_arq_pool()
     await pool.enqueue_job("reindex_domain", str(job_id), str(domain_id))
+
+
+async def enqueue_graph_rebuild(
+    redis: Any | None = None, *, job_id: uuid.UUID, domain_id: uuid.UUID
+) -> None:
+    pool = redis or await get_arq_pool()
+    await pool.enqueue_job("graph_rebuild", str(job_id), str(domain_id))

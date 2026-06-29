@@ -17,7 +17,7 @@ def monkeypatch_session() -> Iterator[pytest.MonkeyPatch]:
 
 @pytest.fixture(scope="session")
 def pg_container() -> Iterator[PostgresContainer]:
-    with PostgresContainer("pgvector/pgvector:pg16", driver="asyncpg") as pg:
+    with PostgresContainer("paw/postgres:pg16-age", driver="asyncpg") as pg:
         yield pg
 
 
