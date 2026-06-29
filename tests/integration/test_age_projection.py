@@ -1,12 +1,11 @@
-import uuid
 
 import pytest
+from tests.factories import seed_article_with_entities  # see Step 1a
 
 from paw.db.session import get_sessionmaker
 from paw.graph.age import projection, schema
 from paw.graph.age.cypher import run_cypher
 from paw.graph.age.naming import graph_name
-from tests.factories import seed_article_with_entities  # see Step 1a
 
 
 @pytest.mark.usefixtures("wired_settings")

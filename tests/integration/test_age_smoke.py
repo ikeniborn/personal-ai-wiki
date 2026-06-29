@@ -21,8 +21,9 @@ async def test_cypher_callable_over_asyncpg() -> None:
 
 @pytest.mark.usefixtures("wired_settings")
 async def test_run_cypher_binds_params() -> None:
-    from paw.graph.age import cypher
     from sqlalchemy import text as _text
+
+    from paw.graph.age import cypher
 
     async with get_sessionmaker()() as s:
         await s.execute(_text(f"SELECT create_graph('{_G_PARAMS}')"))

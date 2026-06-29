@@ -5,12 +5,10 @@ Step 4: end-to-end — run_ingest with engine=age projects the article node.
 """
 from __future__ import annotations
 
-import uuid
-
 import pytest
-from sqlalchemy import text
+from tests.factories import seed_article_with_entities
+from tests.stubs import StubChatProvider, StubEmbeddingProvider
 
-import paw.jobs.tasks as tasks_mod
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.jobs import JobRepo
 from paw.db.repos.sources import SourceRepo
@@ -21,9 +19,6 @@ from paw.graph.age.naming import graph_name
 from paw.providers.config import WikiConfig
 from paw.services.provider_settings import ProviderSettingsService
 from paw.storage.postgres import PostgresStorage
-from tests.factories import seed_article_with_entities
-from tests.stubs import StubChatProvider, StubEmbeddingProvider
-
 
 # ---------------------------------------------------------------------------
 # Step 1: atomicity test

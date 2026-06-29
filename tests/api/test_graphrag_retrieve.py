@@ -30,6 +30,8 @@ import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from tests.factories import _set_domain_engine_age
+from tests.stubs import StubChatProvider, StubEmbeddingProvider
 
 import paw.services.query as query_mod
 from paw.db.managed import ensure_embedding_column
@@ -45,8 +47,6 @@ from paw.security.passwords import hash_password
 from paw.security.secrets import SecretBox
 from paw.services.provider_settings import ProviderSettingsService
 from paw.vector.embed import embed_and_write
-from tests.factories import _set_domain_engine_age
-from tests.stubs import StubChatProvider, StubEmbeddingProvider
 
 _FERNET = "k" * 43 + "="
 _DIM = 8

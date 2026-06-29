@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.factories import _set_domain_engine_age, seed_article_with_entities
 
 from paw.db.repos.users import UserRepo
 from paw.db.session import get_sessionmaker
@@ -10,7 +11,6 @@ from paw.graph.age.cypher import run_cypher
 from paw.graph.age.naming import graph_name
 from paw.security.passwords import hash_password
 from paw.services.articles import ArticleService
-from tests.factories import _set_domain_engine_age, seed_article_with_entities
 
 
 @pytest.mark.usefixtures("wired_settings")

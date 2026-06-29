@@ -199,6 +199,7 @@ async def _web_start_maintenance(
         "lint": svc.start_lint,
         "format": svc.start_format,
         "reindex": svc.start_reindex,
+        "rebuild_graph": svc.start_graph_rebuild,
     }[op]
     job = await starter(domain_id=domain_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
@@ -236,6 +237,17 @@ async def web_reindex(
     __: User = Depends(require_role("admin", "editor")),
 ) -> Response:
     return await _web_start_maintenance(domain_id, request, session, "reindex")
+
+
+@router.post("/domains/{domain_id}/rebuild-graph", response_class=HTMLResponse)
+async def web_rebuild_graph(
+    domain_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    return await _web_start_maintenance(domain_id, request, session, "rebuild_graph")
 
 
 @router.get("/domains/{domain_id}/lint/{job_id}/results", response_class=HTMLResponse)

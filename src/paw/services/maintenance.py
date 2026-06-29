@@ -8,7 +8,13 @@ from paw.api.errors import ProblemError
 from paw.db.models import Job
 from paw.db.repos.domains import DomainRepo
 from paw.db.repos.jobs import JobRepo
-from paw.jobs.queue import enqueue_fix, enqueue_format, enqueue_lint, enqueue_reindex
+from paw.jobs.queue import (
+    enqueue_fix,
+    enqueue_format,
+    enqueue_graph_rebuild,
+    enqueue_lint,
+    enqueue_reindex,
+)
 from paw.providers.config import MaintenanceConfig
 from paw.services.provider_settings import ProviderSettingsService
 
@@ -63,4 +69,10 @@ class MaintenanceService:
         job = await self._repo.create(domain_id=domain_id, kind="reindex")
         await self._s.commit()
         await enqueue_reindex(None, job_id=job.id, domain_id=domain_id)
+        return job
+
+    async def start_graph_rebuild(self, *, domain_id: uuid.UUID) -> Job:
+        job = await self._repo.create(domain_id=domain_id, kind="graph_rebuild")
+        await self._s.commit()
+        await enqueue_graph_rebuild(None, job_id=job.id, domain_id=domain_id)
         return job
