@@ -7,6 +7,7 @@ layer / Docker-less environments stay green. The real run happens on a Docker ho
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -57,7 +58,7 @@ def test_backup_restore_roundtrip() -> None:
         pytest.skip(f"Docker unavailable: {exc}")
 
     try:
-        env = _libpq_env(ctx)
+        env = {**os.environ, **_libpq_env(ctx)}
         dsn = _dsn(ctx)
 
         # 1. Seed a known corpus.
