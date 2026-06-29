@@ -85,9 +85,10 @@
 
 ## Maintenance router
 
-`maintenance.py` runs domain-wide upkeep through [[services#MaintenanceService & JobService]], each returning `202` + `job_id`. Covers `lint` (find link/structure issues), `fix` (repair selected `issue_ids`), `format`, and `reindex` (rebuild embeddings/FTS). See [[harness#Ops]] and [[vector#Reindex]].
+`maintenance.py` runs domain-wide upkeep through [[services#MaintenanceService & JobService]], each returning `202` + `job_id`. Covers `lint` (find link/structure issues), `fix` (repair selected `issue_ids`), `format`, `reindex` (rebuild embeddings/FTS), and `rebuild-graph` (full rebuild of the per-domain Apache AGE graph). See [[harness#Ops]] and [[vector#Reindex]].
 
 - `POST /domains/{domain_id}/lint` · `/fix` · `/format` · `/reindex`.
+- `POST /domains/{domain_id}/rebuild-graph` (Phase 10) — admin/editor + CSRF; enqueues `graph_rebuild` and backfills the domain's AGE graph. No per-domain enable flag (unlike the other maintenance ops). See [[graph#Graph rebuild job]].
 
 ## Query router
 

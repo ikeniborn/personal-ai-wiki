@@ -71,7 +71,7 @@ A few repos drop to `text()` SQL where ORM mapping is awkward — chiefly for co
 - `get_engine()` builds `create_async_engine(database_url, pool_pre_ping=True)` once, with asyncpg `connect_args` for Apache AGE: `server_settings={"search_path": 'ag_catalog,"$user",public'}` (so `cypher()` resolves at connection startup) and `statement_cache_size=0` (the prepared-statement cache collides with AGE's `cypher(cstring)` parse hook). See [[graph#AGE graph engine]].
 - `get_sessionmaker()` builds `async_sessionmaker(engine, expire_on_commit=False)` once.
 - `get_session()` is an async-generator dependency yielding a session per request/op.
-- Tests reset these globals to `None` (mirror that for any new cached global).
+- Tests reset these globals to `None` (mirror that for any new cached global) — the `wired_settings` fixture does this so each test rebuilds the engine and picks up the AGE `connect_args`.
 
 ## Managed chunks columns
 
