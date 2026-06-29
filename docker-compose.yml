@@ -135,9 +135,33 @@ services:
       - "/sys:/sys:ro"
       - "/var/lib/docker/:/var/lib/docker:ro"
 
+  # Opt-in scheduled backups. Enable with:  docker compose --profile backup up -d backup
+  # Default `docker compose up` does NOT start this service.
+  backup:
+    image: postgres:16-alpine
+    profiles: ["backup"]
+    command:
+      - "sh"
+      - "-c"
+      - "while true; do /scripts/backup.sh; sleep \"${BACKUP_INTERVAL_SECONDS:-86400}\"; done"
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: paw
+      PGDATABASE: paw
+      PGPASSWORD: ${POSTGRES_PASSWORD:-paw}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - "./deploy/backup:/scripts:ro"
+      - "backups:/backups"
+    depends_on:
+      postgres: { condition: service_healthy }
+
 volumes:
   pgdata:
   redisdata:
   letsencrypt:
   promdata:
   grafanadata:
+  backups:
