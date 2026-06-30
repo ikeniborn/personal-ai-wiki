@@ -72,17 +72,23 @@ def page_ctx(
 router = APIRouter(tags=["web"])
 
 
-async def _current_uid(request: Request, store: SessionStore) -> str | None:
-    return await store.get(request.cookies.get(SESSION_COOKIE, ""))
-
-
-async def _current_user_opt(
+async def _require_web_user(
     request: Request, session: AsyncSession, store: SessionStore
 ) -> User | None:
-    uid = await _current_uid(request, store)
+    """Resolve the logged-in user for web pages, evicting stale sessions.
+
+    Returns None when there is no session or the user was deleted; callers
+    redirect to /login. Mirrors api.deps.current_user for the HTML routes.
+    """
+    sid = request.cookies.get(SESSION_COOKIE, "")
+    uid = await store.get(sid)
     if not uid:
         return None
-    return await UserRepo(session).get(uuid.UUID(uid))
+    user = await UserRepo(session).get(uuid.UUID(uid))
+    if user is None:
+        await store.delete(sid)
+        return None
+    return user
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -106,11 +112,12 @@ async def dashboard(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if await SetupService(session).needs_setup():
+    needs_setup = await SetupService(session).needs_setup()
+    if needs_setup and not request.cookies.get(SESSION_COOKIE, ""):
         return RedirectResponse("/setup", status_code=307)
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
-    user = await _current_user_opt(request, session, store)
     domains = await DomainService(session).list()
     app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
@@ -125,14 +132,14 @@ async def domain_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
     domain = await DomainRepo(session).get(domain_id)
     articles = await ArticleRepo(session).list_by_domain(domain_id)
     sources = await SourceRepo(session).list_by_domain(domain_id)
     tree = await ArticleService(session).domain_tree(domain_id)
     latest_source_id = str(sources[-1].id) if sources else None
-    user = await _current_user_opt(request, session, store)
     app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
         request,
@@ -154,24 +161,23 @@ async def graph_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
     domain = await DomainRepo(session).get(domain_id)
     articles = await ArticleRepo(session).list_by_domain(domain_id)
     cfg = await GraphService(session).config_for(domain_id)
     tree = await ArticleService(session).domain_tree(domain_id)
     root_id = root if root is not None else (articles[0].id if articles else None)
+    app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
         request,
         "graph.html",
-        {
-            "domain": domain,
-            "articles": articles,
-            "cfg": cfg,
-            "tree": tree,
-            "domain_name": domain.name if domain else "",
-            "root_id": root_id,
-        },
+        page_ctx(
+            request, user, app_settings,
+            domain=domain, articles=articles, cfg=cfg, tree=tree,
+            domain_name=domain.name if domain else "", root_id=root_id,
+        ),
     )
 
 
@@ -258,7 +264,8 @@ async def web_lint_results(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
     job = await JobRepo(session).get(job_id)
     issues: list[dict[str, object]] = []
@@ -270,7 +277,7 @@ async def web_lint_results(
     return templates.TemplateResponse(
         request,
         "_lint_results.html",
-        {"domain_id": domain_id, "issues": issues, "csrf": csrf},
+        {"domain_id": domain_id, "issues": issues, "csrf": csrf, "user": user},
     )
 
 
@@ -295,11 +302,14 @@ async def query_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
     domain = await DomainRepo(session).get(domain_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
-    return templates.TemplateResponse(request, "query.html", {"domain": domain, "csrf": csrf})
+    return templates.TemplateResponse(
+        request, "query.html", {"domain": domain, "csrf": csrf, "user": user}
+    )
 
 
 @router.post("/domains/{domain_id}/query", response_class=HTMLResponse)
@@ -367,7 +377,8 @@ async def web_suggest(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return HTMLResponse("")
     domain = await DomainRepo(session).get(domain_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
@@ -377,7 +388,7 @@ async def web_suggest(
     return templates.TemplateResponse(
         request,
         "_suggestions.html",
-        {"domain": domain, "suggestions": suggestions, "csrf": csrf},
+        {"domain": domain, "suggestions": suggestions, "csrf": csrf, "user": user},
     )
 
 
@@ -388,7 +399,8 @@ async def article_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
     svc = ArticleService(session)
     body = await svc.get_body(article_id)
@@ -408,6 +420,7 @@ async def article_page(
             "tree": tree,
             "domain_name": domain.name if domain else "",
             "csrf": csrf,
+            "user": user,
         },
     )
 
@@ -448,12 +461,12 @@ async def settings_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    if not await _current_uid(request, store):
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
-    user = await _current_user_opt(request, session, store)
     app_settings = await SettingsService(session).get()
-    users = await UserService(session).list() if user and user.role == "admin" else []
-    keys = await ApiKeyService(session).list(user.id) if user else []
+    users = await UserService(session).list() if user.role == "admin" else []
+    keys = await ApiKeyService(session).list(user.id)
     return templates.TemplateResponse(
         request, "settings.html",
         page_ctx(request, user, app_settings, users=users, api_keys=keys),
@@ -466,16 +479,23 @@ async def chat_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    uid = await _current_uid(request, store)
-    if not uid:
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
-    sessions = await ChatRepo(session).list_by_user(uuid.UUID(uid), limit=50)
+    sessions = await ChatRepo(session).list_by_user(user.id, limit=50)
     domains = await DomainService(session).list()
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(
         request,
         "chat.html",
-        {"sessions": sessions, "domains": domains, "session": None, "messages": [], "csrf": csrf},
+        {
+            "sessions": sessions,
+            "domains": domains,
+            "session": None,
+            "messages": [],
+            "csrf": csrf,
+            "user": user,
+        },
     )
 
 
@@ -486,16 +506,16 @@ async def chat_session_page(
     session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
-    uid = await _current_uid(request, store)
-    if not uid:
+    user = await _require_web_user(request, session, store)
+    if user is None:
         return RedirectResponse("/login", status_code=307)
     svc = ChatService(session)
-    sess = await svc.get_owned(session_id=session_id, user_id=uuid.UUID(uid))  # 404 if not owned
+    sess = await svc.get_owned(session_id=session_id, user_id=user.id)  # 404 if not owned
     rows = await svc.session_messages(session_id)
     messages = [
         {"role": m.role, "content": m.content, "html": render_markdown(m.content)} for m in rows
     ]
-    sessions = await ChatRepo(session).list_by_user(uuid.UUID(uid), limit=50)
+    sessions = await ChatRepo(session).list_by_user(user.id, limit=50)
     domains = await DomainService(session).list()
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(
@@ -507,6 +527,7 @@ async def chat_session_page(
             "session": sess,
             "messages": messages,
             "csrf": csrf,
+            "user": user,
         },
     )
 
