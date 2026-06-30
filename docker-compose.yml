@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: paw
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: paw
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
@@ -168,7 +168,7 @@ services:
     image: prometheuscommunity/postgres-exporter
     profiles: ["observability"]
     environment:
-      DATA_SOURCE_NAME: "postgresql://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://paw:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/paw?sslmode=disable"
 
   redis_exporter:
     image: oliver006/redis_exporter
@@ -200,7 +200,7 @@ services:
       PGPORT: "5432"
       PGUSER: paw
       PGDATABASE: paw
-      PGPASSWORD: ${POSTGRES_PASSWORD:-paw}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     volumes:
