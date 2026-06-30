@@ -142,6 +142,11 @@ services:
   prometheus:
     image: prom/prometheus:v3.4.1
     profiles: ["observability"]
+    # Compose validates env_file paths only for active-profile services. This
+    # marker keeps normal compose usage token-optional while making
+    # `--profile observability` fail fast when METRICS_TOKEN is empty/unset.
+    env_file:
+      - "./deploy/observability/METRICS_TOKEN-required-for-observability/${METRICS_TOKEN:+metrics-token-present.marker}"
     volumes:
       - "./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
       - "promdata:/prometheus"

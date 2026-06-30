@@ -37,6 +37,7 @@ _CSP = (
     "img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; "
     "form-action 'self'; object-src 'none'"
 )
+_BEARER_CHALLENGE = {"WWW-Authenticate": "Bearer"}
 
 
 def create_app() -> FastAPI:
@@ -81,9 +82,11 @@ def create_app() -> FastAPI:
         try:
             scheme, provided_token = provided.split(None, 1)
         except ValueError:
-            raise ProblemError(status=401, title="Unauthorized") from None
+            raise ProblemError(
+                status=401, title="Unauthorized", headers=_BEARER_CHALLENGE
+            ) from None
         if scheme.lower() != "bearer" or not secrets.compare_digest(provided_token, token):
-            raise ProblemError(status=401, title="Unauthorized")
+            raise ProblemError(status=401, title="Unauthorized", headers=_BEARER_CHALLENGE)
         payload, content_type = render_metrics()
         return Response(payload, media_type=content_type)
 
