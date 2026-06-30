@@ -59,7 +59,7 @@ async def run_cypher(
     g = assert_graph_name(graph)
     safe = _escape_body(body)
     sql = text(
-        f"SELECT * FROM cypher('{g}', $cy${safe}$cy$, CAST(:p AS agtype)) AS ({columns})"
+        f"SELECT * FROM cypher('{g}', $cy${safe}$cy$, CAST(:p AS agtype)) AS ({columns})"  # nosec B608  # graph is regex-validated; body/columns are internal literals; params are agtype-bound
     )
     res = await session.execute(sql, {"p": agtype_params(params or {})})
     return [tuple(_load(c) for c in row) for row in res.all()]
@@ -77,7 +77,7 @@ async def exec_cypher(
     g = assert_graph_name(graph)
     safe = _escape_body(body)
     sql = text(
-        f"SELECT * FROM cypher('{g}', $cy${safe}\nRETURN 1$cy$, CAST(:p AS agtype)) AS (ok agtype)"
+        f"SELECT * FROM cypher('{g}', $cy${safe}\nRETURN 1$cy$, CAST(:p AS agtype)) AS (ok agtype)"  # nosec B608  # graph is regex-validated; body is an internal literal; params are agtype-bound
     )
     await session.execute(sql, {"p": agtype_params(params or {})})
 

@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from arq.connections import RedisSettings
@@ -13,6 +14,8 @@ from paw.jobs.tasks import (
     reindex_domain,
 )
 from paw.obs import metrics
+
+logger = logging.getLogger(__name__)
 
 
 async def heartbeat(ctx: dict[str, Any]) -> str:
@@ -35,7 +38,7 @@ async def set_queue_depth(redis: Any) -> None:
         n = await redis.zcard(arq.constants.default_queue_name)
         metrics.QUEUE_DEPTH.set(n)
     except Exception:  # noqa: BLE001
-        pass  # gauge update must never fail startup or a job
+        logger.debug("queue depth gauge update failed", exc_info=True)
 
 
 async def reconcile_jobs(ctx: dict[str, Any]) -> str:
@@ -70,7 +73,7 @@ class WorkerSettings:
 
                 start_http_server(port)
             except Exception:  # noqa: BLE001
-                pass  # metrics server must never crash the worker
+                logger.warning("worker metrics server failed to start", exc_info=True)
         await heartbeat(ctx)
         await reconcile_jobs(ctx)
         await set_queue_depth(ctx["redis"])

@@ -53,7 +53,7 @@ async def _safe_publish(redis: Any, jid: uuid.UUID, event: dict[str, Any]) -> No
     try:
         await publish(redis, jid, event)
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("best-effort job progress publish failed", exc_info=True)
 
 
 async def _build_providers(
@@ -121,7 +121,7 @@ def _record_job(kind: str, ctx: dict[str, Any], status: str, started: float) -> 
         metrics.JOB_DURATION.labels(kind=kind).observe(time.perf_counter() - started)
         metrics.JOB_TOTAL.labels(kind=kind, status=status).inc()
     except Exception:  # noqa: BLE001
-        pass  # metrics must never change a job's outcome
+        logger.debug("best-effort job metrics update failed", exc_info=True)
     return status
 
 

@@ -176,7 +176,7 @@ class QueryCacheService:
         deps: list[tuple[uuid.UUID, int]] = []
         if ids:
             res = await self._s.execute(
-                text("SELECT id, current_rev FROM articles WHERE id = ANY(:ids)"),
+                text("SELECT id, current_rev FROM articles WHERE id = ANY(:ids)"),  # nosec B608  # constant SQL, ids are bind-parameterized
                 {"ids": [str(i) for i in ids]},
             )
             rev_of = {uuid.UUID(str(r[0])): int(r[1]) for r in res.all()}

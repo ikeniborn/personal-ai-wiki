@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paw.api.deps import db
+from paw.api.client_ip import client_ip
+from paw.api.deps import db, get_redis
+from paw.api.errors import ProblemError
+from paw.config import get_settings
+from paw.security.ratelimit import RateLimiter
 from paw.services.setup import SetupService
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -35,7 +39,19 @@ async def status(session: AsyncSession = Depends(db)) -> SetupStatus:
 
 
 @router.post("", status_code=201, response_model=SetupResult)
-async def complete(body: SetupRequest, session: AsyncSession = Depends(db)) -> SetupResult:
+async def complete(
+    body: SetupRequest, request: Request, session: AsyncSession = Depends(db)
+) -> SetupResult:
+    s = get_settings()
+    ip = client_ip(request)
+    allowed = await RateLimiter(get_redis()).hit(
+        f"setup:ip:{ip}",
+        limit=s.login_rate_limit,
+        window_seconds=s.login_rate_window_seconds,
+    )
+    if not allowed:
+        raise ProblemError(status=429, title="Too many attempts", detail="slow down")
+
     admin = await SetupService(session).complete(
         email=body.email,
         password=body.password,

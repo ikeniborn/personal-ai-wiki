@@ -1,0 +1,8 @@
+{% for job_id in job_ids %}
+<div class="job" data-job-events="/api/v1/jobs/{{ job_id }}/events">
+  <progress max="6"></progress>
+  <ul data-job-messages></ul>
+  <button hx-post="/api/v1/jobs/{{ job_id }}/cancel"
+          hx-headers='{"x-csrf-token": "{{ csrf }}"}' type="button">Cancel</button>
+</div>
+{% endfor %}

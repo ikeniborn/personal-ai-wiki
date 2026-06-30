@@ -1,6 +1,8 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from paw.db.repos.settings import SettingsRepo
+from paw.db.repos.users import UserRepo
 from paw.main import create_app
 
 
@@ -20,7 +22,7 @@ async def test_first_run_needs_setup(client):
 
 _SETUP_BODY = {
     "email": "admin@example.com",
-    "password": "pw12345",
+    "password": "pw12345678901",
     "base_url": "https://api.example/v1",
     "api_key": "sk-x",
     "chat_model": "gpt-x",
@@ -40,12 +42,24 @@ async def test_complete_setup_creates_admin(client):
     assert status.json()["needs_setup"] is False
 
 
+async def test_setup_rejects_weak_password_without_persisting_rows(client, db_session):
+    weak_body = {**_SETUP_BODY, "password": "short"}
+    r = await client.post("/api/v1/setup", json=weak_body)
+
+    assert r.status_code == 422
+    assert r.headers["content-type"].startswith("application/problem+json")
+    assert r.json()["title"] == "Weak password"
+    assert r.json()["detail"] == "password must be at least 12 characters"
+    assert await UserRepo(db_session).count() == 0
+    assert await SettingsRepo(db_session).get() is None
+
+
 async def test_setup_captures_dim_and_creates_vector_column(client, db_session):
     r = await client.post(
         "/api/v1/setup",
         json={
             "email": "admin@example.com",
-            "password": "pw12345",
+            "password": "pw12345678901",
             "base_url": "https://api.example/v1",
             "api_key": "sk-x",
             "chat_model": "gpt-x",

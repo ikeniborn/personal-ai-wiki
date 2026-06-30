@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цепочка IDD→SDD — Security Audit Follow-up</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --info:#255da8; --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --info:#89b4fa; --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.2rem 2rem 4rem; max-width:1120px;
+  font:16px/1.55 system-ui, -apple-system, Segoe UI, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+h1{ font-size:1.7rem; margin:.2rem 0 .2rem; }
+h2{ font-size:1.25rem; margin:1.9rem 0 .55rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; }
+h3{ font-size:1.02rem; margin:1.1rem 0 .35rem; color:var(--accent); }
+p.sub{ color:var(--muted); font-size:.92rem; margin:.1rem 0 .8rem; }
+code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .32rem; border-radius:5px; font-size:.86em; }
+table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:.9rem 0; font-size:.88rem; border:1px solid var(--border); border-radius:8px; overflow:hidden; box-shadow:0 1px 8px var(--shadow); }
+th,td{ border-bottom:1px solid var(--border); padding:.5rem .65rem; text-align:left; vertical-align:top; }
+tr:last-child td{ border-bottom:none; }
+thead th{ background:var(--accent); color:#fff; }
+tbody tr:nth-child(even){ background:var(--zebra); }
+.sev{ display:inline-block; min-width:5.4rem; text-align:center; border-radius:999px; padding:.06rem .5rem; font-size:.74rem; font-weight:700; color:#fff; }
+.crit{ background:var(--danger-2); }
+.warn{ background:var(--warn-2); }
+.info{ background:var(--info); }
+.ok{ background:var(--ok-2); }
+.note{ border-left:4px solid var(--accent); background:var(--surface); padding:.7rem 1rem; margin:1rem 0; box-shadow:0 1px 8px var(--shadow); border-radius:0 8px 8px 0; }
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+.chain-tabs{ display:flex; gap:.3rem; margin:.7rem 0 0; border-bottom:2px solid var(--border); flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+.tab-pane{ display:none; }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+/* solution component blocks */
+.blocks{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.7rem; margin:1rem 0; }
+.bk{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.7rem .8rem; box-shadow:0 1px 8px var(--shadow); }
+.bk b{ color:var(--accent); }
+.bk .tag{ font-size:.72rem; color:var(--muted); display:block; margin-top:.25rem; }
+.bk.p1{ border-top:3px solid var(--danger-2); }
+.bk.p2{ border-top:3px solid var(--warn-2); }
+.bk.p3{ border-top:3px solid var(--accent); }
+.bk.p4{ border-top:3px solid var(--info); }
+figure{ margin:1rem 0; }
+figure figcaption{ color:var(--muted); font-size:.84rem; margin-top:.3rem; }
+svg{ max-width:100%; height:auto; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 1px 8px var(--shadow); }
+.legend{ font-size:.8rem; color:var(--muted); margin:.3rem 0 0; }
+.verdict{ font-size:1.05rem; font-weight:700; padding:.6rem .9rem; border-radius:8px; display:inline-block; }
+.verdict.okv{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); }
+.verdict.failv{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn); }
+ul.tight li{ margin:.22rem 0; }
+.muted{ color:var(--muted); }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
+<header>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<h1>Цепочка IDD→SDD: Security Audit Follow-up</h1>
+<p class="sub">Спецификация: <code>docs/superpowers/specs/2026-06-30-security-audit-followup-design.md</code> · проверка: 2026-06-30 · режим: цепочка</p>
+</header>
+<nav class="chain-tabs">
+<label for="tab-intent">Intent</label>
+<label for="tab-spec">Spec</label>
+<label for="tab-plan">Plan</label>
+<label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+<p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+
+<h2>1. Резюме спецификации</h2>
+<p class="sub">Требования по разделам (одно требование на строку) + критерии приёмки. Источник:
+<code>2026-06-30-security-audit-followup-design.md</code>.</p>
+<table>
+<thead><tr><th>Раздел</th><th>ID</th><th>Требование</th><th>Definition of Done / тест</th></tr></thead>
+<tbody>
+<tr><td>Cross-cutting</td><td>X-RL</td><td>Новый модуль <code>security/ratelimit.py</code>: Redis sliding-window <code>RateLimiter.hit(key, limit, window) -&gt; bool</code>, переиспользует process-global Redis.</td><td>Используется SEC-06; покрытие в тестах SEC-06.</td></tr>
+<tr><td>Cross-cutting</td><td>X-BL</td><td>Новый ASGI middleware <code>api/middleware/body_limit.py</code> с hard cap по телу запроса.</td><td>Детали и тесты в SEC-02.</td></tr>
+<tr><td>Cross-cutting</td><td>X-CFG</td><td>Новые поля <code>config.py</code>: <code>metrics_token</code>, <code>login_rate_limit/_window</code>, <code>login_lockout_threshold/_seconds</code>, <code>password_min_length</code>; <code>max_request_bytes</code> становится cap'ом.</td><td>Поля валидируются pydantic-settings; используются в SEC-02/05/06.</td></tr>
+<tr><td>Cross-cutting</td><td>X-AA</td><td>Новый модуль <code>audit/actions.py</code> — константы имён действий.</td><td>Используется SEC-07.</td></tr>
+<tr><td>Phase 1 · SEC-01</td><td>SEC-01</td><td>Helper <code>_require_web_user</code> грузит <code>User</code>, удаляет stale session при отсутствии пользователя; применяется во всех аутентифицированных web GET (вкл. <code>graph_page</code>); <code>_current_uid</code>/<code>_current_user_opt</code> удаляются.</td><td>Тест: создать→войти→удалить→каждая страница 307 на <code>/login</code> И Redis-сессия отсутствует.</td></tr>
+<tr><td>Phase 1 · SEC-02</td><td>SEC-02</td><td>BodySizeLimitMiddleware: <code>413</code> при <code>Content-Length</code> &gt; cap; подсчёт стримленных байт с <code>413</code> при превышении; wire в <code>create_app</code>.</td><td>Тест: тело &gt; cap (с CL) ⇒ 413 до хендлера; chunked &gt; cap ⇒ 413; нормальный upload ОК.</td></tr>
+<tr><td>Phase 2 · SEC-04</td><td>SEC-04</td><td>SSRF IP-pin: <code>validate_url</code> возвращает <code>(host, verified_ip)</code>; <code>safe_get</code> коннектится на verified IP с Host-заголовком и <code>sni_hostname</code>; re-pin на каждом redirect.</td><td>Тест: resolver public→private (rebinding) ⇒ коннект на первый IP / запрос отклонён; allowlist+https-only без изменений.</td></tr>
+<tr><td>Phase 2 · SEC-05</td><td>SEC-05</td><td><code>/metrics</code> за Bearer <code>metrics_token</code> (constant-time); unset ⇒ <code>404</code> (fail closed); Traefik IP-allowlist middleware на пути.</td><td>Тест: с токеном — wrong⇒401, right⇒200+payload; без токена⇒404 на любой запрос.</td></tr>
+<tr><td>Phase 2 · SEC-06</td><td>SEC-06</td><td>Throttle (RateLimiter по IP+email, <code>429</code>+Retry-After); lockout (Redis-счётчик); <code>validate_password_strength</code> (min length + blocklist) в setup/user create/password change.</td><td>Тест: превышение⇒429; lockout до окна; слабый пароль в setup и user create⇒отклонён; сильный принят.</td></tr>
+<tr><td>Phase 3 · SEC-03</td><td>SEC-03</td><td>Dockerfile: COPY <code>uv.lock</code>+src+alembic, <code>uv sync --frozen --no-dev</code>, <code>.venv</code> на PATH.</td><td>N/A (build-time): зелёный билд в CI / <code>docker compose build</code>.</td></tr>
+<tr><td>Phase 3 · OPS-01</td><td>OPS-01</td><td>Fail-fast на missing secret: заменить fallback на required <code>POSTGRES_PASSWORD</code> в 3 местах compose; <code>.env.example</code> — placeholder+комментарий.</td><td>N/A (compose): <code>docker compose config</code> падает без env var.</td></tr>
+<tr><td>Phase 3 · FUNC-01</td><td>FUNC-01</td><td>Web endpoint <code>POST /domains/{id}/sources/bulk</code> возвращает drawer-partial; HTMX в <code>domain.html</code> указывает на него; JSON API остаётся.</td><td>Тест: bulk zip на web endpoint⇒HTML drawer с записью на job; JSON API всё ещё <code>BulkOut</code>.</td></tr>
+<tr><td>Phase 4 · SEC-07</td><td>SEC-07</td><td>Вызовы <code>audit.log.record(...)</code> внутри commit-boundary сервиса на чувствительных операциях; имена из <code>audit/actions.py</code>.</td><td>Тест: каждая операция пишет ровно 1 <code>AuditLog</code> с верными action/user_id/target в той же транзакции.</td></tr>
+<tr><td>Phase 4 · QUAL-01</td><td>QUAL-01</td><td>Добавить <code>.dockerignore</code> (pycache, *.pyc, .venv, tests, .git, docs); документировать cleanup; gitignore сохранить.</td><td>N/A: размер build-контекста / отсутствие байткода в образе.</td></tr>
+<tr><td>Phase 4 · Bandit</td><td>BANDIT</td><td>Triage: B608 (query_cache, cypher) ⇒ nosec+обоснование/typing wrapper; B105 i18n ⇒ nosec; B110 ⇒ логировать; B101 ⇒ заменить на raise.</td><td>Тест там, где правится smell (B110 log, B101 raise); nosec-only без теста.</td></tr>
+<tr><td>Phase 4 · Coverage</td><td>COV</td><td>Negative/branch тесты для перечисленных low-файлов (readiness 24%, worker 54%, maintenance 59%, web/routes 60%, setup 60%, users 65%, jobs/tasks 67%, articles 68%); опционально branch=true.</td><td>Покрытие «measurably increased», без регрессии общего покрытия.</td></tr>
+</tbody>
+</table>
+
+<h3>Критерии приёмки (Acceptance criteria)</h3>
+<ul class="tight">
+<li>Все 4 фазы смержены; <code>ruff check .</code>, <code>mypy src</code>, <code>pytest -q</code> зелёные на каждом PR.</li>
+<li>У каждого finding — regression-тест, падающий до фикса и проходящий после.</li>
+<li>Обе HIGH закрыты; шесть MED усилены; обе LOW решены.</li>
+<li>Bandit re-run: реальные smells исправлены, остальное с обоснованным <code># nosec</code>.</li>
+<li>Покрытие перечисленных модулей измеримо выросло; нет регрессии общего покрытия.</li>
+</ul>
+
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>Компоненты решения (новые/изменённые модули по фазам)</h3>
+<div class="blocks">
+<div class="bk p2"><b>security/ratelimit.py</b> — Redis sliding-window limiter<span class="tag">new · cross-cutting → SEC-06</span></div>
+<div class="bk p1"><b>api/middleware/body_limit.py</b> — ASGI hard body cap (413)<span class="tag">new · SEC-02</span></div>
+<div class="bk p2"><b>/metrics guard</b> — Bearer token (constant-time), 404 fail-closed<span class="tag">main.py · SEC-05</span></div>
+<div class="bk p1"><b>_require_web_user</b> — load user, evict stale session<span class="tag">api/web/routes.py · SEC-01</span></div>
+<div class="bk p2"><b>SSRF IP-pin</b> — validate_url→(host,ip); safe_get pins IP + SNI<span class="tag">security/ssrf.py · SEC-04</span></div>
+<div class="bk p2"><b>validate_password_strength</b> + throttle/lockout<span class="tag">security/passwords.py + auth/setup · SEC-06</span></div>
+<div class="bk p3"><b>web bulk endpoint</b> — POST /domains/{id}/sources/bulk → drawer<span class="tag">api/web/routes.py · FUNC-01</span></div>
+<div class="bk p4"><b>audit/actions.py + record() wiring</b> — в commit-boundary<span class="tag">new + сервисы · SEC-07</span></div>
+<div class="bk p3"><b>Dockerfile / docker-compose / .dockerignore</b> — uv.lock build, PG fail-fast, build-context<span class="tag">SEC-03 · OPS-01 · QUAL-01</span></div>
+</div>
+
+<figure>
+<svg viewBox="0 0 940 470" role="img" aria-label="Граф зависимостей требований">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
+</marker>
+<filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+<feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="var(--shadow)"></feDropShadow>
+</filter>
+</defs>
+<style>
+.n rect{ fill:var(--surface); stroke:var(--border); stroke-width:1.4; rx:9; filter:url(#ds); }
+.n text{ fill:var(--fg); font:600 12px system-ui; }
+.n .sm{ fill:var(--muted); font:11px system-ui; }
+.cc rect{ stroke:var(--accent); stroke-dasharray:4 3; }
+.e{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arr); }
+.el{ fill:var(--muted); font:10px system-ui; }
+</style>
+<!-- cross-cutting roots -->
+<g class="n cc"><rect x="20" y="20" width="150" height="46"></rect><text x="34" y="40">config.py fields</text><text x="34" y="57" class="sm">metrics_token, limits…</text></g>
+<g class="n cc"><rect x="20" y="100" width="150" height="46"></rect><text x="34" y="120">ratelimit.py</text><text x="34" y="137" class="sm">Redis sliding-window</text></g>
+<g class="n cc"><rect x="20" y="180" width="150" height="46"></rect><text x="34" y="200">audit/actions.py</text><text x="34" y="217" class="sm">action constants</text></g>
+<!-- requirement nodes -->
+<g class="n"><rect x="270" y="14" width="150" height="40"></rect><text x="284" y="38">SEC-02 body limit</text></g>
+<g class="n"><rect x="270" y="74" width="150" height="40"></rect><text x="284" y="98">SEC-05 /metrics auth</text></g>
+<g class="n"><rect x="270" y="134" width="150" height="40"></rect><text x="284" y="158">SEC-06 brute/policy</text></g>
+<g class="n"><rect x="270" y="194" width="150" height="40"></rect><text x="284" y="218">SEC-07 audit wiring</text></g>
+<g class="n"><rect x="270" y="254" width="150" height="40"></rect><text x="284" y="278">SEC-01 web authz</text></g>
+<g class="n"><rect x="270" y="314" width="150" height="40"></rect><text x="284" y="338">SEC-04 SSRF pin</text></g>
+<!-- phase 3 / build cluster -->
+<g class="n"><rect x="520" y="44" width="150" height="40"></rect><text x="534" y="68">SEC-03 uv.lock build</text></g>
+<g class="n"><rect x="520" y="104" width="150" height="40"></rect><text x="534" y="128">QUAL-01 .dockerignore</text></g>
+<g class="n"><rect x="520" y="164" width="150" height="40"></rect><text x="534" y="188">OPS-01 PG fail-fast</text></g>
+<g class="n"><rect x="520" y="224" width="150" height="40"></rect><text x="534" y="248">FUNC-01 web bulk</text></g>
+<!-- coverage/bandit sink -->
+<g class="n"><rect x="760" y="120" width="150" height="46"></rect><text x="774" y="140">Coverage + Bandit</text><text x="774" y="157" class="sm">regression per finding</text></g>
+<!-- edges from cross-cutting -->
+<path class="e" d="M170,40 C220,42 230,34 270,34"></path>
+<path class="e" d="M170,55 C215,80 235,90 270,94"></path>
+<path class="e" d="M170,62 C210,130 240,150 270,154"></path>
+<path class="e" d="M170,118 C215,135 240,150 270,150"></path>
+<path class="e" d="M170,200 C215,210 240,214 270,214"></path>
+<!-- SEC-03 -> QUAL-01 (reinforces) -->
+<path class="e" d="M595,84 L595,104"></path><text x="600" y="98" class="el">reinforces</text>
+<!-- requirements -> coverage/bandit sink -->
+<path class="e" d="M420,34 C620,40 700,110 760,128"></path>
+<path class="e" d="M420,214 C640,210 700,150 760,150"></path>
+<path class="e" d="M670,144 C710,150 730,150 760,150"></path>
+</svg>
+<figcaption>Граф зависимостей: cross-cutting модули (пунктир) питают требования фаз; SEC-03 усиливает QUAL-01; все findings сходятся к покрытию/bandit.
+Стрелка A→B = «B зависит от A».</figcaption>
+</figure>
+
+<h3>Матрица покрытия «задача → требование»</h3>
+<table>
+<thead><tr><th>Задача аудита</th><th>Покрывающее требование</th><th>Статус</th></tr></thead>
+<tbody>
+<tr><td>SEC-01 stale web session authz</td><td>SEC-01 (<code>_require_web_user</code>)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>SEC-02 upload body memory limit</td><td>SEC-02 (BodySizeLimitMiddleware)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>SEC-03 Docker lockfile build</td><td>SEC-03 (<code>uv sync --frozen</code>)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>SEC-04 SSRF DNS TOCTOU</td><td>SEC-04 (IP-pin + SNI)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>SEC-05 /metrics auth</td><td>SEC-05 (Bearer + Traefik allowlist)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>SEC-06 login/setup rate-limit + password policy</td><td>SEC-06 (throttle/lockout/strength)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>SEC-07 audit-log wiring</td><td>SEC-07 (<code>record()</code> в commit-boundary)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>OPS-01 weak Postgres password default</td><td>OPS-01 (fail-fast secret)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>FUNC-01 bulk-upload UI/API contract</td><td>FUNC-01 (web bulk endpoint)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>QUAL-01 bytecode hygiene</td><td>QUAL-01 (<code>.dockerignore</code>)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>bandit triage</td><td>Bandit triage (B608/B105/B110/B101)</td><td><span class="sev ok">покрыто</span></td></tr>
+<tr><td>test-coverage hardening</td><td>Coverage hardening</td><td><span class="sev ok">покрыто</span></td></tr>
+</tbody>
+</table>
+<p class="legend">Каждая из 12 задач закрыта ≥1 требованием; «лишних» требований без задачи нет. Все cross-cutting модули привязаны к конкретным findings.</p>
+
+<h2>3. Результаты проверки</h2>
+
+<h3>Статус по фазам</h3>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Findings (open)</th></tr></thead>
+<tbody>
+<tr><td>Structure (структура)</td><td><span class="sev ok">passed</span></td><td>2 WARNING (F-001, F-002)</td></tr>
+<tr><td>Coverage (покрытие)</td><td><span class="sev ok">passed</span></td><td>0 — все 12 задач покрыты, лишних требований нет</td></tr>
+<tr><td>Clarity (ясность)</td><td><span class="sev ok">passed</span></td><td>1 WARNING (F-003), 2 INFO (F-004, F-005)</td></tr>
+<tr><td>Consistency (согласованность)</td><td><span class="sev ok">passed</span></td><td>первый прогон — нет прежних хэшей, baseline зафиксирован</td></tr>
+</tbody>
+</table>
+<p class="legend">Фаза = <code>passed</code>, если нет открытого CRITICAL. Открытых CRITICAL: 0.</p>
+
+<h3>Таблица findings</h3>
+<table>
+<thead><tr><th>ID</th><th>Фаза</th><th>Severity</th><th>Раздел</th><th>Описание</th><th>Исправление</th></tr></thead>
+<tbody>
+<tr>
+<td>F-001</td><td>structure</td><td><span class="sev warn">WARNING</span></td><td>SEC-02</td>
+<td>Ссылка «Phase 3 ops notes» ведёт в никуда: в Phase 3 нет подраздела ops-notes и нигде не документируется лимит Traefik <code>maxRequestBodyBytes</code>.</td>
+<td>Добавить подраздел «Ops notes» в Phase 3 либо перенести заметку в SEC-02 и убрать forward-ссылку.</td>
+</tr>
+<tr>
+<td>F-002</td><td>structure</td><td><span class="sev warn">WARNING</span></td><td>OPS-01</td>
+<td>Дизайн предписывает значение compose с фрагментом, который не является валидным синтаксисом интерполяции (артефакт маскирования, перенесённый из исходного HTML-аудита). Реальный дефолт в <code>docker-compose.yml</code> использует оператор подстановки по умолчанию. Как написано, дизайн нельзя реализовать дословно.</td>
+<td>Указать корректную fail-fast форму через оператор <code>:?</code> (compose завершается ошибкой, если переменная не задана), в строках 34/157/189.</td>
+</tr>
+<tr>
+<td>F-003</td><td>clarity</td><td><span class="sev warn">WARNING</span></td><td>SEC-06</td>
+<td>Password-policy заявлена для «password change», но ни Problem, ни cross-cutting не называют endpoint смены пароля, а тесты SEC-06 проверяют только setup и user create.</td>
+<td>Назвать endpoint/сервис смены пароля (или убрать из scope) и добавить его в список тестов SEC-06.</td>
+</tr>
+<tr>
+<td>F-004</td><td>clarity</td><td><span class="sev info">INFO</span></td><td>Coverage hardening</td>
+<td>Неизмеримые формулировки: «Optionally enable branch=true» и «measurably increased» без целевых процентов по модулям.</td>
+<td>Задать конкретные цели/дельту покрытия на модуль; сделать branch-coverage чётким yes/no.</td>
+</tr>
+<tr>
+<td>F-005</td><td>clarity</td><td><span class="sev info">INFO</span></td><td>SEC-05</td>
+<td>Дрейф формулировок: cross-cutting говорит «unset ⇒ endpoint disabled» без статуса, тело SEC-05 — «404». Не противоречие, но рассинхрон.</td>
+<td>Согласовать описание <code>metrics_token</code> в cross-cutting с телом SEC-05 («unset ⇒ 404»).</td>
+</tr>
+</tbody>
+</table>
+
+<h3>Сводка</h3>
+<div class="note">
+<b>Открытых CRITICAL:</b> 0 · <b>Открытых WARNING:</b> 3 (F-001, F-002, F-003) · <b>INFO:</b> 2 (F-004, F-005).<br>
+Все 12 задач аудита покрыты; противоречий между требованиями не найдено; плейсхолдеров (TODO/TBD/???/FIXME) нет; дублей заголовков нет.
+</div>
+
+<h3>Итоговый вердикт</h3>
+<p><span class="verdict okv">OK — 0 critical open, все 4 фазы passed</span></p>
+<p class="legend">Открытые WARNING/INFO не блокируют вердикт по правилам алгоритма (фаза passed при отсутствии открытого CRITICAL), но рекомендуются к устранению до перехода к плану.</p>
+
+<h3>Цепочка (intent → spec)</h3>
+<table>
+<thead><tr><th>Звено</th><th>Значение</th></tr></thead>
+<tbody>
+<tr><td>intent</td><td><code>null</code> — intent-документ не привязан (этап ещё не проверен)</td></tr>
+<tr><td>spec</td><td><code>2026-06-30-security-audit-followup-design.md</code> · spec_hash <code>e9f52602801d4640</code> · last_run 2026-06-30</td></tr>
+</tbody>
+</table>
+
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+
+<h2>1. Резюме плана</h2>
+<p class="sub">14 задач плана (по одной строке) с их Definition of Done. Источник:
+<code>2026-06-30-security-audit-followup.md</code> · plan_hash <code>76e2f88686ddafcd</code> · spec_hash <code>e2661b83be9c570a</code> · last_run 2026-06-30.</p>
+<table>
+<thead><tr><th>Задача</th><th>Требование</th><th>Суть</th><th>Definition of Done (проверка)</th></tr></thead>
+<tbody>
+<tr><td>T1</td><td>SEC-01</td><td>Helper <code>_require_web_user</code>; все web GET отклоняют удалённых юзеров + evict stale session.</td><td>Тест <code>test_web_auth_stale_session</code>: удалить юзера ⇒ <code>/</code> даёт 307 на <code>/login</code> И Redis-сессия отсутствует; suite + ruff + mypy зелёные.</td></tr>
+<tr><td>T2</td><td>SEC-02</td><td><code>BodySizeLimitMiddleware</code> (ASGI): 413 по <code>Content-Length</code> и по стримленным байтам; wire в <code>create_app</code>.</td><td>Тест <code>test_body_limit</code>: тело &gt; cap ⇒ 413; upload под cap ⇒ ОК; ruff + mypy.</td></tr>
+<tr><td>T3</td><td>SEC-04</td><td><code>validate_url -&gt; (host, ip)</code>; <code>safe_get</code> коннектится на verified IP с Host+SNI, re-pin на redirect.</td><td>Тест <code>test_ssrf_pin</code>: <code>url_host==ip</code>, <code>Host</code> и <code>sni==example.com</code>, private ⇒ <code>SsrfRejected</code>; mypy + ruff.</td></tr>
+<tr><td>T4</td><td>SEC-05</td><td><code>metrics_token</code> в config; <code>/metrics</code> за Bearer (constant-time), unset ⇒ 404; Traefik IP-allowlist.</td><td>Тест <code>test_metrics_auth</code>: unset⇒404, wrong⇒401, right⇒200+payload; ruff + mypy.</td></tr>
+<tr><td>T5</td><td>SEC-06a</td><td><code>RateLimiter.hit</code> (sliding-window) + <code>LoginGuard</code> (lockout); config-поля лимитов.</td><td>Тест <code>test_ratelimit</code>: блок после лимита; lock после threshold, reset снимает; ruff + mypy.</td></tr>
+<tr><td>T6</td><td>SEC-06b</td><td><code>validate_password_strength</code> + <code>WeakPassword</code>; enforce в <code>setup.complete</code> и <code>users.create</code>.</td><td>Тесты unit+API: короткий/частый пароль ⇒ 422; сильный принят; чинит существующие тесты со слабыми паролями.</td></tr>
+<tr><td>T7</td><td>SEC-06c</td><td>Throttle + lockout в <code>routers/auth.py::login</code> (RateLimiter+LoginGuard по IP+email).</td><td>Тест <code>test_login_throttle</code>: повтор логинов ⇒ 429; нормальный логин ОК; ruff + mypy.</td></tr>
+<tr><td>T8</td><td>SEC-03</td><td>Dockerfile: COPY <code>uv.lock</code>+src+alembic, <code>uv sync --frozen --no-dev</code>, <code>.venv</code> на PATH.</td><td><code>docker compose build api</code> + <code>which uvicorn arq alembic</code> печатает 3 пути в <code>.venv/bin</code>.</td></tr>
+<tr><td>T9</td><td>OPS-01</td><td><code>POSTGRES_PASSWORD</code> ⇒ required-var оператор <code>:?</code> в 3 местах compose; <code>.env.example</code> placeholder.</td><td><code>env -u POSTGRES_PASSWORD docker compose config</code> ⇒ ненулевой выход с ошибкой про <code>POSTGRES_PASSWORD</code>.</td></tr>
+<tr><td>T10</td><td>FUNC-01</td><td>Web <code>POST /domains/{id}/sources/bulk</code> ⇒ <code>_jobs_drawer.html</code>; HTMX в <code>domain.html</code> на web endpoint.</td><td>Тест <code>test_web_bulk_upload</code>: 200 + <code>text/html</code> + <code>class="job"</code> ×2; JSON API не тронут.</td></tr>
+<tr><td>T11</td><td>SEC-07</td><td><code>audit/actions.py</code> константы; <code>record(...)</code> в commit-boundary: login/logout/setup/user/api-key/provider/ingest-start.</td><td>Тест <code>test_audit_log</code>: <code>user.create</code> пишет +1 <code>AuditLog</code>-строку; ruff + mypy.</td></tr>
+<tr><td>T12</td><td>QUAL-01</td><td>Добавить <code>.dockerignore</code> (pycache, *.pyc, .venv, tests, docs, .git…).</td><td>Очистить pycache + <code>docker compose build api</code> ⇒ билд ОК, нет байткода в src/tests/alembic.</td></tr>
+<tr><td>T13</td><td>BANDIT</td><td>Triage: B608 (query_cache, cypher+guard+test), B105 (i18n) ⇒ nosec; B101 ⇒ raise; B110 ⇒ логировать.</td><td><code>bandit -r src</code>: med/low падают; <code>test_cypher_guard</code> + ruff + mypy зелёные.</td></tr>
+<tr><td>T14</td><td>COVERAGE</td><td><code>branch=true</code> в pyproject; тесты readiness/worker/maintenance/articles/setup/users; ≥80% на перечисленных.</td><td><code>coverage report --show-missing</code>: каждый модуль ≥80%; нет регрессии общего покрытия.</td></tr>
+</tbody>
+</table>
+
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<h3>Граф зависимостей между задачами</h3>
+<figure>
+<svg viewBox="0 0 940 430" role="img" aria-label="Граф зависимостей задач плана">
+<defs>
+<marker id="arrp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--line)"></path>
+</marker>
+<filter id="dsp" x="-20%" y="-20%" width="140%" height="140%">
+<feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="var(--shadow)"></feDropShadow>
+</filter>
+</defs>
+<style>
+.np rect{ fill:var(--surface); stroke:var(--border); stroke-width:1.4; rx:9; filter:url(#dsp); }
+.np text{ fill:var(--fg); font:600 12px system-ui; }
+.np .sm{ fill:var(--muted); font:10px system-ui; }
+.ep{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arrp); }
+.elp{ fill:var(--muted); font:10px system-ui; }
+.cf rect{ stroke:var(--warn-2); stroke-width:1.8; }
+</style>
+<!-- cross-cutting providers -->
+<g class="np"><rect x="20" y="170" width="150" height="46"></rect><text x="34" y="190">T5 ratelimit.py</text><text x="34" y="206" class="sm">RateLimiter + LoginGuard</text></g>
+<!-- consumers -->
+<g class="np"><rect x="270" y="100" width="150" height="44"></rect><text x="284" y="120">T6 password policy</text><text x="284" y="136" class="sm">config password_min</text></g>
+<g class="np cf"><rect x="270" y="170" width="150" height="46"></rect><text x="284" y="190">T7 login throttle</text><text x="284" y="206" class="sm">login() rewrite</text></g>
+<g class="np cf"><rect x="270" y="250" width="150" height="46"></rect><text x="284" y="270">T11 audit wiring</text><text x="284" y="286" class="sm">login() + сервисы</text></g>
+<!-- config cluster -->
+<g class="np"><rect x="20" y="80" width="150" height="44"></rect><text x="34" y="100">T4 /metrics auth</text><text x="34" y="116" class="sm">config metrics_token</text></g>
+<!-- file-overlap cluster nodes -->
+<g class="np"><rect x="540" y="30" width="160" height="44"></rect><text x="554" y="50">T1 web authz</text><text x="554" y="66" class="sm">web/routes.py</text></g>
+<g class="np"><rect x="540" y="92" width="160" height="44"></rect><text x="554" y="112">T10 web bulk</text><text x="554" y="128" class="sm">web/routes.py</text></g>
+<g class="np"><rect x="540" y="160" width="160" height="44"></rect><text x="554" y="180">T2 body limit</text><text x="554" y="196" class="sm">main.py</text></g>
+<g class="np"><rect x="540" y="222" width="160" height="44"></rect><text x="554" y="242">T4 /metrics</text><text x="554" y="258" class="sm">main.py</text></g>
+<g class="np"><rect x="540" y="300" width="160" height="44"></rect><text x="554" y="320">T8/T9/T12 Docker</text><text x="554" y="336" class="sm">Dockerfile/compose/.dockerignore</text></g>
+<g class="np"><rect x="770" y="160" width="150" height="46"></rect><text x="784" y="180">T13 + T14</text><text x="784" y="196" class="sm">bandit + coverage</text></g>
+<!-- dependency edges (B depends on A => A->B) -->
+<path class="ep" d="M170,188 C210,180 240,178 270,184"></path><text x="178" y="178" class="elp">consumes</text>
+<path class="ep" d="M170,180 C205,150 235,130 270,126"></path><text x="178" y="150" class="elp">password_min (T5 cfg)</text>
+<!-- T7 -> T11 conflict edge on login() -->
+<path class="ep cf" d="M345,216 L345,250"></path><text x="350" y="238" class="elp">login() overlap</text>
+<!-- everything feeds coverage/bandit -->
+<path class="ep" d="M700,52 C740,90 750,150 770,176"></path>
+<path class="ep" d="M700,184 L770,184"></path>
+<path class="ep" d="M700,322 C745,300 750,230 770,200"></path>
+<path class="ep" d="M420,275 C560,300 680,250 770,200"></path>
+</svg>
+<figcaption>Стрелка A→B = «B зависит от A». T7 потребляет <code>RateLimiter</code>/<code>LoginGuard</code> из T5; T6 потребляет поле <code>password_min_length</code>, добавленное в config шагом T5. T7 и T11 редактируют один хендлер <code>login()</code> (оранжевая связь — пересечение, см. F-003). Все findings/изменения сходятся к T13 (bandit) и T14 (coverage).</figcaption>
+</figure>
+
+<h3>Матрица пересечений (задачи, трогающие один файл)</h3>
+<table>
+<thead><tr><th>Файл</th><th>Задачи</th><th>Риск пересечения</th></tr></thead>
+<tbody>
+<tr><td><code>src/paw/config.py</code></td><td>T4, T5, T6</td><td>Низкий — добавляют разные поля; порядок T4→T5→T6 последовательный.</td></tr>
+<tr><td><code>src/paw/main.py</code></td><td>T2, T4</td><td>Низкий — T2 добавляет <code>add_middleware</code>, T4 заменяет <code>/metrics</code> handler; разные участки.</td></tr>
+<tr><td><code>src/paw/api/web/routes.py</code></td><td>T1, T10</td><td>Средний — T1 переписывает guard-хелпер + GET-роуты, T10 добавляет POST bulk; T10 опирается на хелперы/импорты после T1.</td></tr>
+<tr><td><code>src/paw/api/routers/auth.py</code></td><td>T7, T11</td><td><b>Средний</b> — оба правят <code>login()</code>; T11 должен ложиться поверх переписанного T7 хендлера (см. F-003).</td></tr>
+<tr><td><code>src/paw/security/passwords.py</code></td><td>T6</td><td>Нет — единственная задача.</td></tr>
+<tr><td><code>src/paw/security/ssrf.py</code></td><td>T3</td><td>Нет — единственная задача.</td></tr>
+<tr><td><code>src/paw/services/users.py</code></td><td>T6, T11, T13</td><td>Средний — T6 добавляет policy-проверку, T11 actor_id+audit, T13 заменяет <code>assert</code> на raise (:46); три разных участка одной функции/файла.</td></tr>
+<tr><td><code>src/paw/services/setup.py</code></td><td>T6, T11</td><td>Низкий — T6 policy перед hash, T11 record перед commit.</td></tr>
+<tr><td><code>Dockerfile</code> / <code>docker-compose.yml</code> / <code>.dockerignore</code></td><td>T8, T9, T12</td><td>Низкий — T4 тоже трогает compose (metrics router); все разные блоки.</td></tr>
+<tr><td><code>docker-compose.yml</code></td><td>T4, T9</td><td>Низкий — T4 добавляет metrics-router labels, T9 правит <code>POSTGRES_PASSWORD</code> в 3 местах; разные участки.</td></tr>
+<tr><td><code>pyproject.toml</code></td><td>T14</td><td>Нет — единственная задача.</td></tr>
+</tbody>
+</table>
+<p class="legend">Жёстких конфликтов (две задачи правят одну строку) нет. Единственный участок риска — <code>login()</code> (T7→T11); порядок выполнения корректен, но план не помечает наложение явно (F-003).</p>
+
+<h2>3. Результаты проверки</h2>
+
+<h3>Статус по фазам</h3>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Findings (open)</th></tr></thead>
+<tbody>
+<tr><td>Structure (структура)</td><td><span class="sev ok">passed</span></td><td>0 — нет плейсхолдеров, нумерация 1–14 без пропусков/дублей, шаги по задачам последовательны</td></tr>
+<tr><td>Coverage (покрытие)</td><td><span class="sev ok">passed</span></td><td>2 WARNING (F-001, F-002) — частичное покрытие SEC-06/SEC-07; нет открытого CRITICAL</td></tr>
+<tr><td>Dependencies (зависимости)</td><td><span class="sev ok">passed</span></td><td>1 INFO (F-003) — пересечение T7/T11 на <code>login()</code>; порядок корректен</td></tr>
+<tr><td>Verifiability (проверяемость)</td><td><span class="sev ok">passed</span></td><td>1 INFO (F-004) — T14 Step 4 самый слабый DoD; цель ≥80% задана</td></tr>
+<tr><td>Consistency (согласованность)</td><td><span class="sev ok">passed</span></td><td>первый прогон — нет прежних хэшей, baseline зафиксирован</td></tr>
+</tbody>
+</table>
+<p class="legend">Фаза = <code>passed</code>, если нет открытого CRITICAL. Открытых CRITICAL: 0.</p>
+
+<h3>Таблица findings</h3>
+<table>
+<thead><tr><th>ID</th><th>Фаза</th><th>Severity</th><th>Раздел</th><th>Описание</th><th>Исправление</th></tr></thead>
+<tbody>
+<tr>
+<td>F-001</td><td>coverage</td><td><span class="sev warn">WARNING</span></td><td>Task 7 / SEC-06</td>
+<td>Spec SEC-06 предписывает throttle на login <b>и setup</b> («RateLimiter applied to login and setup»). План троттлит только <code>POST /auth/login</code> (T7); ни один шаг не добавляет RateLimiter в <code>routers/setup.py::complete</code>. Требование setup-throttle не покрыто.<br><span class="muted">fragment: «Throttle (RateLimiter по IP+email, 429+Retry-After)»</span></td>
+<td>Добавить шаг (в T7 или T6), который вешает RateLimiter на <code>setup.complete</code> по IP + тест на 429; либо сузить spec до login-only.</td>
+</tr>
+<tr>
+<td>F-002</td><td>coverage</td><td><span class="sev warn">WARNING</span></td><td>Task 11 / SEC-07</td>
+<td>Spec SEC-07 называет audit-точки «ingest start / <b>rollback / delete</b>», но T11 объявляет только <code>INGEST_START</code> и подключает только <code>jobs.start_ingest</code>. Нет констант/wiring для ingest rollback и delete — 2 из 3 ingest-точек не покрыты.<br><span class="muted">fragment: «INGEST_START = "ingest.start"»</span></td>
+<td>Добавить <code>INGEST_ROLLBACK</code>/<code>INGEST_DELETE</code> и подключить их в соответствующих сервисах rollback/delete; либо сузить spec до start-only.</td>
+</tr>
+<tr>
+<td>F-003</td><td>dependencies</td><td><span class="sev info">INFO</span></td><td>Task 11 / Task 7</td>
+<td>T7 полностью переписывает <code>routers/auth.py::login</code> (throttle/lockout), а T11 затем снова правит тот же хендлер (добавляя LOGIN-audit). Оба меняют одну функцию; T11 должен лечь поверх тела из T7. Порядок верный (T7&lt;T11), но план не помечает наложение.<br><span class="muted">fragment: «Rewrite the <code>login</code> handler in <code>src/paw/api/routers/auth.py</code>»</span></td>
+<td>Добавить в T11 Step 4 пометку, что LOGIN-record вставляется в уже-троттленный хендлер из T7 (после <code>guard.reset</code> / перед возвратом <code>LoginResponse</code>).</td>
+</tr>
+<tr>
+<td>F-004</td><td>verifiability</td><td><span class="sev info">INFO</span></td><td>Task 14 / Step 4</td>
+<td>Шаг «Measure and fill the largest remaining gaps» задаёт чёткую цель ≥80% и команды coverage, но per-module работа открыта («add a focused test covering the specific missed lines»). Набор тестов зависит от прогона ⇒ DoD проверяем только после выполнения. Самый слабый DoD в плане, но допустимо.<br><span class="muted">fragment: «this step closes the rest to the ≥80% target.»</span></td>
+<td>Опционально: перечислить конкретные тест-функции на модуль (кандидаты уже названы: articles.rollback, maintenance start_*, setup 409, users last-admin 409).</td>
+</tr>
+</tbody>
+</table>
+
+<h3>Сводка</h3>
+<div class="note">
+<b>Открытых CRITICAL:</b> 0 · <b>Открытых WARNING:</b> 2 (F-001, F-002) · <b>INFO:</b> 2 (F-003, F-004).<br>
+Структура чистая: плейсхолдеров (TODO/TBD/???/FIXME) нет, задачи 1–14 без пропусков/дублей, шаги по задачам последовательны, дублей заголовков нет.
+Все 12 требований spec имеют ≥1 покрывающую задачу; лишних задач без требования нет (F-001/F-002 — частичное покрытие внутри SEC-06/SEC-07, не отсутствие). Артефакты, потребляемые позже, создаются раньше (T5→T7, T5-config→T6); сигнатуры <code>record()</code>, <code>start_ingest</code>, <code>upload_bulk</code>, имена сервисных методов сверены с реальным исходником и совпадают.
+</div>
+
+<h3>Итоговый вердикт</h3>
+<p><span class="verdict okv">OK — 0 critical open, все 5 фаз passed</span></p>
+<p class="legend">Открытые WARNING/INFO не блокируют вердикт по правилам алгоритма (фаза passed при отсутствии открытого CRITICAL), но F-001/F-002 рекомендуются к устранению до исполнения плана: иначе SEC-06 (setup throttle) и SEC-07 (ingest rollback/delete) останутся частично нереализованными относительно spec.</p>
+
+<h3>Цепочка (intent → spec → plan)</h3>
+<table>
+<thead><tr><th>Звено</th><th>Значение</th></tr></thead>
+<tbody>
+<tr><td>intent</td><td><code>null</code> — intent-документ не привязан</td></tr>
+<tr><td>spec</td><td><code>2026-06-30-security-audit-followup-design.md</code> · spec_hash <code>e2661b83be9c570a</code></td></tr>
+<tr><td>plan</td><td><code>2026-06-30-security-audit-followup.md</code> · plan_hash <code>76e2f88686ddafcd</code> · last_run 2026-06-30</td></tr>
+</tbody>
+</table>
+
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+
+<h2>1. Резюме сверки</h2>
+<p class="sub">Сверка результатов исполнения плана с цепочкой intent → spec → plan против git diff.</p>
+<table>
+<thead><tr><th>Документ</th><th>Путь</th><th>Состояние</th></tr></thead>
+<tbody>
+<tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-30-security-audit-followup.md</code></td><td>plan_hash <code>1cced2f470425a5d</code> (совпадает с review-блоком — тело плана не менялось)</td></tr>
+<tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-30-security-audit-followup-design.md</code></td><td>spec_hash <code>e2661b83be9c570a</code></td></tr>
+<tr><td>Intent</td><td><code>null</code></td><td>intent-документ не привязан (этап n/a)</td></tr>
+<tr><td>Diff base</td><td><code>git diff master...HEAD</code> (merge-base <code>939c6bc</code>)</td><td>72 файла изменено, +5137 / −177. <code>git diff HEAD</code> пуст — вся работа закоммичена в ветке <code>dev-security-audit-followup</code>.</td></tr>
+</tbody>
+</table>
+<div class="note"><b>Почему база — master, а не HEAD.</b> Незакоммиченных изменений нет: все 14 задач закоммичены в ветку. Поэтому сверка ведётся против точки ветвления (<code>master</code> = merge-base <code>939c6bc</code>), а не против пустого <code>git diff HEAD</code>.</div>
+
+<h2>2. Результаты проверки</h2>
+
+<h3>Покрытие шагов плана (по задачам)</h3>
+<table>
+<thead><tr><th>Статус</th><th>Кол-во</th></tr></thead>
+<tbody>
+<tr><td><span class="sev ok">DONE</span></td><td>14 из 14 задач</td></tr>
+<tr><td><span class="sev warn">PARTIAL</span></td><td>0</td></tr>
+<tr><td><span class="sev crit">MISSING</span></td><td>0</td></tr>
+</tbody>
+</table>
+
+<table>
+<thead><tr><th>Задача</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+<tbody>
+<tr><td>T1 · SEC-01 web authz</td><td><span class="sev ok">DONE</span></td><td><code>api/web/routes.py</code> (+198), <code>tests/api/test_web_auth_stale_session.py</code> (+85)</td></tr>
+<tr><td>T2 · SEC-02 body limit</td><td><span class="sev ok">DONE</span></td><td><code>api/middleware/body_limit.py</code> (+99), <code>main.py</code> (+21), <code>tests/api/test_body_limit.py</code> (+188)</td></tr>
+<tr><td>T3 · SEC-04 SSRF pin</td><td><span class="sev ok">DONE</span></td><td><code>security/ssrf.py</code> (+54), <code>tests/unit/test_ssrf_pin.py</code> (+171), <code>test_ssrf.py</code> (+70)</td></tr>
+<tr><td>T4 · SEC-05 /metrics auth</td><td><span class="sev ok">DONE</span></td><td><code>config.py</code>, <code>main.py</code>, <code>docker-compose.yml</code> (+26), <code>.env.example</code>, <code>tests/api/test_metrics_auth.py</code> (+53)</td></tr>
+<tr><td>T5 · SEC-06a ratelimit</td><td><span class="sev ok">DONE</span></td><td><code>security/ratelimit.py</code> (+95), <code>config.py</code>, <code>tests/integration/test_ratelimit.py</code> (+57)</td></tr>
+<tr><td>T6 · SEC-06b password policy</td><td><span class="sev ok">DONE</span></td><td><code>security/passwords.py</code> (+42), <code>services/setup.py</code>, <code>services/users.py</code>, <code>test_password_policy.py</code> (+22), <code>test_user_create_password_policy.py</code> (+39)</td></tr>
+<tr><td>T7 · SEC-06c login+setup throttle</td><td><span class="sev ok">DONE</span></td><td><code>routers/auth.py</code> (+74), <code>routers/setup.py</code> (+22, throttle подключён :47-53), <code>test_login_throttle.py</code> (+75), <code>test_setup_throttle.py</code> (+29) — закрывает прежний F-001</td></tr>
+<tr><td>T8 · SEC-03 uv.lock build</td><td><span class="sev ok">DONE</span></td><td><code>Dockerfile</code> (+6)</td></tr>
+<tr><td>T9 · OPS-01 PG fail-fast</td><td><span class="sev ok">DONE</span></td><td><code>docker-compose.yml</code>, <code>.env.example</code></td></tr>
+<tr><td>T10 · FUNC-01 web bulk drawer</td><td><span class="sev ok">DONE</span></td><td><code>templates/_jobs_drawer.html</code> (+8), <code>web/routes.py</code>, <code>domain.html</code> (+4), <code>test_web_bulk_upload.py</code> (+72)</td></tr>
+<tr><td>T11 · SEC-07 audit wiring</td><td><span class="sev ok">DONE</span></td><td><code>audit/actions.py</code> (+13), <code>routers/auth.py</code>, <code>routers/users.py</code>, сервисы <code>setup/users/api_keys/provider_settings/jobs/articles</code>, <code>test_audit_log.py</code> (+315); <code>INGEST_ROLLBACK</code> подключён <code>articles.py:139</code> — закрывает прежний F-002</td></tr>
+<tr><td>T12 · QUAL-01 .dockerignore</td><td><span class="sev ok">DONE</span></td><td><code>.dockerignore</code> (+21)</td></tr>
+<tr><td>T13 · Bandit triage</td><td><span class="sev ok">DONE</span></td><td><code>query_cache.py</code>, <code>graph/age/cypher.py</code>, <code>i18n.py</code>, <code>providers/structured.py</code>, B110-сайты (<code>langfuse_client.py</code>, <code>worker.py</code>, <code>jobs/tasks.py</code>), <code>test_cypher_guard.py</code> (+22)</td></tr>
+<tr><td>T14 · Coverage hardening</td><td><span class="sev ok">DONE</span></td><td><code>pyproject.toml</code> (+4, branch=true), <code>test_readiness.py</code> (+29), <code>test_worker_heartbeat.py</code>, <code>test_coverage_hardening.py</code> (+180), <code>test_web_routes_coverage.py</code> (+44)</td></tr>
+</tbody>
+</table>
+
+<h3>Таблица findings</h3>
+<table>
+<thead><tr><th>Severity</th><th>Шаг / привязка</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr></thead>
+<tbody>
+<tr>
+<td><span class="sev info">INFO</span></td><td>T7 / T11 follow-up: <code>client_ip.py</code>, <code>errors.py</code></td>
+<td>План для T7 называет <code>routers/auth.py</code>+<code>setup.py</code>; <code>api/client_ip.py</code> и правки <code>errors.py</code> не перечислены в File Structure.</td>
+<td><code>src/paw/api/client_ip.py</code> (+10, new), <code>src/paw/api/errors.py</code> (+17) — извлечение client-IP и поддержка Retry-After/429 для throttle.</td>
+<td>Не дефект: review-driven рефинемент T7 (коммиты <code>dc139bd</code>/<code>35ae0a9</code>). Опционально дописать строку в File Structure плана.</td>
+</tr>
+<tr>
+<td><span class="sev info">INFO</span></td><td>T10 follow-up: web SSE</td>
+<td>T10 называет <code>_jobs_drawer.html</code>+<code>routes.py</code>+<code>domain.html</code>; <code>app.js</code> и <code>_job_drawer.html</code> не перечислены.</td>
+<td><code>web/static/app.js</code> (+71), <code>templates/_job_drawer.html</code> (+6) — нативный EventSource для прогресса (коммит <code>d237876</code>).</td>
+<td>Не дефект: рефинемент T10 (рендер прогресса). Привязан к FUNC-01.</td>
+</tr>
+<tr>
+<td><span class="sev info">INFO</span></td><td>SEC-05 / OPS-01 docs+ops</td>
+<td>Планом не предусмотрены отдельные шаги для observability-конфигов и README.</td>
+<td><code>deploy/observability/*</code>, <code>prometheus.yml</code> (+3), <code>README.md</code>, <code>docs/README.ru.md</code>, <code>docs/wiki/ops.md</code> — документация METRICS_TOKEN/POSTGRES_PASSWORD.</td>
+<td>Не дефект: spec OPS-01 явно требует «document in the README run section». Соответствует spec.</td>
+</tr>
+</tbody>
+</table>
+<p class="legend">CRITICAL/MISSING findings нет: каждая из 14 задач имеет прямое свидетельство в diff. INFO-находки — это excess-файлы, привязанные к задачам плана через review-фиксы, а не несвязанные изменения.</p>
+
+<h3>Покрытие intent / spec</h3>
+<table>
+<thead><tr><th>Источник</th><th>Покрыто</th><th>Детали</th></tr></thead>
+<tbody>
+<tr><td>Intent — Desired Outcomes</td><td><span class="sev ok">n/a</span></td><td>intent не привязан (<code>chain.intent: null</code>)</td></tr>
+<tr><td>Spec — Goals (Desired Outcomes)</td><td><span class="sev ok">5 / 5</span></td><td>2 HIGH закрыты (SEC-01/02), 6 MED усилены (SEC-04/05/06/03/OPS-01/FUNC-01), 2 LOW решены (SEC-07/QUAL-01), bandit triage, coverage hardening — все отражены в diff.</td></tr>
+<tr><td>Spec — requirements (разделы)</td><td><span class="sev ok">12 / 12</span></td><td>SEC-01..07, OPS-01, FUNC-01, QUAL-01, Bandit, Coverage — каждый имеет код+тест в diff.</td></tr>
+<tr><td>Spec — Acceptance criteria</td><td><span class="sev warn">частично проверяемо</span></td><td>regression-тест на finding и закрытие HIGH/MED/LOW — подтверждено наличием файлов. «ruff/mypy/pytest зелёные» и «≥80% покрытия» статически из diff не проверяются (data-dependent, ср. прежний F-004) — требуют прогона CI.</td></tr>
+</tbody>
+</table>
+
+<h3>Excess changes</h3>
+<ul class="tight">
+<li><span class="sev info">INFO</span> <code>api/client_ip.py</code>, <code>api/errors.py</code> — рефинемент T7 (client-IP, 429/Retry-After).</li>
+<li><span class="sev info">INFO</span> <code>web/static/app.js</code>, <code>templates/_job_drawer.html</code> — рефинемент T10 (SSE-прогресс).</li>
+<li><span class="sev info">INFO</span> <code>deploy/observability/*</code>, <code>prometheus.yml</code>, <code>README.md</code>, <code>docs/README.ru.md</code>, <code>docs/wiki/ops.md</code> — документация ops (SEC-05/OPS-01, требуется spec).</li>
+<li><span class="sev info">INFO</span> <code>routers/settings.py</code>, <code>routers/sources.py</code>, тесты (<code>test_web_pages.py</code>, <code>test_maintenance_web.py</code>, <code>test_users_admin.py</code>, e2e, <code>conftest.py</code>) — правки под T6 (сильные пароли) и T11/T14, в пределах scope.</li>
+</ul>
+<p class="legend">Жёстких excess (изменения без связи с планом) нет. Все «лишние» файлы трассируются к задачам плана либо к требованиям spec.</p>
+
+<h3>Сводка</h3>
+<div class="note">
+<b>CRITICAL:</b> 0 · <b>WARNING:</b> 0 · <b>INFO:</b> 3 (excess-рефинементы) + 1 предупреждение о непроверяемых статически Acceptance criteria.<br>
+Все 14 задач плана — DONE с прямым свидетельством в diff. Прежние findings из review плана (<b>F-001</b> setup-throttle, <b>F-002</b> INGEST_ROLLBACK, <b>F-003</b> наложение T7/T11 на <code>login()</code>, <b>F-004</b> coverage DoD) — устранены в реализации: setup throttle подключён, <code>INGEST_ROLLBACK</code> заведён и подключён, login-audit лёг поверх throttle-хендлера, coverage-тесты добавлены с branch=true.
+</div>
+
+<h3>Итоговый вердикт</h3>
+<p><span class="verdict okv">OK — 14/14 DONE, 0 CRITICAL, 0 MISSING</span></p>
+<p class="legend">Вердикт <code>OK</code>: нет MISSING-шагов и CRITICAL-находок. INFO-находки (excess-рефинементы) не блокируют. Рекомендация: прогнать CI (<code>ruff check .</code> → <code>mypy src</code> → <code>pytest -q</code>) и <code>coverage report</code> для подтверждения статически-непроверяемых Acceptance criteria (зелёные проверки + ≥80%).</p>
+
+<h3>Цепочка (intent → spec → plan → result)</h3>
+<table>
+<thead><tr><th>Звено</th><th>Значение</th></tr></thead>
+<tbody>
+<tr><td>intent</td><td><code>null</code> — не привязан</td></tr>
+<tr><td>spec</td><td><code>2026-06-30-security-audit-followup-design.md</code> · spec_hash <code>e2661b83be9c570a</code></td></tr>
+<tr><td>plan</td><td><code>2026-06-30-security-audit-followup.md</code> · plan_hash <code>1cced2f470425a5d</code></td></tr>
+<tr><td>result</td><td>verdict <code>OK</code> · diff base <code>master...HEAD</code> · last_run 2026-06-30</td></tr>
+</tbody>
+</table>
+
+</section>
+<!-- TAB:result END -->
+
+</body>
+</html>

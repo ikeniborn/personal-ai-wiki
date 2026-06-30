@@ -1,4 +1,5 @@
 import contextlib
+import secrets
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -6,7 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from paw.api.errors import install_error_handlers
+from paw.api.errors import ProblemError, install_error_handlers
+from paw.api.middleware.body_limit import BodySizeLimitMiddleware
 from paw.api.routers import api_keys as api_keys_router
 from paw.api.routers import articles as articles_router
 from paw.api.routers import auth as auth_router
@@ -21,6 +23,7 @@ from paw.api.routers import setup as setup_router
 from paw.api.routers import sources as sources_router
 from paw.api.routers import users as users_router
 from paw.api.web import routes as web_routes
+from paw.config import get_settings
 from paw.mcp.auth import MCPAuthMiddleware
 from paw.mcp.server import build_mcp
 from paw.obs import readiness as readiness_mod
@@ -34,6 +37,7 @@ _CSP = (
     "img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; "
     "form-action 'self'; object-src 'none'"
 )
+_BEARER_CHALLENGE = {"WWW-Authenticate": "Bearer"}
 
 
 def create_app() -> FastAPI:
@@ -70,7 +74,19 @@ def create_app() -> FastAPI:
         return await health(ready=1)
 
     @app.get("/metrics")
-    async def metrics_endpoint() -> Response:
+    async def metrics_endpoint(request: Request) -> Response:
+        token = get_settings().metrics_token
+        if not token:
+            raise ProblemError(status=404, title="Not found")
+        provided = request.headers.get("authorization", "")
+        try:
+            scheme, provided_token = provided.split(None, 1)
+        except ValueError:
+            raise ProblemError(
+                status=401, title="Unauthorized", headers=_BEARER_CHALLENGE
+            ) from None
+        if scheme.lower() != "bearer" or not secrets.compare_digest(provided_token, token):
+            raise ProblemError(status=401, title="Unauthorized", headers=_BEARER_CHALLENGE)
         payload, content_type = render_metrics()
         return Response(payload, media_type=content_type)
 
@@ -95,6 +111,7 @@ def create_app() -> FastAPI:
     app.mount("/mcp", mcp_asgi)
     app.add_middleware(MCPAuthMiddleware)
     app.add_middleware(MetricsMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=get_settings().max_request_bytes)
     return app
 
 

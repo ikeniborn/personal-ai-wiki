@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: paw
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: paw
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
@@ -79,6 +79,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -89,6 +90,12 @@ services:
       - "traefik.http.routers.paw.entrypoints=websecure"
       - "traefik.http.routers.paw.tls.certresolver=le"
       - "traefik.http.services.paw.loadbalancer.server.port=8000"
+      - "traefik.http.routers.paw-metrics.rule=Host(`${PAW_HOST:-localhost}`) && Path(`/metrics`)"
+      - "traefik.http.routers.paw-metrics.entrypoints=websecure"
+      - "traefik.http.routers.paw-metrics.tls.certresolver=le"
+      - "traefik.http.routers.paw-metrics.service=paw"
+      - "traefik.http.routers.paw-metrics.middlewares=metrics-allowlist"
+      - "traefik.http.middlewares.metrics-allowlist.ipallowlist.sourcerange=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
       interval: 10s
@@ -135,9 +142,16 @@ services:
   prometheus:
     image: prom/prometheus:v3.4.1
     profiles: ["observability"]
+    # Compose validates env_file paths only for active-profile services. This
+    # marker keeps normal compose usage token-optional while making
+    # `--profile observability` fail fast when METRICS_TOKEN is empty/unset.
+    env_file:
+      - "./deploy/observability/METRICS_TOKEN-required-for-observability/${METRICS_TOKEN:+metrics-token-present.marker}"
     volumes:
       - "./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
       - "promdata:/prometheus"
+    secrets:
+      - metrics_token
 
   grafana:
     image: grafana/grafana:11.6.1
@@ -154,7 +168,9 @@ services:
     image: prometheuscommunity/postgres-exporter
     profiles: ["observability"]
     environment:
-      DATA_SOURCE_NAME: "postgresql://paw:${POSTGRES_PASSWORD:-paw}@postgres:5432/paw?sslmode=disable"
+      DATA_SOURCE_URI: "postgres:5432/paw?sslmode=disable"
+      DATA_SOURCE_USER: paw
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
 
   redis_exporter:
     image: oliver006/redis_exporter
@@ -186,7 +202,7 @@ services:
       PGPORT: "5432"
       PGUSER: paw
       PGDATABASE: paw
-      PGPASSWORD: ${POSTGRES_PASSWORD:-paw}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     volumes:
@@ -202,3 +218,7 @@ volumes:
   promdata:
   grafanadata:
   backups:
+
+secrets:
+  metrics_token:
+    environment: METRICS_TOKEN

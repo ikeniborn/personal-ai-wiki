@@ -3,6 +3,8 @@ from httpx import ASGITransport, AsyncClient
 
 from paw.main import create_app
 
+_STRONG_PASSWORD = "pw12345678901"
+
 
 @pytest.fixture
 async def client(db_session, wired_settings):
@@ -19,7 +21,7 @@ async def test_full_walking_skeleton(client):
         "/api/v1/setup",
         json={
             "email": "admin@example.com",
-            "password": "pw12345",
+            "password": _STRONG_PASSWORD,
             "base_url": "https://api.example/v1",
             "api_key": "sk-x",
             "chat_model": "gpt-x",
@@ -30,7 +32,8 @@ async def test_full_walking_skeleton(client):
     assert r.status_code == 201
     # 3. login
     await client.post(
-        "/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"}
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com", "password": _STRONG_PASSWORD},
     )
     csrf = client.cookies.get("paw_csrf")
     h = {"x-csrf-token": csrf}

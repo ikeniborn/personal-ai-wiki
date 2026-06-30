@@ -2,11 +2,13 @@ FROM python:3.12-slim AS base
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 RUN pip install --no-cache-dir uv
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 COPY alembic ./alembic
 COPY alembic.ini ./
-RUN uv pip install --system .
+RUN uv sync --frozen --no-dev
+ENV PATH="/app/.venv/bin:$PATH"
 
 # api: uvicorn; worker: arq; init: alembic upgrade head  (entrypoint chosen in compose)
 EXPOSE 8000

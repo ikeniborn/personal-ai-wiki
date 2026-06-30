@@ -22,7 +22,7 @@ CATALOG: dict[str, dict[str, str]] = {
         # login
         "login.title": "Sign in",
         "login.email": "Email",
-        "login.password": "Password",
+        "login.password": "Password",  # nosec B105  # UI label, not a secret
         "login.submit": "Sign in",
         # dashboard
         "dashboard.title": "Domains",
@@ -44,7 +44,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "users.role": "Role",
         "users.created": "Created",
         "users.create": "Create user",
-        "users.new_password": "Password",
+        "users.new_password": "Password",  # nosec B105  # UI label, not a secret
         "users.role_admin": "admin",
         "users.role_editor": "editor",
         "users.role_viewer": "viewer",
@@ -75,7 +75,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "lang.ru": "Русский",
         "login.title": "Вход",
         "login.email": "Эл. почта",
-        "login.password": "Пароль",
+        "login.password": "Пароль",  # nosec B105  # UI label, not a secret
         "login.submit": "Войти",
         "dashboard.title": "Домены",
         "dashboard.new_domain": "Новый домен",
@@ -94,7 +94,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "users.role": "Роль",
         "users.created": "Создан",
         "users.create": "Создать пользователя",
-        "users.new_password": "Пароль",
+        "users.new_password": "Пароль",  # nosec B105  # UI label, not a secret
         "users.role_admin": "админ",
         "users.role_editor": "редактор",
         "users.role_viewer": "читатель",

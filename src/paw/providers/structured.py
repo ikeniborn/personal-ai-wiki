@@ -22,7 +22,8 @@ def schema_tool(model: type[BaseModel], name: str = "emit_result") -> ToolSpec:
 def _extract_payload(result: object, tool_name: str, *, use_tools: bool) -> dict[str, object]:
     from paw.providers.base import ChatResult
 
-    assert isinstance(result, ChatResult)
+    if not isinstance(result, ChatResult):
+        raise TypeError("expected ChatResult from provider")
     if use_tools:
         for tc in result.tool_calls:
             if tc.name == tool_name:

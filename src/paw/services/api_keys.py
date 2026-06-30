@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.errors import ProblemError
+from paw.audit import actions
+from paw.audit.log import record
 from paw.db.models import ApiKey
 from paw.db.repos.api_keys import ApiKeyRepo
 from paw.security.api_keys import (
@@ -47,6 +49,13 @@ class ApiKeyService:
         row = await self._repo.create(
             user_id=user_id, prefix=prefix, hash=hash_secret(secret), scopes=list(scopes)
         )
+        await record(
+            self._s,
+            user_id=user_id,
+            action=actions.API_KEY_ISSUE,
+            target_type="api_key",
+            target_id=row.id,
+        )
         await self._s.commit()
         return IssuedKey(id=row.id, prefix=prefix, token=token, scopes=list(scopes))
 
@@ -56,6 +65,13 @@ class ApiKeyService:
     async def revoke(self, *, user_id: uuid.UUID, key_id: uuid.UUID) -> None:
         if not await self._repo.revoke(key_id, user_id):
             raise ProblemError(status=404, title="API key not found")
+        await record(
+            self._s,
+            user_id=user_id,
+            action=actions.API_KEY_REVOKE,
+            target_type="api_key",
+            target_id=key_id,
+        )
         await self._s.commit()
 
     async def authenticate(self, authorization: str | None) -> AuthedKey | None:

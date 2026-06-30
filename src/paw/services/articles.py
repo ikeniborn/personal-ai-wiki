@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.errors import ProblemError
+from paw.audit import actions
+from paw.audit.log import record
 from paw.db.models import Article, ArticleRevision
 from paw.db.repos.articles import ArticleRepo
 from paw.db.repos.citations import CitationRepo, CitationView
@@ -131,6 +133,13 @@ class ArticleService:
                     art.id,
                     exc_info=True,
                 )
+        await record(
+            self._s,
+            user_id=author_id,
+            action=actions.INGEST_ROLLBACK,
+            target_type="article",
+            target_id=article_id,
+        )
         await self._s.commit()
         return art
 

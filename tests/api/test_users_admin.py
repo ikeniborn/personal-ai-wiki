@@ -26,7 +26,7 @@ async def admin_client(db_session, wired_settings):
 async def _make_user(c, csrf, email, role):
     r = await c.post(
         "/api/v1/users",
-        json={"email": email, "password": "pw12345", "role": role},
+        json={"email": email, "password": "pw12345678901", "role": role},
         headers={"x-csrf-token": csrf},
     )
     assert r.status_code == 201

@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +22,11 @@ class Settings(BaseSettings):
     max_request_bytes: int = 12 * 1024 * 1024
     session_ttl_seconds: int = 60 * 60 * 24 * 7
     worker_metrics_port: int = 0  # >0 starts a prometheus http server in the worker
+    login_rate_limit: PositiveInt = 5
+    login_rate_window_seconds: PositiveInt = 60
+    login_lockout_threshold: PositiveInt = 10
+    login_lockout_seconds: PositiveInt = 900
+    password_min_length: PositiveInt = 12
 
     # hardening (env layer; LLD §11)
     url_allowlist: str = ""  # comma-separated host suffixes; "" = any public host
@@ -28,6 +34,7 @@ class Settings(BaseSettings):
     max_unzip_bytes: int = 100 * 1024 * 1024
     max_unzip_entries: int = 2000
     max_compression_ratio: float = 100.0
+    metrics_token: str | None = None  # Bearer token gating /metrics; unset = endpoint disabled
 
 
 @lru_cache

@@ -29,23 +29,33 @@ class InitRequest(BaseModel):
 @router.post(
     "/domains/{domain_id}/ingest",
     status_code=202,
-    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+    dependencies=[Depends(require_csrf)],
 )
 async def start_ingest(
-    domain_id: uuid.UUID, body: IngestRequest, session: AsyncSession = Depends(db)
+    domain_id: uuid.UUID,
+    body: IngestRequest,
+    session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin", "editor")),
 ) -> dict[str, str]:
-    job = await JobService(session).start_ingest(domain_id=domain_id, source_id=body.source_id)
+    job = await JobService(session).start_ingest(
+        domain_id=domain_id, source_id=body.source_id, actor_id=user.id
+    )
     return {"job_id": str(job.id)}
 
 
 @router.post(
     "/domains/{domain_id}/init",
-    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+    dependencies=[Depends(require_csrf)],
 )
 async def init_domain(
-    domain_id: uuid.UUID, body: InitRequest, session: AsyncSession = Depends(db)
+    domain_id: uuid.UUID,
+    body: InitRequest,
+    session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin", "editor")),
 ) -> dict[str, list[dict[str, str]]]:
-    pairs = await JobService(session).init_domain(domain_id=domain_id, brief=body.brief)
+    pairs = await JobService(session).init_domain(
+        domain_id=domain_id, brief=body.brief, actor_id=user.id
+    )
     return {"topics": [{"topic": t, "job_id": str(j)} for t, j in pairs]}
 
 

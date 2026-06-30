@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 # Silence SDK background-transport noise at import time so unit-test output
 # stays clean when tests point at a deliberately-dead host.
 logging.getLogger("langfuse").setLevel(logging.ERROR)
+logger = logging.getLogger(__name__)
 
 # Module-level cache: (host, public_key, secret_key) -> Langfuse client.
 # Keyed on credentials so distinct configs get distinct clients.
@@ -141,7 +142,7 @@ class OpTrace:
             )
             gen.end()
         except Exception:
-            pass
+            logger.debug("best-effort Langfuse generation failed", exc_info=True)
 
     def span(self, *, name: str, metadata: dict[str, object]) -> None:
         if self._root is None:
@@ -154,7 +155,7 @@ class OpTrace:
             )
             sp.end()
         except Exception:
-            pass
+            logger.debug("best-effort Langfuse span failed", exc_info=True)
 
     def flush(self) -> None:
         """Best-effort flush — fire-and-forget, never raises."""
@@ -164,4 +165,4 @@ class OpTrace:
             self._root.end()
             self._client.flush()
         except Exception:
-            pass
+            logger.debug("best-effort Langfuse flush failed", exc_info=True)

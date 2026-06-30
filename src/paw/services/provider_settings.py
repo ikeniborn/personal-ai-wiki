@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paw.audit import actions
+from paw.audit.log import record
 from paw.config import get_settings
 from paw.db.managed import (
     ensure_embedding_column,
@@ -55,6 +59,7 @@ class ProviderSettingsService:
         embedding_dim: int,
         api_key: str,
         vision_model: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> ProviderConfig:
         """Write the provider config to the session WITHOUT committing.
 
@@ -72,6 +77,17 @@ class ProviderSettingsService:
         settings = await self._all()
         settings[PROVIDER_KEY] = pc.model_dump()
         await self._repo.upsert(settings)
+        await record(
+            self._s,
+            user_id=actor_id,
+            action=actions.PROVIDER_CHANGE,
+            meta={
+                "chat_model": chat_model,
+                "embedding_model": embedding_model,
+                "embedding_dim": embedding_dim,
+                "vision_model": vision_model,
+            },
+        )
         return pc
 
     async def set_provider(
@@ -83,6 +99,7 @@ class ProviderSettingsService:
         embedding_dim: int,
         api_key: str,
         vision_model: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> ProviderConfig:
         pc = await self.persist_provider(
             base_url=base_url,
@@ -91,6 +108,7 @@ class ProviderSettingsService:
             embedding_dim=embedding_dim,
             api_key=api_key,
             vision_model=vision_model,
+            actor_id=actor_id,
         )
         await self._s.commit()
         return pc
@@ -104,6 +122,7 @@ class ProviderSettingsService:
         embedding_dim: int,
         api_key: str,
         vision_model: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> ProviderConfig:
         from paw.db.managed import embedding_dim as current_embedding_dim
 
@@ -119,6 +138,7 @@ class ProviderSettingsService:
             embedding_dim=embedding_dim,
             api_key=api_key,
             vision_model=vision_model,
+            actor_id=actor_id,
         )
         chunks_dim_changed = current is not None and current != embedding_dim
         qc_dim_changed = current_qc is not None and current_qc != embedding_dim

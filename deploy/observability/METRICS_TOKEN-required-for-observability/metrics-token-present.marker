@@ -1,0 +1,2 @@
+# Marker env file used only to validate that METRICS_TOKEN is set for the
+# observability profile. It intentionally defines no environment variables.
