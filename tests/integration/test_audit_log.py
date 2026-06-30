@@ -168,9 +168,12 @@ async def test_article_rollback_writes_audit_row(db_session, wired_settings):
         markdown="# Two",
         author_id=user.id,
     )
+    before = await _count(db_session, actions.INGEST_ROLLBACK)
     await svc.rollback(article_id=article.id, rev_no=1, author_id=user.id)
 
+    after = await _count(db_session, actions.INGEST_ROLLBACK)
     row = await _latest(db_session, actions.INGEST_ROLLBACK)
+    assert after == before + 1
     assert row.user_id == user.id
     assert row.target_type == "article"
     assert row.target_id == article.id
