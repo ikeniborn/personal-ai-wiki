@@ -1,6 +1,15 @@
-.git
-.venv
-__pycache__
-tests
-docs
-.superpowers
+# Keep generated/dev files out of the build context and image.
+__pycache__/
+*.py[cod]
+.venv/
+.git/
+.github/
+tests/
+docs/
+.claude/
+.superpowers/
+.env
+*.md
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
