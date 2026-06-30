@@ -23,6 +23,8 @@ def _zip_bytes() -> bytes:
 async def test_web_bulk_upload_returns_drawer(
     db_session: AsyncSession, wired_settings: object, monkeypatch: MonkeyPatch
 ) -> None:
+    enqueue_calls: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID | None, str | None]] = []
+
     async def fake_enqueue(
         _ctx: object,
         *,
@@ -31,7 +33,7 @@ async def test_web_bulk_upload_returns_drawer(
         source_id: uuid.UUID | None = None,
         topic: str | None = None,
     ) -> None:
-        return None
+        enqueue_calls.append((job_id, domain_id, source_id, topic))
 
     monkeypatch.setattr("paw.services.jobs.enqueue_ingest", fake_enqueue)
     await UserRepo(db_session).create(
@@ -59,5 +61,12 @@ async def test_web_bulk_upload_returns_drawer(
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
         assert resp.text.count('class="job"') == 2
+        assert resp.text.count('data-job-events="/api/v1/jobs/') == 2
+        assert "sse-connect" not in resp.text
+        assert len(enqueue_calls) == 2
+        assert {domain_id for _, domain_id, _, _ in enqueue_calls} == {dom.id}
+        assert all(source_id is not None for _, _, source_id, _ in enqueue_calls)
+        assert len({source_id for _, _, source_id, _ in enqueue_calls}) == 2
+        assert all(topic is None for _, _, _, topic in enqueue_calls)
     finally:
         await c.aclose()

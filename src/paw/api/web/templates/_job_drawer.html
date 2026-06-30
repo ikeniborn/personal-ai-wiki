@@ -1,6 +1,6 @@
-<div class="job" hx-ext="sse" sse-connect="/api/v1/jobs/{{ job_id }}/events">
+<div class="job" data-job-events="/api/v1/jobs/{{ job_id }}/events">
   <progress max="6" id="job-progress"></progress>
-  <ul id="job-log" sse-swap="message" hx-swap="beforeend"></ul>
+  <ul id="job-log" data-job-messages></ul>
   <button hx-post="/api/v1/jobs/{{ job_id }}/cancel"
-          hx-headers='{"x-csrf-token": "{{ csrf }}"}'>Cancel</button>
+          hx-headers='{"x-csrf-token": "{{ csrf }}"}' type="button">Cancel</button>
 </div>

@@ -39,7 +39,8 @@ async def test_web_lint_returns_job_drawer(ctx):
     c, csrf, dom, _ = ctx
     r = await c.post(f"/domains/{dom}/lint", data={}, headers={"x-csrf-token": csrf})
     assert r.status_code == 200
-    assert "sse-connect" in r.text  # the job drawer partial
+    assert "data-job-events" in r.text  # the job drawer partial
+    assert "sse-connect" not in r.text
 
 
 async def test_lint_results_view_lists_issues_with_fix_form(ctx):

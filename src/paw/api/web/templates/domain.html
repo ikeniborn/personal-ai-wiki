@@ -12,7 +12,7 @@
   <form hx-post="/domains/{{ domain.id }}/sources/bulk"
         hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-target="#job-drawer"
         hx-swap="innerHTML" hx-encoding="multipart/form-data">
-    <input type="file" name="file" accept=".zip">
+    <input type="file" name="file" accept=".zip" required>
     <button type="submit">⬆ Bulk upload (zip)</button>
   </form>
   <a class="btn" href="/domains/{{ domain.id }}/query">🔍 Query</a>

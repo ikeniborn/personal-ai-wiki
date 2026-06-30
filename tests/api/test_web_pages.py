@@ -112,8 +112,9 @@ async def test_web_ingest_renders_job_drawer(authed, monkeypatch):
         headers={"x-csrf-token": csrf},
     )
     assert r.status_code == 200
-    # the SSE-wired drawer partial, not raw JSON
-    assert 'sse-connect="/api/v1/jobs/' in r.text
+    # the EventSource-wired drawer partial, not raw JSON
+    assert 'data-job-events="/api/v1/jobs/' in r.text
+    assert "sse-connect" not in r.text
     assert "Cancel" in r.text
 
 
