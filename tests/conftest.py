@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
@@ -6,6 +7,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
+
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://paw:paw@localhost/paw")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("SESSION_SECRET", "s" * 32)
+os.environ.setdefault("FERNET_KEY", "k" * 43 + "=")
 
 
 @pytest.fixture(scope="session")
@@ -39,6 +45,9 @@ def _migrate(pg_async_url: str, monkeypatch_session: pytest.MonkeyPatch) -> None
     monkeypatch_session.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch_session.setenv("SESSION_SECRET", "s" * 32)
     monkeypatch_session.setenv("FERNET_KEY", "k" * 43 + "=")
+    from paw.config import get_settings
+
+    get_settings.cache_clear()
     from alembic import command
     from alembic.config import Config
 

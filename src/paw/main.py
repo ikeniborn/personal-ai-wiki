@@ -5,7 +5,6 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.types import Receive, Scope, Send
 
 from paw.api.errors import install_error_handlers
 from paw.api.middleware.body_limit import BodySizeLimitMiddleware
@@ -102,14 +101,4 @@ def create_app() -> FastAPI:
     return app
 
 
-class _LazyApp:
-    def __init__(self) -> None:
-        self._app: FastAPI | None = None
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if self._app is None:
-            self._app = create_app()
-        await self._app(scope, receive, send)
-
-
-app = _LazyApp()
+app = create_app()
