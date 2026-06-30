@@ -3,7 +3,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from paw.api.deps import (
     require_csrf,
     require_role,
 )
+from paw.api.errors import ProblemError
 from paw.api.web.i18n import resolve_ui_lang
 from paw.api.web.i18n import t as _t
 from paw.db.models import User
@@ -28,6 +29,8 @@ from paw.db.repos.sources import SourceRepo
 from paw.db.repos.users import UserRepo
 from paw.security.sanitize import render_markdown, resolve_wikilinks
 from paw.security.sessions import SessionStore
+from paw.security.ssrf import SsrfRejected
+from paw.security.uploads import UploadRejected
 from paw.services.api_keys import ApiKeyService
 from paw.services.articles import ArticleService
 from paw.services.chat import ChatService
@@ -39,6 +42,7 @@ from paw.services.query import QueryService
 from paw.services.query_cache import QueryCacheService
 from paw.services.settings import SettingsService
 from paw.services.setup import SetupService
+from paw.services.sources import SourceService
 from paw.services.users import UserService
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -212,6 +216,33 @@ async def web_start_ingest(
     job = await JobService(session).start_ingest(domain_id=domain_id, source_id=source_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
+
+
+@router.post("/domains/{domain_id}/sources/bulk", response_class=HTMLResponse)
+async def web_bulk_upload(
+    domain_id: uuid.UUID,
+    request: Request,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(db),
+    _: None = Depends(require_csrf),
+    __: User = Depends(require_role("admin", "editor")),
+) -> Response:
+    data = await file.read()
+    try:
+        srcs = await SourceService(session).upload_bulk(domain_id=domain_id, zip_bytes=data)
+    except (UploadRejected, SsrfRejected) as e:
+        raise ProblemError(status=422, title="Bulk upload rejected", detail=str(e)) from e
+
+    jobs = JobService(session)
+    job_ids: list[str] = []
+    for src in srcs:
+        job = await jobs.start_ingest(domain_id=domain_id, source_id=src.id)
+        job_ids.append(str(job.id))
+
+    csrf = request.cookies.get(CSRF_COOKIE, "")
+    return templates.TemplateResponse(
+        request, "_jobs_drawer.html", {"job_ids": job_ids, "csrf": csrf}
+    )
 
 
 async def _web_start_maintenance(

@@ -9,7 +9,7 @@
     <input type="hidden" name="source_id" value="{{ latest_source_id | default('') }}">
     <button type="submit" {% if not latest_source_id %}disabled{% endif %}>Ingest latest source</button>
   </form>
-  <form hx-post="/api/v1/domains/{{ domain.id }}/sources/bulk"
+  <form hx-post="/domains/{{ domain.id }}/sources/bulk"
         hx-headers='{"x-csrf-token": "{{ csrf }}"}' hx-target="#job-drawer"
         hx-swap="innerHTML" hx-encoding="multipart/form-data">
     <input type="file" name="file" accept=".zip">

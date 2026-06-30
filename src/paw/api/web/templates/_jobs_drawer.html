@@ -1,0 +1,8 @@
+{% for job_id in job_ids %}
+<div class="job" hx-ext="sse" sse-connect="/api/v1/jobs/{{ job_id }}/events">
+  <progress max="6"></progress>
+  <ul sse-swap="message" hx-swap="beforeend"></ul>
+  <button hx-post="/api/v1/jobs/{{ job_id }}/cancel"
+          hx-headers='{"x-csrf-token": "{{ csrf }}"}'>Cancel</button>
+</div>
+{% endfor %}
