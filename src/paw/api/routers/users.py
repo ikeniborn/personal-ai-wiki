@@ -45,10 +45,16 @@ async def list_users(
     "",
     status_code=201,
     response_model=UserOut,
-    dependencies=[Depends(require_csrf), Depends(require_role("admin"))],
+    dependencies=[Depends(require_csrf)],
 )
-async def create_user(body: UserCreate, session: AsyncSession = Depends(db)) -> UserOut:
-    u = await UserService(session).create(email=body.email, password=body.password, role=body.role)
+async def create_user(
+    body: UserCreate,
+    session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin")),
+) -> UserOut:
+    u = await UserService(session).create(
+        email=body.email, password=body.password, role=body.role, actor_id=user.id
+    )
     return UserOut(id=str(u.id), email=u.email, role=u.role)
 
 

@@ -5,6 +5,8 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.errors import ProblemError
+from paw.audit import actions
+from paw.audit.log import record
 from paw.config import get_settings
 from paw.db.models import Job
 from paw.db.repos.jobs import JobRepo
@@ -21,6 +23,13 @@ class JobService:
 
     async def start_ingest(self, *, domain_id: uuid.UUID, source_id: uuid.UUID) -> Job:
         job = await self._repo.create(domain_id=domain_id, kind="ingest")
+        await record(
+            self._s,
+            user_id=None,
+            action=actions.INGEST_START,
+            target_type="source",
+            target_id=source_id,
+        )
         await self._s.commit()
         await enqueue_ingest(None, job_id=job.id, domain_id=domain_id, source_id=source_id)
         return job

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paw.audit import actions
+from paw.audit.log import record
 from paw.config import get_settings
 from paw.db.managed import (
     ensure_embedding_column,
@@ -72,6 +74,18 @@ class ProviderSettingsService:
         settings = await self._all()
         settings[PROVIDER_KEY] = pc.model_dump()
         await self._repo.upsert(settings)
+        await record(
+            self._s,
+            user_id=None,
+            action=actions.PROVIDER_CHANGE,
+            meta={
+                "base_url": base_url,
+                "chat_model": chat_model,
+                "embedding_model": embedding_model,
+                "embedding_dim": embedding_dim,
+                "vision_model": vision_model,
+            },
+        )
         return pc
 
     async def set_provider(

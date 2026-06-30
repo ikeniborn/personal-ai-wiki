@@ -1,6 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.errors import ProblemError
+from paw.audit import actions
+from paw.audit.log import record
 from paw.db.models import User
 from paw.db.repos.settings import SettingsRepo
 from paw.db.repos.users import UserRepo
@@ -49,5 +51,12 @@ class SetupService:
             vision_model=vision_model,
         )
         await ensure_embedding_column(self._s, embedding_dim)
+        await record(
+            self._s,
+            user_id=admin.id,
+            action=actions.SETUP_COMPLETE,
+            target_type="user",
+            target_id=admin.id,
+        )
         await self._s.commit()
         return admin

@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +13,8 @@ from paw.api.deps import (
     get_session_store,
 )
 from paw.api.errors import ProblemError
+from paw.audit import actions
+from paw.audit.log import record
 from paw.config import get_settings
 from paw.db.repos.users import UserRepo
 from paw.security.csrf import issue_token
@@ -85,6 +89,8 @@ async def login(
     csrf = issue_token(s.session_secret)
     response.set_cookie(SESSION_COOKIE, sid, httponly=True, samesite="lax", secure=True)
     response.set_cookie(CSRF_COOKIE, csrf, httponly=False, samesite="lax", secure=True)
+    await record(session, user_id=user.id, action=actions.LOGIN)
+    await session.commit()
     return LoginResponse(id=str(user.id), email=user.email, role=user.role)
 
 
@@ -92,11 +98,23 @@ async def login(
 async def logout(
     request: Request,
     response: Response,
+    session: AsyncSession = Depends(db),
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
     sid = request.cookies.get(SESSION_COOKIE, "")
     if sid:
+        raw_user_id = await store.get(sid)
+        user_id: uuid.UUID | None = None
+        if raw_user_id:
+            try:
+                user_id = uuid.UUID(raw_user_id)
+            except ValueError:
+                user_id = None
+        if user_id is not None:
+            await record(session, user_id=user_id, action=actions.LOGOUT)
         await store.delete(sid)
+        if user_id is not None:
+            await session.commit()
     response.delete_cookie(SESSION_COOKIE)
     response.delete_cookie(CSRF_COOKIE)
     return Response(status_code=204)
