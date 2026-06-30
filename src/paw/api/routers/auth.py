@@ -25,7 +25,7 @@ from paw.security.sessions import SessionStore
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _DUMMY_PASSWORD_HASH = (
-    "$argon2id$v=19$m=65536,t=3,p=4$kPkNAztwLj1cOKf4AEC6rA"
+    "$argon2id$v=19$m=65536,t=3,p=4$kPkNAztwLj1cOKf4AEC6rA"  # nosec B105  # dummy hash for constant-time missing-user login checks
     "$Kboljui51UbAfJfUmKUyfvdMmBipqa466f7/N2HAlAY"
 )
 

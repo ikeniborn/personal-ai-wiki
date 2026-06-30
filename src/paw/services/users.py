@@ -67,7 +67,8 @@ class UserService:
         )
         await self._s.commit()
         refreshed = await self._repo.get(user_id)
-        assert refreshed is not None
+        if refreshed is None:
+            raise ProblemError(status=404, title="User not found")
         return refreshed
 
     async def delete(self, *, user_id: uuid.UUID, actor_id: uuid.UUID | None = None) -> None:

@@ -52,7 +52,7 @@ class QueryCacheRepo:
     ) -> CacheRow | None:
         res = await self._s.execute(
             text(
-                f"SELECT {_SELECT} FROM query_cache "
+                f"SELECT {_SELECT} FROM query_cache "  # nosec B608  # _SELECT is an internal constant; filters are bind-parameterized
                 "WHERE domain_id = :d AND query_norm = :n"
             ),
             {"d": str(domain_id), "n": query_norm},
@@ -65,7 +65,7 @@ class QueryCacheRepo:
     ) -> tuple[CacheRow, float] | None:
         res = await self._s.execute(
             text(
-                f"SELECT {_SELECT}, (query_embedding <=> CAST(:q AS vector)) AS dist "
+                f"SELECT {_SELECT}, (query_embedding <=> CAST(:q AS vector)) AS dist "  # nosec B608  # _SELECT is an internal constant; vector/domain values are bind-parameterized
                 "FROM query_cache "
                 "WHERE domain_id = :d AND query_embedding IS NOT NULL "
                 "ORDER BY query_embedding <=> CAST(:q AS vector) LIMIT 1"
