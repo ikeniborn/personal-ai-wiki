@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     max_request_bytes: int = 12 * 1024 * 1024
     session_ttl_seconds: int = 60 * 60 * 24 * 7
     worker_metrics_port: int = 0  # >0 starts a prometheus http server in the worker
+    login_rate_limit: int = 5
+    login_rate_window_seconds: int = 60
+    login_lockout_threshold: int = 10
+    login_lockout_seconds: int = 900
+    password_min_length: int = 12
 
     # hardening (env layer; LLD §11)
     url_allowlist: str = ""  # comma-separated host suffixes; "" = any public host
