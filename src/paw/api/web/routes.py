@@ -379,7 +379,7 @@ async def web_suggest(
 ) -> Response:
     user = await _require_web_user(request, session, store)
     if user is None:
-        return HTMLResponse("")
+        return RedirectResponse("/login", status_code=307)
     domain = await DomainRepo(session).get(domain_id)
     csrf = request.cookies.get(CSRF_COOKIE, "")
     svc = QueryCacheService(session)
