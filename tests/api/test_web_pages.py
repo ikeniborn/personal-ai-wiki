@@ -1,6 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from paw.api.deps import SESSION_COOKIE
 from paw.db.repos.users import UserRepo
 from paw.main import create_app
 from paw.security.passwords import hash_password
@@ -36,6 +37,15 @@ async def test_setup_page_shown_when_no_users(client):
     # first run redirects to setup
     assert r.status_code in (302, 307)
     assert "/setup" in r.headers["location"]
+
+
+async def test_setup_page_shown_when_no_users_with_stale_session_cookie(client):
+    client.cookies.set(SESSION_COOKIE, "already-evicted")
+
+    r = await client.get("/")
+
+    assert r.status_code == 307
+    assert r.headers["location"] == "/setup"
 
 
 async def test_setup_then_dashboard(client):

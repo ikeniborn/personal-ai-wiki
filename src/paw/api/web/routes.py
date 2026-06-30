@@ -1,7 +1,7 @@
 import uuid
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -72,6 +72,30 @@ def page_ctx(
 router = APIRouter(tags=["web"])
 
 
+class _WebSessionState(NamedTuple):
+    user: User | None
+    had_session_user_id: bool
+
+
+async def _resolve_web_session(
+    request: Request, session: AsyncSession, store: SessionStore
+) -> _WebSessionState:
+    sid = request.cookies.get(SESSION_COOKIE, "")
+    uid = await store.get(sid)
+    if not uid:
+        return _WebSessionState(user=None, had_session_user_id=False)
+    try:
+        user_id = uuid.UUID(uid)
+    except ValueError:
+        await store.delete(sid)
+        return _WebSessionState(user=None, had_session_user_id=False)
+    user = await UserRepo(session).get(user_id)
+    if user is None:
+        await store.delete(sid)
+        return _WebSessionState(user=None, had_session_user_id=True)
+    return _WebSessionState(user=user, had_session_user_id=True)
+
+
 async def _require_web_user(
     request: Request, session: AsyncSession, store: SessionStore
 ) -> User | None:
@@ -80,20 +104,7 @@ async def _require_web_user(
     Returns None when there is no session or the user was deleted; callers
     redirect to /login. Mirrors api.deps.current_user for the HTML routes.
     """
-    sid = request.cookies.get(SESSION_COOKIE, "")
-    uid = await store.get(sid)
-    if not uid:
-        return None
-    try:
-        user_id = uuid.UUID(uid)
-    except ValueError:
-        await store.delete(sid)
-        return None
-    user = await UserRepo(session).get(user_id)
-    if user is None:
-        await store.delete(sid)
-        return None
-    return user
+    return (await _resolve_web_session(request, session, store)).user
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -118,9 +129,10 @@ async def dashboard(
     store: SessionStore = Depends(get_session_store),
 ) -> Response:
     needs_setup = await SetupService(session).needs_setup()
-    if needs_setup and not request.cookies.get(SESSION_COOKIE, ""):
+    web_session = await _resolve_web_session(request, session, store)
+    if needs_setup and not web_session.had_session_user_id:
         return RedirectResponse("/setup", status_code=307)
-    user = await _require_web_user(request, session, store)
+    user = web_session.user
     if user is None:
         return RedirectResponse("/login", status_code=307)
     domains = await DomainService(session).list()
