@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     login_rate_window_seconds: PositiveInt = 60
     login_lockout_threshold: PositiveInt = 10
     login_lockout_seconds: PositiveInt = 900
-    password_min_length: int = 12
+    password_min_length: PositiveInt = 12
 
     # hardening (env layer; LLD §11)
     url_allowlist: str = ""  # comma-separated host suffixes; "" = any public host

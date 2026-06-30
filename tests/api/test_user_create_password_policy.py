@@ -31,5 +31,9 @@ async def test_create_user_rejects_weak_password(db_session, wired_settings):
             json={"email": "new@example.com", "password": "short", "role": "viewer"},
         )
         assert resp.status_code == 422
+        assert resp.headers["content-type"].startswith("application/problem+json")
+        assert resp.json()["title"] == "Weak password"
+        assert resp.json()["detail"] == "password must be at least 12 characters"
+        assert await UserRepo(db_session).get_by_email("new@example.com") is None
     finally:
         await c.aclose()

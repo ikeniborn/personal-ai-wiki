@@ -13,5 +13,10 @@ def test_rejects_common_password(wired_settings):
         validate_password_strength("password1234")
 
 
+def test_rejects_padded_common_password(wired_settings):
+    with pytest.raises(WeakPassword):
+        validate_password_strength("  Password1234  ")
+
+
 def test_accepts_strong_password(wired_settings):
     validate_password_strength("a-Long-Unique-Phrase-42")

@@ -42,7 +42,7 @@ def validate_password_strength(plain: str) -> None:
     min_length = get_settings().password_min_length
     if len(plain) < min_length:
         raise WeakPassword(f"password must be at least {min_length} characters")
-    if plain.lower() in _COMMON_PASSWORDS:
+    if plain.strip().casefold() in _COMMON_PASSWORDS:
         raise WeakPassword("password is too common")
 
 
