@@ -25,31 +25,44 @@ class BodySizeLimitMiddleware:
             await self._reject(send)
             return
 
-        replay_messages: list[Message] = []
-        received = 0
+        body_buffer = bytearray()
+        body_complete = False
+        saw_request = False
+        pending_message: Message | None = None
         while True:
             message = await receive()
             if message["type"] != "http.request":
-                replay_messages.append(message)
+                pending_message = message
                 break
 
+            saw_request = True
             body = message.get("body", b"")
-            received += len(body)
-            if received > self.max_bytes:
+            if len(body_buffer) + len(body) > self.max_bytes:
                 await self._reject(send)
                 return
 
-            replay_messages.append(message)
+            body_buffer.extend(body)
             if not message.get("more_body", False):
+                body_complete = True
                 break
 
-        replay = iter(replay_messages)
+        replay_body = bytes(body_buffer)
+        replay_step = 0
 
         async def replay_receive() -> Message:
-            try:
-                return next(replay)
-            except StopIteration:
-                return await receive()
+            nonlocal replay_step
+            if replay_step == 0:
+                replay_step += 1
+                if pending_message is None or replay_body or saw_request:
+                    return {
+                        "type": "http.request",
+                        "body": replay_body,
+                        "more_body": not body_complete,
+                    }
+            if replay_step == 1 and pending_message is not None:
+                replay_step += 1
+                return pending_message
+            return await receive()
 
         await self.app(scope, replay_receive, send)
 
@@ -66,7 +79,10 @@ class BodySizeLimitMiddleware:
         for value in content_lengths:
             if not value.isdigit():
                 return True
-            parsed_values.append(int(value))
+            try:
+                parsed_values.append(int(value))
+            except ValueError:
+                return True
 
         if any(value > self.max_bytes for value in parsed_values):
             return True

@@ -16,6 +16,7 @@ async def _call_body_limit(
     max_bytes: int,
     headers: Iterable[tuple[bytes, bytes]] = (),
     request_messages: Iterable[Message] = (),
+    downstream_messages: list[Message] | None = None,
 ) -> list[Message]:
     sent: list[Message] = []
     messages = iter(request_messages)
@@ -36,6 +37,8 @@ async def _call_body_limit(
         await send({"type": "http.response.start", "status": 200, "headers": []})
         while True:
             message = await receive()
+            if downstream_messages is not None:
+                downstream_messages.append(message)
             if message["type"] != "http.request" or not message.get("more_body", False):
                 break
         await send({"type": "http.response.body", "body": b"ok"})
@@ -68,22 +71,42 @@ async def test_content_length_over_limit_is_rejected_case_insensitively() -> Non
     assert sent[0]["status"] == 413
 
 
+async def test_long_digit_content_length_is_rejected_without_int_parse_error() -> None:
+    sent = await _call_body_limit(
+        max_bytes=10,
+        headers=[(b"content-length", b"9" * 5000)],
+    )
+
+    assert sent[0]["status"] == 413
+
+
+async def test_malformed_content_length_is_rejected() -> None:
+    sent = await _call_body_limit(
+        max_bytes=10,
+        headers=[(b"content-length", b"not-a-number")],
+    )
+
+    assert sent[0]["status"] == 413
+
+
 async def test_conflicting_duplicate_content_length_headers_are_rejected() -> None:
     sent = await _call_body_limit(
-        max_bytes=3,
-        headers=[(b"Content-Length", b"4"), (b"content-length", b"1")],
+        max_bytes=10,
+        headers=[(b"Content-Length", b"2"), (b"content-length", b"3")],
     )
 
     assert sent[0]["status"] == 413
 
 
 async def test_streamed_body_under_limit_is_replayed_to_downstream_app() -> None:
+    downstream_messages: list[Message] = []
     sent = await _call_body_limit(
         max_bytes=4,
         request_messages=[
             {"type": "http.request", "body": b"ab", "more_body": True},
             {"type": "http.request", "body": b"cd", "more_body": False},
         ],
+        downstream_messages=downstream_messages,
     )
 
     assert [message["type"] for message in sent] == [
@@ -92,6 +115,33 @@ async def test_streamed_body_under_limit_is_replayed_to_downstream_app() -> None
     ]
     assert sent[0]["status"] == 200
     assert sent[1]["body"] == b"ok"
+    assert downstream_messages == [
+        {"type": "http.request", "body": b"abcd", "more_body": False}
+    ]
+
+
+async def test_non_http_scope_passes_through_without_request_body_limit() -> None:
+    sent: list[Message] = []
+    scope: Scope = {"type": "websocket", "path": "/ws"}
+
+    async def receive() -> Message:
+        return {"type": "websocket.connect"}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        message = await receive()
+        await send({"type": f"{scope['type']}.accepted", "received": message})
+
+    await BodySizeLimitMiddleware(app, max_bytes=0)(scope, receive, send)
+
+    assert sent == [
+        {
+            "type": "websocket.accepted",
+            "received": {"type": "websocket.connect"},
+        }
+    ]
 
 
 async def _admin_client(db_session: AsyncSession) -> AsyncClient:
