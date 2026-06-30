@@ -81,8 +81,8 @@ ul.tight li{ margin:.22rem 0; }
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <header>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <h1>Цепочка IDD→SDD: Security Audit Follow-up</h1>
@@ -457,7 +457,119 @@ ul.tight li{ margin:.22rem 0; }
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-<p class="note">Этап ещё не проверен.</p>
+
+<h2>1. Резюме сверки</h2>
+<p class="sub">Сверка результатов исполнения плана с цепочкой intent → spec → plan против git diff.</p>
+<table>
+<thead><tr><th>Документ</th><th>Путь</th><th>Состояние</th></tr></thead>
+<tbody>
+<tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-30-security-audit-followup.md</code></td><td>plan_hash <code>1cced2f470425a5d</code> (совпадает с review-блоком — тело плана не менялось)</td></tr>
+<tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-30-security-audit-followup-design.md</code></td><td>spec_hash <code>e2661b83be9c570a</code></td></tr>
+<tr><td>Intent</td><td><code>null</code></td><td>intent-документ не привязан (этап n/a)</td></tr>
+<tr><td>Diff base</td><td><code>git diff master...HEAD</code> (merge-base <code>939c6bc</code>)</td><td>72 файла изменено, +5137 / −177. <code>git diff HEAD</code> пуст — вся работа закоммичена в ветке <code>dev-security-audit-followup</code>.</td></tr>
+</tbody>
+</table>
+<div class="note"><b>Почему база — master, а не HEAD.</b> Незакоммиченных изменений нет: все 14 задач закоммичены в ветку. Поэтому сверка ведётся против точки ветвления (<code>master</code> = merge-base <code>939c6bc</code>), а не против пустого <code>git diff HEAD</code>.</div>
+
+<h2>2. Результаты проверки</h2>
+
+<h3>Покрытие шагов плана (по задачам)</h3>
+<table>
+<thead><tr><th>Статус</th><th>Кол-во</th></tr></thead>
+<tbody>
+<tr><td><span class="sev ok">DONE</span></td><td>14 из 14 задач</td></tr>
+<tr><td><span class="sev warn">PARTIAL</span></td><td>0</td></tr>
+<tr><td><span class="sev crit">MISSING</span></td><td>0</td></tr>
+</tbody>
+</table>
+
+<table>
+<thead><tr><th>Задача</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+<tbody>
+<tr><td>T1 · SEC-01 web authz</td><td><span class="sev ok">DONE</span></td><td><code>api/web/routes.py</code> (+198), <code>tests/api/test_web_auth_stale_session.py</code> (+85)</td></tr>
+<tr><td>T2 · SEC-02 body limit</td><td><span class="sev ok">DONE</span></td><td><code>api/middleware/body_limit.py</code> (+99), <code>main.py</code> (+21), <code>tests/api/test_body_limit.py</code> (+188)</td></tr>
+<tr><td>T3 · SEC-04 SSRF pin</td><td><span class="sev ok">DONE</span></td><td><code>security/ssrf.py</code> (+54), <code>tests/unit/test_ssrf_pin.py</code> (+171), <code>test_ssrf.py</code> (+70)</td></tr>
+<tr><td>T4 · SEC-05 /metrics auth</td><td><span class="sev ok">DONE</span></td><td><code>config.py</code>, <code>main.py</code>, <code>docker-compose.yml</code> (+26), <code>.env.example</code>, <code>tests/api/test_metrics_auth.py</code> (+53)</td></tr>
+<tr><td>T5 · SEC-06a ratelimit</td><td><span class="sev ok">DONE</span></td><td><code>security/ratelimit.py</code> (+95), <code>config.py</code>, <code>tests/integration/test_ratelimit.py</code> (+57)</td></tr>
+<tr><td>T6 · SEC-06b password policy</td><td><span class="sev ok">DONE</span></td><td><code>security/passwords.py</code> (+42), <code>services/setup.py</code>, <code>services/users.py</code>, <code>test_password_policy.py</code> (+22), <code>test_user_create_password_policy.py</code> (+39)</td></tr>
+<tr><td>T7 · SEC-06c login+setup throttle</td><td><span class="sev ok">DONE</span></td><td><code>routers/auth.py</code> (+74), <code>routers/setup.py</code> (+22, throttle подключён :47-53), <code>test_login_throttle.py</code> (+75), <code>test_setup_throttle.py</code> (+29) — закрывает прежний F-001</td></tr>
+<tr><td>T8 · SEC-03 uv.lock build</td><td><span class="sev ok">DONE</span></td><td><code>Dockerfile</code> (+6)</td></tr>
+<tr><td>T9 · OPS-01 PG fail-fast</td><td><span class="sev ok">DONE</span></td><td><code>docker-compose.yml</code>, <code>.env.example</code></td></tr>
+<tr><td>T10 · FUNC-01 web bulk drawer</td><td><span class="sev ok">DONE</span></td><td><code>templates/_jobs_drawer.html</code> (+8), <code>web/routes.py</code>, <code>domain.html</code> (+4), <code>test_web_bulk_upload.py</code> (+72)</td></tr>
+<tr><td>T11 · SEC-07 audit wiring</td><td><span class="sev ok">DONE</span></td><td><code>audit/actions.py</code> (+13), <code>routers/auth.py</code>, <code>routers/users.py</code>, сервисы <code>setup/users/api_keys/provider_settings/jobs/articles</code>, <code>test_audit_log.py</code> (+315); <code>INGEST_ROLLBACK</code> подключён <code>articles.py:139</code> — закрывает прежний F-002</td></tr>
+<tr><td>T12 · QUAL-01 .dockerignore</td><td><span class="sev ok">DONE</span></td><td><code>.dockerignore</code> (+21)</td></tr>
+<tr><td>T13 · Bandit triage</td><td><span class="sev ok">DONE</span></td><td><code>query_cache.py</code>, <code>graph/age/cypher.py</code>, <code>i18n.py</code>, <code>providers/structured.py</code>, B110-сайты (<code>langfuse_client.py</code>, <code>worker.py</code>, <code>jobs/tasks.py</code>), <code>test_cypher_guard.py</code> (+22)</td></tr>
+<tr><td>T14 · Coverage hardening</td><td><span class="sev ok">DONE</span></td><td><code>pyproject.toml</code> (+4, branch=true), <code>test_readiness.py</code> (+29), <code>test_worker_heartbeat.py</code>, <code>test_coverage_hardening.py</code> (+180), <code>test_web_routes_coverage.py</code> (+44)</td></tr>
+</tbody>
+</table>
+
+<h3>Таблица findings</h3>
+<table>
+<thead><tr><th>Severity</th><th>Шаг / привязка</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr></thead>
+<tbody>
+<tr>
+<td><span class="sev info">INFO</span></td><td>T7 / T11 follow-up: <code>client_ip.py</code>, <code>errors.py</code></td>
+<td>План для T7 называет <code>routers/auth.py</code>+<code>setup.py</code>; <code>api/client_ip.py</code> и правки <code>errors.py</code> не перечислены в File Structure.</td>
+<td><code>src/paw/api/client_ip.py</code> (+10, new), <code>src/paw/api/errors.py</code> (+17) — извлечение client-IP и поддержка Retry-After/429 для throttle.</td>
+<td>Не дефект: review-driven рефинемент T7 (коммиты <code>dc139bd</code>/<code>35ae0a9</code>). Опционально дописать строку в File Structure плана.</td>
+</tr>
+<tr>
+<td><span class="sev info">INFO</span></td><td>T10 follow-up: web SSE</td>
+<td>T10 называет <code>_jobs_drawer.html</code>+<code>routes.py</code>+<code>domain.html</code>; <code>app.js</code> и <code>_job_drawer.html</code> не перечислены.</td>
+<td><code>web/static/app.js</code> (+71), <code>templates/_job_drawer.html</code> (+6) — нативный EventSource для прогресса (коммит <code>d237876</code>).</td>
+<td>Не дефект: рефинемент T10 (рендер прогресса). Привязан к FUNC-01.</td>
+</tr>
+<tr>
+<td><span class="sev info">INFO</span></td><td>SEC-05 / OPS-01 docs+ops</td>
+<td>Планом не предусмотрены отдельные шаги для observability-конфигов и README.</td>
+<td><code>deploy/observability/*</code>, <code>prometheus.yml</code> (+3), <code>README.md</code>, <code>docs/README.ru.md</code>, <code>docs/wiki/ops.md</code> — документация METRICS_TOKEN/POSTGRES_PASSWORD.</td>
+<td>Не дефект: spec OPS-01 явно требует «document in the README run section». Соответствует spec.</td>
+</tr>
+</tbody>
+</table>
+<p class="legend">CRITICAL/MISSING findings нет: каждая из 14 задач имеет прямое свидетельство в diff. INFO-находки — это excess-файлы, привязанные к задачам плана через review-фиксы, а не несвязанные изменения.</p>
+
+<h3>Покрытие intent / spec</h3>
+<table>
+<thead><tr><th>Источник</th><th>Покрыто</th><th>Детали</th></tr></thead>
+<tbody>
+<tr><td>Intent — Desired Outcomes</td><td><span class="sev ok">n/a</span></td><td>intent не привязан (<code>chain.intent: null</code>)</td></tr>
+<tr><td>Spec — Goals (Desired Outcomes)</td><td><span class="sev ok">5 / 5</span></td><td>2 HIGH закрыты (SEC-01/02), 6 MED усилены (SEC-04/05/06/03/OPS-01/FUNC-01), 2 LOW решены (SEC-07/QUAL-01), bandit triage, coverage hardening — все отражены в diff.</td></tr>
+<tr><td>Spec — requirements (разделы)</td><td><span class="sev ok">12 / 12</span></td><td>SEC-01..07, OPS-01, FUNC-01, QUAL-01, Bandit, Coverage — каждый имеет код+тест в diff.</td></tr>
+<tr><td>Spec — Acceptance criteria</td><td><span class="sev warn">частично проверяемо</span></td><td>regression-тест на finding и закрытие HIGH/MED/LOW — подтверждено наличием файлов. «ruff/mypy/pytest зелёные» и «≥80% покрытия» статически из diff не проверяются (data-dependent, ср. прежний F-004) — требуют прогона CI.</td></tr>
+</tbody>
+</table>
+
+<h3>Excess changes</h3>
+<ul class="tight">
+<li><span class="sev info">INFO</span> <code>api/client_ip.py</code>, <code>api/errors.py</code> — рефинемент T7 (client-IP, 429/Retry-After).</li>
+<li><span class="sev info">INFO</span> <code>web/static/app.js</code>, <code>templates/_job_drawer.html</code> — рефинемент T10 (SSE-прогресс).</li>
+<li><span class="sev info">INFO</span> <code>deploy/observability/*</code>, <code>prometheus.yml</code>, <code>README.md</code>, <code>docs/README.ru.md</code>, <code>docs/wiki/ops.md</code> — документация ops (SEC-05/OPS-01, требуется spec).</li>
+<li><span class="sev info">INFO</span> <code>routers/settings.py</code>, <code>routers/sources.py</code>, тесты (<code>test_web_pages.py</code>, <code>test_maintenance_web.py</code>, <code>test_users_admin.py</code>, e2e, <code>conftest.py</code>) — правки под T6 (сильные пароли) и T11/T14, в пределах scope.</li>
+</ul>
+<p class="legend">Жёстких excess (изменения без связи с планом) нет. Все «лишние» файлы трассируются к задачам плана либо к требованиям spec.</p>
+
+<h3>Сводка</h3>
+<div class="note">
+<b>CRITICAL:</b> 0 · <b>WARNING:</b> 0 · <b>INFO:</b> 3 (excess-рефинементы) + 1 предупреждение о непроверяемых статически Acceptance criteria.<br>
+Все 14 задач плана — DONE с прямым свидетельством в diff. Прежние findings из review плана (<b>F-001</b> setup-throttle, <b>F-002</b> INGEST_ROLLBACK, <b>F-003</b> наложение T7/T11 на <code>login()</code>, <b>F-004</b> coverage DoD) — устранены в реализации: setup throttle подключён, <code>INGEST_ROLLBACK</code> заведён и подключён, login-audit лёг поверх throttle-хендлера, coverage-тесты добавлены с branch=true.
+</div>
+
+<h3>Итоговый вердикт</h3>
+<p><span class="verdict okv">OK — 14/14 DONE, 0 CRITICAL, 0 MISSING</span></p>
+<p class="legend">Вердикт <code>OK</code>: нет MISSING-шагов и CRITICAL-находок. INFO-находки (excess-рефинементы) не блокируют. Рекомендация: прогнать CI (<code>ruff check .</code> → <code>mypy src</code> → <code>pytest -q</code>) и <code>coverage report</code> для подтверждения статически-непроверяемых Acceptance criteria (зелёные проверки + ≥80%).</p>
+
+<h3>Цепочка (intent → spec → plan → result)</h3>
+<table>
+<thead><tr><th>Звено</th><th>Значение</th></tr></thead>
+<tbody>
+<tr><td>intent</td><td><code>null</code> — не привязан</td></tr>
+<tr><td>spec</td><td><code>2026-06-30-security-audit-followup-design.md</code> · spec_hash <code>e2661b83be9c570a</code></td></tr>
+<tr><td>plan</td><td><code>2026-06-30-security-audit-followup.md</code> · plan_hash <code>1cced2f470425a5d</code></td></tr>
+<tr><td>result</td><td>verdict <code>OK</code> · diff base <code>master...HEAD</code> · last_run 2026-06-30</td></tr>
+</tbody>
+</table>
+
 </section>
 <!-- TAB:result END -->
 

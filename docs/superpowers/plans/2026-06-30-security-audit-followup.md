@@ -74,6 +74,10 @@ review:
         already names candidates: articles.rollback, maintenance start_*, setup
         409, users last-admin 409) so the DoD is enumerable up front.
       verdict: fixed
+result_check:
+  verdict: OK
+  plan_hash: 1cced2f470425a5d
+  last_run: 2026-06-30
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-30-security-audit-followup-design.md
