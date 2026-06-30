@@ -5,10 +5,6 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 _TOO_LARGE = b'{"title":"Payload too large","status":413}'
 
 
-class _BodyTooLarge(Exception):
-    pass
-
-
 class BodySizeLimitMiddleware:
     """Reject request bodies larger than ``max_bytes`` at the ASGI layer.
 
@@ -25,39 +21,56 @@ class BodySizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        headers = dict(scope.get("headers") or [])
-        content_length = headers.get(b"content-length")
-        if content_length is not None:
-            try:
-                if int(content_length) > self.max_bytes:
-                    await self._reject(send)
-                    return
-            except ValueError:
-                pass
+        if self._has_oversized_or_ambiguous_content_length(scope):
+            await self._reject(send)
+            return
 
+        replay_messages: list[Message] = []
         received = 0
-        started = False
-
-        async def counting_receive() -> Message:
-            nonlocal received
+        while True:
             message = await receive()
-            if message["type"] == "http.request":
-                received += len(message.get("body", b""))
-                if received > self.max_bytes:
-                    raise _BodyTooLarge
-            return message
+            if message["type"] != "http.request":
+                replay_messages.append(message)
+                break
 
-        async def guarded_send(message: Message) -> None:
-            nonlocal started
-            if message["type"] == "http.response.start":
-                started = True
-            await send(message)
-
-        try:
-            await self.app(scope, counting_receive, guarded_send)
-        except _BodyTooLarge:
-            if not started:
+            body = message.get("body", b"")
+            received += len(body)
+            if received > self.max_bytes:
                 await self._reject(send)
+                return
+
+            replay_messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        replay = iter(replay_messages)
+
+        async def replay_receive() -> Message:
+            try:
+                return next(replay)
+            except StopIteration:
+                return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+    def _has_oversized_or_ambiguous_content_length(self, scope: Scope) -> bool:
+        content_lengths = [
+            value
+            for name, value in scope.get("headers") or []
+            if name.lower() == b"content-length"
+        ]
+        if not content_lengths:
+            return False
+
+        parsed_values: list[int] = []
+        for value in content_lengths:
+            if not value.isdigit():
+                return True
+            parsed_values.append(int(value))
+
+        if any(value > self.max_bytes for value in parsed_values):
+            return True
+        return len(set(parsed_values)) > 1
 
     async def _reject(self, send: Send) -> None:
         await send(
