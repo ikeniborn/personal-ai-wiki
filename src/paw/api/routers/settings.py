@@ -39,10 +39,12 @@ class ProviderConnRequest(BaseModel):
 @router.post(
     "/provider",
     status_code=204,
-    dependencies=[Depends(require_csrf), Depends(require_role("admin"))],
+    dependencies=[Depends(require_csrf)],
 )
 async def set_provider_connection(
-    body: ProviderConnRequest, session: AsyncSession = Depends(db)
+    body: ProviderConnRequest,
+    session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin")),
 ) -> Response:
-    await ProviderSettingsService(session).update_provider(**body.model_dump())
+    await ProviderSettingsService(session).update_provider(**body.model_dump(), actor_id=user.id)
     return Response(status_code=204)

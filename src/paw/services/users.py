@@ -39,7 +39,9 @@ class UserService:
     async def get(self, user_id: uuid.UUID) -> User | None:
         return await self._repo.get(user_id)
 
-    async def set_role(self, *, user_id: uuid.UUID, role: str) -> User:
+    async def set_role(
+        self, *, user_id: uuid.UUID, role: str, actor_id: uuid.UUID | None = None
+    ) -> User:
         if role not in USER_ROLES:
             raise ProblemError(
                 status=422, title="Invalid role", detail=f"role must be one of {USER_ROLES}"
@@ -58,7 +60,7 @@ class UserService:
         await self._repo.set_role(user_id, role)
         await record(
             self._s,
-            user_id=None,
+            user_id=actor_id,
             action=actions.USER_ROLE_CHANGE,
             target_type="user",
             target_id=user_id,
@@ -68,7 +70,7 @@ class UserService:
         assert refreshed is not None
         return refreshed
 
-    async def delete(self, *, user_id: uuid.UUID) -> None:
+    async def delete(self, *, user_id: uuid.UUID, actor_id: uuid.UUID | None = None) -> None:
         target = await self._repo.get(user_id)
         if target is None:
             raise ProblemError(status=404, title="User not found")
@@ -78,7 +80,7 @@ class UserService:
             )
         await record(
             self._s,
-            user_id=None,
+            user_id=actor_id,
             action=actions.USER_DELETE,
             target_type="user",
             target_id=user_id,

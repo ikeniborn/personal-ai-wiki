@@ -209,11 +209,13 @@ async def web_start_ingest(
     source_id: uuid.UUID = Form(...),
     session: AsyncSession = Depends(db),
     _: None = Depends(require_csrf),
-    __: User = Depends(require_role("admin", "editor")),
+    user: User = Depends(require_role("admin", "editor")),
 ) -> Response:
     # Start the job and return the SSE-wired drawer partial so HTMX swaps a live
     # progress drawer into #job-drawer (not the raw JSON the API endpoint returns).
-    job = await JobService(session).start_ingest(domain_id=domain_id, source_id=source_id)
+    job = await JobService(session).start_ingest(
+        domain_id=domain_id, source_id=source_id, actor_id=user.id
+    )
     csrf = request.cookies.get(CSRF_COOKIE, "")
     return templates.TemplateResponse(request, "_job_drawer.html", {"job_id": job.id, "csrf": csrf})
 
@@ -225,7 +227,7 @@ async def web_bulk_upload(
     file: UploadFile = File(...),
     session: AsyncSession = Depends(db),
     _: None = Depends(require_csrf),
-    __: User = Depends(require_role("admin", "editor")),
+    user: User = Depends(require_role("admin", "editor")),
 ) -> Response:
     data = await file.read()
     try:
@@ -236,7 +238,7 @@ async def web_bulk_upload(
     jobs = JobService(session)
     job_ids: list[str] = []
     for src in srcs:
-        job = await jobs.start_ingest(domain_id=domain_id, source_id=src.id)
+        job = await jobs.start_ingest(domain_id=domain_id, source_id=src.id, actor_id=user.id)
         job_ids.append(str(job.id))
 
     csrf = request.cookies.get(CSRF_COOKIE, "")

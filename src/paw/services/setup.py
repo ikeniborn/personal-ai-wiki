@@ -49,6 +49,7 @@ class SetupService:
             embedding_dim=embedding_dim,
             api_key=api_key,
             vision_model=vision_model,
+            actor_id=admin.id,
         )
         await ensure_embedding_column(self._s, embedding_dim)
         await record(

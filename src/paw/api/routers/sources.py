@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.deps import db, require_csrf, require_role
 from paw.api.errors import ProblemError
+from paw.db.models import User
 from paw.security.ssrf import SsrfRejected
 from paw.security.uploads import UploadRejected
 from paw.services.jobs import JobService
@@ -29,12 +30,13 @@ class BulkOut(BaseModel):
     "",
     status_code=201,
     response_model=SourceOut,
-    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+    dependencies=[Depends(require_csrf)],
 )
 async def upload_source(
     domain_id: uuid.UUID,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(db),
+    _: User = Depends(require_role("admin", "editor")),
 ) -> SourceOut:
     data = await file.read()
     try:
@@ -53,12 +55,13 @@ async def upload_source(
     "/bulk",
     status_code=201,
     response_model=BulkOut,
-    dependencies=[Depends(require_csrf), Depends(require_role("admin", "editor"))],
+    dependencies=[Depends(require_csrf)],
 )
 async def upload_bulk(
     domain_id: uuid.UUID,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(db),
+    user: User = Depends(require_role("admin", "editor")),
 ) -> BulkOut:
     data = await file.read()
     try:
@@ -68,7 +71,7 @@ async def upload_bulk(
     job_ids: list[str] = []
     jobs = JobService(session)
     for src in srcs:
-        job = await jobs.start_ingest(domain_id=domain_id, source_id=src.id)
+        job = await jobs.start_ingest(domain_id=domain_id, source_id=src.id, actor_id=user.id)
         job_ids.append(str(job.id))
     return BulkOut(
         sources=[SourceOut(id=str(src.id), filename=src.filename, type=src.type) for src in srcs],

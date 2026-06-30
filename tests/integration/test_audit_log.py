@@ -2,8 +2,11 @@ import uuid
 
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from pytest import MonkeyPatch
+from sqlalchemy import delete, func, select
 
+import paw.services.jobs as jobs_svc
+from paw.api.deps import get_session_store
 from paw.audit import actions
 from paw.db.models import AuditLog
 from paw.db.repos.domains import DomainRepo
@@ -58,13 +61,15 @@ async def test_user_admin_operations_write_audit_rows(db_session, wired_settings
     )
     await db_session.commit()
 
-    await UserService(db_session).set_role(user_id=target.id, role="editor")
+    await UserService(db_session).set_role(user_id=target.id, role="editor", actor_id=actor.id)
     role_row = await _latest(db_session, actions.USER_ROLE_CHANGE)
+    assert role_row.user_id == actor.id
     assert role_row.target_type == "user"
     assert role_row.target_id == target.id
 
-    await UserService(db_session).delete(user_id=target.id)
+    await UserService(db_session).delete(user_id=target.id, actor_id=actor.id)
     delete_row = await _latest(db_session, actions.USER_DELETE)
+    assert delete_row.user_id == actor.id
     assert delete_row.target_type == "user"
     assert delete_row.target_id == target.id
 
@@ -106,14 +111,19 @@ async def test_api_key_issue_and_revoke_write_audit_rows(db_session, wired_setti
 
 
 async def test_provider_changes_write_audit_rows(db_session, wired_settings):
+    actor = await UserRepo(db_session).create(
+        email="provider@example.com", pw_hash=hash_password("pw12345678901"), role="admin"
+    )
+    await db_session.commit()
     key = Fernet.generate_key().decode()
     svc = ProviderSettingsService(db_session, box=SecretBox(key))
     await svc.set_provider(
-        base_url="https://api.example/v1",
+        base_url="https://user:pass@api.example/v1?token=secret",
         chat_model="chat-1",
         embedding_model="embedding-1",
         embedding_dim=8,
         api_key="sk-secret",
+        actor_id=actor.id,
     )
     await svc.update_provider(
         base_url="https://api.example/v1",
@@ -121,11 +131,19 @@ async def test_provider_changes_write_audit_rows(db_session, wired_settings):
         embedding_model="embedding-2",
         embedding_dim=8,
         api_key="sk-secret",
+        actor_id=actor.id,
     )
     assert await _count(db_session, actions.PROVIDER_CHANGE) == 2
+    row = await _latest(db_session, actions.PROVIDER_CHANGE)
+    assert row.user_id == actor.id
+    assert "base_url" not in row.meta
+    assert "api_key" not in row.meta
 
 
 async def test_start_ingest_writes_audit_row(db_session, wired_settings):
+    actor = await UserRepo(db_session).create(
+        email="ingest@example.com", pw_hash=hash_password("pw12345678901"), role="admin"
+    )
     domain = await DomainRepo(db_session).create(
         name="Docs", source_prefix="sources/docs", wiki_prefix="wiki/docs"
     )
@@ -138,10 +156,54 @@ async def test_start_ingest_writes_audit_row(db_session, wired_settings):
     )
     await db_session.commit()
 
-    await JobService(db_session).start_ingest(domain_id=domain.id, source_id=source.id)
+    await JobService(db_session).start_ingest(
+        domain_id=domain.id, source_id=source.id, actor_id=actor.id
+    )
     row = await _latest(db_session, actions.INGEST_START)
+    assert row.user_id == actor.id
     assert row.target_type == "source"
     assert row.target_id == source.id
+
+
+async def test_init_domain_writes_ingest_audit_rows(
+    db_session, wired_settings, monkeypatch: MonkeyPatch
+):
+    actor = await UserRepo(db_session).create(
+        email="init@example.com", pw_hash=hash_password("pw12345678901"), role="admin"
+    )
+    await ProviderSettingsService(db_session).set_provider(
+        base_url="https://api.example/v1",
+        chat_model="gpt-x",
+        embedding_model="emb-x",
+        embedding_dim=8,
+        api_key="sk-x",
+        actor_id=actor.id,
+    )
+    domain = await DomainRepo(db_session).create(
+        name="Init", source_prefix="sources/init", wiki_prefix="wiki/init"
+    )
+    await db_session.commit()
+
+    async def fake_plan(*, domain_name, brief, chat, cfg):
+        return ["Alpha", "Beta"]
+
+    async def fake_enqueue(redis, **kwargs):
+        return None
+
+    monkeypatch.setattr(jobs_svc, "build_structure_plan", fake_plan)
+    monkeypatch.setattr(jobs_svc, "enqueue_ingest", fake_enqueue)
+
+    before = await _count(db_session, actions.INGEST_START)
+    await JobService(db_session).init_domain(
+        domain_id=domain.id, brief="seed", actor_id=actor.id
+    )
+    after = await _count(db_session, actions.INGEST_START)
+
+    assert after == before + 2
+    row = await _latest(db_session, actions.INGEST_START)
+    assert row.user_id == actor.id
+    assert row.target_type == "topic"
+    assert row.meta["topic"] in {"Alpha", "Beta"}
 
 
 async def test_article_rollback_writes_audit_row(db_session, wired_settings):
@@ -197,6 +259,31 @@ async def test_login_and_logout_write_audit_rows(db_session, wired_settings):
     assert login_row.user_id == user.id
     logout_row = await _latest(db_session, actions.LOGOUT)
     assert logout_row.user_id == user.id
+
+
+async def test_logout_with_deleted_user_session_clears_session(db_session, wired_settings):
+    user = await UserRepo(db_session).create(
+        email="deleted-login@example.com", pw_hash=hash_password("pw12345"), role="admin"
+    )
+    await db_session.commit()
+    app = create_app()
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="https://t") as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "deleted-login@example.com", "password": "pw12345"},
+        )
+        assert login.status_code == 200
+        sid = client.cookies.get("paw_session")
+        assert sid
+        await db_session.execute(delete(AuditLog).where(AuditLog.user_id == user.id))
+        await UserRepo(db_session).delete(user.id)
+        await db_session.commit()
+
+        logout = await client.post("/api/v1/auth/logout")
+
+    assert logout.status_code == 204
+    assert await get_session_store().get(sid) is None
 
 
 async def test_admin_api_user_create_records_actor(db_session, wired_settings):

@@ -110,11 +110,10 @@ async def logout(
                 user_id = uuid.UUID(raw_user_id)
             except ValueError:
                 user_id = None
-        if user_id is not None:
+        if user_id is not None and await UserRepo(session).get(user_id) is not None:
             await record(session, user_id=user_id, action=actions.LOGOUT)
-        await store.delete(sid)
-        if user_id is not None:
             await session.commit()
+        await store.delete(sid)
     response.delete_cookie(SESSION_COOKIE)
     response.delete_cookie(CSRF_COOKIE)
     return Response(status_code=204)
