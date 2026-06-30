@@ -1,4 +1,5 @@
 import contextlib
+import secrets
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from paw.api.errors import install_error_handlers
+from paw.api.errors import ProblemError, install_error_handlers
 from paw.api.middleware.body_limit import BodySizeLimitMiddleware
 from paw.api.routers import api_keys as api_keys_router
 from paw.api.routers import articles as articles_router
@@ -72,7 +73,14 @@ def create_app() -> FastAPI:
         return await health(ready=1)
 
     @app.get("/metrics")
-    async def metrics_endpoint() -> Response:
+    async def metrics_endpoint(request: Request) -> Response:
+        token = get_settings().metrics_token
+        if not token:
+            raise ProblemError(status=404, title="Not found")
+        expected = f"Bearer {token}"
+        provided = request.headers.get("authorization", "")
+        if not (provided and secrets.compare_digest(provided, expected)):
+            raise ProblemError(status=401, title="Unauthorized")
         payload, content_type = render_metrics()
         return Response(payload, media_type=content_type)
 

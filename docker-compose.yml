@@ -67,6 +67,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres: { condition: service_healthy }
 
@@ -89,6 +90,12 @@ services:
       - "traefik.http.routers.paw.entrypoints=websecure"
       - "traefik.http.routers.paw.tls.certresolver=le"
       - "traefik.http.services.paw.loadbalancer.server.port=8000"
+      - "traefik.http.routers.paw-metrics.rule=Host(`${PAW_HOST:-localhost}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.paw-metrics.entrypoints=websecure"
+      - "traefik.http.routers.paw-metrics.tls.certresolver=le"
+      - "traefik.http.routers.paw-metrics.service=paw"
+      - "traefik.http.routers.paw-metrics.middlewares=metrics-allowlist"
+      - "traefik.http.middlewares.metrics-allowlist.ipallowlist.sourcerange=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
       interval: 10s

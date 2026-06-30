@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     max_unzip_bytes: int = 100 * 1024 * 1024
     max_unzip_entries: int = 2000
     max_compression_ratio: float = 100.0
+    metrics_token: str | None = None  # Bearer token gating /metrics; unset = endpoint disabled
 
 
 @lru_cache
