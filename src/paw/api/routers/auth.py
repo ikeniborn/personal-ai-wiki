@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paw.api.auth import LoginRequest, LoginResponse
+from paw.api.client_ip import client_ip
 from paw.api.deps import (
     CSRF_COOKIE,
     SESSION_COOKIE,
@@ -19,6 +20,15 @@ from paw.security.sessions import SessionStore
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_DUMMY_PASSWORD_HASH = (
+    "$argon2id$v=19$m=65536,t=3,p=4$kPkNAztwLj1cOKf4AEC6rA"
+    "$Kboljui51UbAfJfUmKUyfvdMmBipqa466f7/N2HAlAY"
+)
+
+
+def _login_email_key(email: str) -> str:
+    return email.strip().casefold()
+
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
@@ -30,8 +40,9 @@ async def login(
 ) -> LoginResponse:
     s = get_settings()
     redis = get_redis()
-    ip = request.client.host if request.client else "unknown"
-    email_guard_key = f"email:{body.email}"
+    ip = client_ip(request)
+    email_key = _login_email_key(str(body.email))
+    email_guard_key = f"email:{email_key}"
     ip_guard_key = f"ip:{ip}"
 
     guard = LoginGuard(
@@ -53,7 +64,7 @@ async def login(
         window_seconds=s.login_rate_window_seconds,
     )
     email_allowed = await limiter.hit(
-        f"login:email:{body.email}",
+        f"login:email:{email_key}",
         limit=s.login_rate_limit,
         window_seconds=s.login_rate_window_seconds,
     )
@@ -61,7 +72,8 @@ async def login(
         raise ProblemError(status=429, title="Too many attempts", detail="slow down")
 
     user = await UserRepo(session).get_by_email(body.email)
-    if user is None or not verify_password(body.password, user.pw_hash):
+    pw_hash = user.pw_hash if user is not None else _DUMMY_PASSWORD_HASH
+    if not verify_password(body.password, pw_hash) or user is None:
         await guard.record_failure(email_guard_key)
         await guard.record_failure(ip_guard_key)
         raise ProblemError(status=401, title="Unauthorized", detail="bad credentials")

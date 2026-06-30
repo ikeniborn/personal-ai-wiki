@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paw.api.client_ip import client_ip
 from paw.api.deps import db, get_redis
 from paw.api.errors import ProblemError
 from paw.config import get_settings
@@ -42,7 +43,7 @@ async def complete(
     body: SetupRequest, request: Request, session: AsyncSession = Depends(db)
 ) -> SetupResult:
     s = get_settings()
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     allowed = await RateLimiter(get_redis()).hit(
         f"setup:ip:{ip}",
         limit=s.login_rate_limit,
