@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import SplitResult, urljoin, urlsplit
 
 import httpx
 
@@ -13,6 +13,7 @@ class SsrfRejected(Exception):
 
 _MAX_HOPS = 5
 _TIMEOUT = httpx.Timeout(5.0, connect=5.0)
+_NO_KEEPALIVE_LIMITS = httpx.Limits(max_keepalive_connections=0)
 
 
 def _ip_is_blocked(ip: str) -> bool:
@@ -32,6 +33,10 @@ def _pinned_host(ip: str) -> str:
     if ipaddress.ip_address(ip).version == 6:
         return f"[{ip}]"
     return ip
+
+
+def _http_authority(parts: SplitResult) -> str:
+    return parts.netloc.rsplit("@", 1)[-1]
 
 
 def validate_url(url: str, *, allowlist: list[str]) -> tuple[str, str]:
@@ -76,13 +81,18 @@ async def safe_get(
     client: httpx.AsyncClient | None = None,
 ) -> bytes:
     owns_client = client is None
-    active_client = client or httpx.AsyncClient(follow_redirects=False, timeout=_TIMEOUT)
+    active_client = client or httpx.AsyncClient(
+        follow_redirects=False,
+        timeout=_TIMEOUT,
+        limits=_NO_KEEPALIVE_LIMITS,
+    )
     current = url
     redirects = 0
     try:
         while True:
             host, ip = validate_url(current, allowlist=allowlist)
             parts = urlsplit(current)
+            authority = _http_authority(parts)
             port = parts.port or 443
             path = parts.path or "/"
             if parts.query:
@@ -91,7 +101,7 @@ async def safe_get(
             async with active_client.stream(
                 "GET",
                 pinned,
-                headers={"Host": host},
+                headers={"Host": authority},
                 extensions={"sni_hostname": host},
                 follow_redirects=False,
             ) as resp:

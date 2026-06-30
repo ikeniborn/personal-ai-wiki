@@ -14,6 +14,23 @@ def _patch_resolve(monkeypatch, ip: str):
     monkeypatch.setattr(socket, "getaddrinfo", fake)
 
 
+def _patch_resolve_map(monkeypatch, host_ips: dict[str, list[str]]):
+    def fake(host, *a, **k):
+        ips = host_ips[host]
+        return [
+            (
+                socket.AF_INET6 if ":" in ip else socket.AF_INET,
+                None,
+                None,
+                "",
+                (ip, 0),
+            )
+            for ip in ips
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake)
+
+
 def test_rejects_non_https(monkeypatch):
     _patch_resolve(monkeypatch, "93.184.216.34")
     with pytest.raises(SsrfRejected):
@@ -30,6 +47,12 @@ def test_rejects_private_ipv4(monkeypatch):
     _patch_resolve(monkeypatch, "10.0.0.5")
     with pytest.raises(SsrfRejected):
         validate_url("https://intranet.example/x", allowlist=[])
+
+
+def test_rejects_mixed_dns_result_with_private_address(monkeypatch):
+    _patch_resolve_map(monkeypatch, {"example.com": ["93.184.216.34", "10.0.0.5"]})
+    with pytest.raises(SsrfRejected, match="resolved to a blocked address: 10.0.0.5"):
+        validate_url("https://example.com/x", allowlist=[])
 
 
 def test_rejects_link_local(monkeypatch):
@@ -147,6 +170,27 @@ async def test_safe_get_revalidates_redirect_target(monkeypatch):
     )
 
     with pytest.raises(SsrfRejected, match="only https urls are allowed"):
+        await safe_get("https://example.com/x", max_bytes=10, allowlist=[])
+
+
+async def test_safe_get_rejects_redirect_target_resolving_to_private(monkeypatch):
+    _patch_resolve_map(
+        monkeypatch,
+        {
+            "example.com": ["93.184.216.34"],
+            "internal.example.com": ["10.0.0.5"],
+        },
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302,
+            headers={"location": "https://internal.example.com/private"},
+        )
+
+    _patch_client(monkeypatch, handler)
+
+    with pytest.raises(SsrfRejected, match="resolved to a blocked address: 10.0.0.5"):
         await safe_get("https://example.com/x", max_bytes=10, allowlist=[])
 
 
