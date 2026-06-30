@@ -168,7 +168,9 @@ services:
     image: prometheuscommunity/postgres-exporter
     profiles: ["observability"]
     environment:
-      DATA_SOURCE_NAME: "postgresql://paw:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/paw?sslmode=disable"
+      DATA_SOURCE_URI: "postgres:5432/paw?sslmode=disable"
+      DATA_SOURCE_USER: paw
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
 
   redis_exporter:
     image: oliver006/redis_exporter
