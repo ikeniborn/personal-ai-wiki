@@ -28,7 +28,13 @@ def _ip_is_blocked(ip: str) -> bool:
     )
 
 
-def validate_url(url: str, *, allowlist: list[str]) -> str:
+def _pinned_host(ip: str) -> str:
+    if ipaddress.ip_address(ip).version == 6:
+        return f"[{ip}]"
+    return ip
+
+
+def validate_url(url: str, *, allowlist: list[str]) -> tuple[str, str]:
     parts = urlsplit(url)
     if parts.scheme != "https":
         raise SsrfRejected("only https urls are allowed")
@@ -58,16 +64,37 @@ def validate_url(url: str, *, allowlist: list[str]) -> str:
         ip = str(info[4][0])
         if _ip_is_blocked(ip):
             raise SsrfRejected(f"resolved to a blocked address: {ip}")
-    return host
+    verified_ip = str(infos[0][4][0])
+    return host, verified_ip
 
 
-async def safe_get(url: str, *, max_bytes: int, allowlist: list[str]) -> bytes:
+async def safe_get(
+    url: str,
+    *,
+    max_bytes: int,
+    allowlist: list[str],
+    client: httpx.AsyncClient | None = None,
+) -> bytes:
+    owns_client = client is None
+    active_client = client or httpx.AsyncClient(follow_redirects=False, timeout=_TIMEOUT)
     current = url
     redirects = 0
-    async with httpx.AsyncClient(follow_redirects=False, timeout=_TIMEOUT) as client:
+    try:
         while True:
-            validate_url(current, allowlist=allowlist)
-            async with client.stream("GET", current) as resp:
+            host, ip = validate_url(current, allowlist=allowlist)
+            parts = urlsplit(current)
+            port = parts.port or 443
+            path = parts.path or "/"
+            if parts.query:
+                path = f"{path}?{parts.query}"
+            pinned = f"https://{_pinned_host(ip)}:{port}{path}"
+            async with active_client.stream(
+                "GET",
+                pinned,
+                headers={"Host": host},
+                extensions={"sni_hostname": host},
+                follow_redirects=False,
+            ) as resp:
                 if resp.is_redirect:
                     if redirects >= _MAX_HOPS:
                         raise SsrfRejected("too many redirects")
@@ -85,3 +112,6 @@ async def safe_get(url: str, *, max_bytes: int, allowlist: list[str]) -> bytes:
                         raise SsrfRejected("response too large")
                     buf += chunk
                 return bytes(buf)
+    finally:
+        if owns_client:
+            await active_client.aclose()

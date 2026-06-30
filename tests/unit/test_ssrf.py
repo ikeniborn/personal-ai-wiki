@@ -70,13 +70,16 @@ def test_accepts_public_in_allowlist(monkeypatch):
     _patch_resolve(monkeypatch, "93.184.216.34")
     assert (
         validate_url("https://docs.example.com/x", allowlist=["example.com"])
-        == "docs.example.com"
+        == ("docs.example.com", "93.184.216.34")
     )
 
 
 def test_accepts_public_empty_allowlist(monkeypatch):
     _patch_resolve(monkeypatch, "93.184.216.34")
-    assert validate_url("https://example.com/x", allowlist=[]) == "example.com"
+    assert validate_url("https://example.com/x", allowlist=[]) == (
+        "example.com",
+        "93.184.216.34",
+    )
 
 
 def _patch_client(monkeypatch, handler):
@@ -92,21 +95,24 @@ def _patch_client(monkeypatch, handler):
 async def test_safe_get_allows_five_redirect_hops(monkeypatch):
     _patch_resolve(monkeypatch, "93.184.216.34")
     redirects = {
-        "https://example.com/0": "https://example.com/1",
-        "https://example.com/1": "https://example.com/2",
-        "https://example.com/2": "https://example.com/3",
-        "https://example.com/3": "https://example.com/4",
-        "https://example.com/4": "https://example.com/5",
+        "/0": "https://example.com/1",
+        "/1": "https://example.com/2",
+        "/2": "https://example.com/3",
+        "/3": "https://example.com/4",
+        "/4": "https://example.com/5",
     }
+    seen_paths = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if url in redirects:
-            return httpx.Response(302, headers={"location": redirects[url]})
+        path = request.url.path
+        seen_paths.append(path)
+        if path in redirects:
+            return httpx.Response(302, headers={"location": redirects[path]})
         return httpx.Response(200, content=b"ok")
 
     _patch_client(monkeypatch, handler)
     assert await safe_get("https://example.com/0", max_bytes=10, allowlist=[]) == b"ok"
+    assert seen_paths == ["/0", "/1", "/2", "/3", "/4", "/5"]
 
 
 async def test_safe_get_rejects_response_over_cap(monkeypatch):
