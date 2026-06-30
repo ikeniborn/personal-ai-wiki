@@ -67,7 +67,6 @@ services:
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
-      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres: { condition: service_healthy }
 
@@ -80,6 +79,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
       FERNET_KEY: ${FERNET_KEY}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -90,7 +90,7 @@ services:
       - "traefik.http.routers.paw.entrypoints=websecure"
       - "traefik.http.routers.paw.tls.certresolver=le"
       - "traefik.http.services.paw.loadbalancer.server.port=8000"
-      - "traefik.http.routers.paw-metrics.rule=Host(`${PAW_HOST:-localhost}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.paw-metrics.rule=Host(`${PAW_HOST:-localhost}`) && Path(`/metrics`)"
       - "traefik.http.routers.paw-metrics.entrypoints=websecure"
       - "traefik.http.routers.paw-metrics.tls.certresolver=le"
       - "traefik.http.routers.paw-metrics.service=paw"
@@ -145,6 +145,8 @@ services:
     volumes:
       - "./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
       - "promdata:/prometheus"
+    secrets:
+      - metrics_token
 
   grafana:
     image: grafana/grafana:11.6.1
@@ -209,3 +211,7 @@ volumes:
   promdata:
   grafanadata:
   backups:
+
+secrets:
+  metrics_token:
+    environment: METRICS_TOKEN

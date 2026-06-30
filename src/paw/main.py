@@ -77,9 +77,12 @@ def create_app() -> FastAPI:
         token = get_settings().metrics_token
         if not token:
             raise ProblemError(status=404, title="Not found")
-        expected = f"Bearer {token}"
         provided = request.headers.get("authorization", "")
-        if not (provided and secrets.compare_digest(provided, expected)):
+        try:
+            scheme, provided_token = provided.split(None, 1)
+        except ValueError:
+            raise ProblemError(status=401, title="Unauthorized") from None
+        if scheme.lower() != "bearer" or not secrets.compare_digest(provided_token, token):
             raise ProblemError(status=401, title="Unauthorized")
         payload, content_type = render_metrics()
         return Response(payload, media_type=content_type)
