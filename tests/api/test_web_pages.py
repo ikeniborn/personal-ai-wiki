@@ -68,6 +68,21 @@ async def test_domain_page_has_ingest_action(authed):
     assert 'id="job-drawer"' in page.text
 
 
+async def test_query_page_uses_user_language_context(authed):
+    c, csrf, dom = authed
+    await c.post(
+        "/api/v1/users/me/ui-language",
+        json={"ui_language": "ru"},
+        headers={"x-csrf-token": csrf},
+    )
+
+    page = await c.get(f"/domains/{dom}/query")
+
+    assert page.status_code == 200
+    assert '<html lang="ru">' in page.text
+    assert 'title="Домены"' in page.text
+
+
 async def test_web_ingest_renders_job_drawer(authed, monkeypatch):
     import paw.services.jobs as jobs_svc
 

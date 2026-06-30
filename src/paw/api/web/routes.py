@@ -84,7 +84,12 @@ async def _require_web_user(
     uid = await store.get(sid)
     if not uid:
         return None
-    user = await UserRepo(session).get(uuid.UUID(uid))
+    try:
+        user_id = uuid.UUID(uid)
+    except ValueError:
+        await store.delete(sid)
+        return None
+    user = await UserRepo(session).get(user_id)
     if user is None:
         await store.delete(sid)
         return None
@@ -306,9 +311,9 @@ async def query_page(
     if user is None:
         return RedirectResponse("/login", status_code=307)
     domain = await DomainRepo(session).get(domain_id)
-    csrf = request.cookies.get(CSRF_COOKIE, "")
+    app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
-        request, "query.html", {"domain": domain, "csrf": csrf, "user": user}
+        request, "query.html", page_ctx(request, user, app_settings, domain=domain)
     )
 
 
@@ -408,20 +413,19 @@ async def article_page(
     tree = await svc.domain_tree(body.article.domain_id)
     slug_map = await svc.slug_map(body.article.domain_id)
     domain = await DomainRepo(session).get(body.article.domain_id)
-    csrf = request.cookies.get(CSRF_COOKIE, "")
+    app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
         request,
         "article.html",
-        {
-            "article": body.article,
-            "html": render_markdown(resolve_wikilinks(body.markdown, slug_map)),
-            "markdown": body.markdown,
-            "meta": meta,
-            "tree": tree,
-            "domain_name": domain.name if domain else "",
-            "csrf": csrf,
-            "user": user,
-        },
+        page_ctx(
+            request, user, app_settings,
+            article=body.article,
+            html=render_markdown(resolve_wikilinks(body.markdown, slug_map)),
+            markdown=body.markdown,
+            meta=meta,
+            tree=tree,
+            domain_name=domain.name if domain else "",
+        ),
     )
 
 
@@ -484,18 +488,17 @@ async def chat_page(
         return RedirectResponse("/login", status_code=307)
     sessions = await ChatRepo(session).list_by_user(user.id, limit=50)
     domains = await DomainService(session).list()
-    csrf = request.cookies.get(CSRF_COOKIE, "")
+    app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
         request,
         "chat.html",
-        {
-            "sessions": sessions,
-            "domains": domains,
-            "session": None,
-            "messages": [],
-            "csrf": csrf,
-            "user": user,
-        },
+        page_ctx(
+            request, user, app_settings,
+            sessions=sessions,
+            domains=domains,
+            session=None,
+            messages=[],
+        ),
     )
 
 
@@ -517,18 +520,17 @@ async def chat_session_page(
     ]
     sessions = await ChatRepo(session).list_by_user(user.id, limit=50)
     domains = await DomainService(session).list()
-    csrf = request.cookies.get(CSRF_COOKIE, "")
+    app_settings = await SettingsService(session).get()
     return templates.TemplateResponse(
         request,
         "chat.html",
-        {
-            "sessions": sessions,
-            "domains": domains,
-            "session": sess,
-            "messages": messages,
-            "csrf": csrf,
-            "user": user,
-        },
+        page_ctx(
+            request, user, app_settings,
+            sessions=sessions,
+            domains=domains,
+            session=sess,
+            messages=messages,
+        ),
     )
 
 

@@ -35,6 +35,29 @@ async def test_deleted_user_session_is_rejected_and_evicted(db_session, wired_se
         await c.aclose()
 
 
+async def test_malformed_user_id_session_is_rejected_and_evicted(db_session, wired_settings):
+    await UserRepo(db_session).create(
+        email="corrupt@example.com", pw_hash=hash_password("pw12345678901"), role="admin"
+    )
+    await db_session.commit()
+    app = create_app()
+    store = get_session_store()
+    sid = await store.create("not-a-uuid")
+    c = AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://t", follow_redirects=False
+    )
+    try:
+        c.cookies.set(SESSION_COOKIE, sid)
+
+        resp = await c.get("/")
+
+        assert resp.status_code == 307
+        assert resp.headers["location"] == "/login"
+        assert await store.get(sid) is None
+    finally:
+        await c.aclose()
+
+
 async def test_deleted_user_session_redirects_from_suggest_route(db_session, wired_settings):
     user = await UserRepo(db_session).create(
         email="suggest-gone@example.com", pw_hash=hash_password("pw12345678901"), role="admin"
