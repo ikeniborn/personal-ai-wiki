@@ -19,9 +19,11 @@ async def test_setup_throttled_after_limit(wired_settings, monkeypatch):
             "embedding_model": "e",
             "embedding_dim": 8,
         }
-        last = None
-        for _ in range(4):
-            last = await c.post("/api/v1/setup", json=payload)
-        assert last is not None and last.status_code == 429
+        first = await c.post("/api/v1/setup", json=payload)
+        second = await c.post("/api/v1/setup", json=payload)
+        third = await c.post("/api/v1/setup", json=payload)
+        assert first.status_code == 201
+        assert second.status_code == 409
+        assert third.status_code == 429
     finally:
         await c.aclose()

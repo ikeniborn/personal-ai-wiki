@@ -63,12 +63,14 @@ async def login(
         limit=s.login_rate_limit,
         window_seconds=s.login_rate_window_seconds,
     )
+    if not ip_allowed:
+        raise ProblemError(status=429, title="Too many attempts", detail="slow down")
     email_allowed = await limiter.hit(
         f"login:email:{email_key}",
         limit=s.login_rate_limit,
         window_seconds=s.login_rate_window_seconds,
     )
-    if not ip_allowed or not email_allowed:
+    if not email_allowed:
         raise ProblemError(status=429, title="Too many attempts", detail="slow down")
 
     user = await UserRepo(session).get_by_email(body.email)
