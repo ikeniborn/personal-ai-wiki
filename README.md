@@ -153,9 +153,10 @@ Copy `.env.example` → `.env` and fill (no defaults; startup fails if absent):
 | `REDIS_URL` | `redis://redis:6379/0` |
 | `SESSION_SECRET` | 32+ byte random — `openssl rand -hex 32` |
 | `FERNET_KEY` | 44-char Fernet key — `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `POSTGRES_PASSWORD` | Strong random Postgres password; if it contains `$`, single-quote it in `.env` or escape `$` as `$$` |
 
-Production also sets `POSTGRES_PASSWORD`, `PAW_HOST` (public DNS), `ACME_EMAIL`,
-and optional backup knobs. See the **prod checklist** in
+Production also sets `PAW_HOST` (public DNS), `ACME_EMAIL`, and optional backup knobs.
+See the **prod checklist** in
 [`docs/wiki/ops.md`](docs/wiki/ops.md).
 
 ---
@@ -163,7 +164,7 @@ and optional backup knobs. See the **prod checklist** in
 ## Quick start
 
 ```bash
-cp .env.example .env          # then fill SESSION_SECRET + FERNET_KEY (see above)
+cp .env.example .env          # then fill SESSION_SECRET, FERNET_KEY, POSTGRES_PASSWORD
 docker compose up             # traefik + postgres + redis + init(migrate) + api + worker
 ```
 
