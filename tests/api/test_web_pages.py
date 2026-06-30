@@ -53,7 +53,7 @@ async def test_setup_then_dashboard(client):
         "/api/v1/setup",
         json={
             "email": "admin@example.com",
-            "password": "pw12345",
+            "password": "pw12345678901",
             "base_url": "https://api.example/v1",
             "api_key": "sk-x",
             "chat_model": "gpt-x",
@@ -62,7 +62,8 @@ async def test_setup_then_dashboard(client):
         },
     )
     await client.post(
-        "/api/v1/auth/login", json={"email": "admin@example.com", "password": "pw12345"}
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com", "password": "pw12345678901"},
     )
     r = await client.get("/")
     assert r.status_code == 200

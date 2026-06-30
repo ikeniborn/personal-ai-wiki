@@ -4,7 +4,7 @@ from paw.api.errors import ProblemError
 from paw.db.models import User
 from paw.db.repos.settings import SettingsRepo
 from paw.db.repos.users import UserRepo
-from paw.security.passwords import hash_password
+from paw.security.passwords import WeakPassword, hash_password, validate_password_strength
 
 
 class SetupService:
@@ -30,6 +30,10 @@ class SetupService:
     ) -> User:
         if not await self.needs_setup():
             raise ProblemError(status=409, title="Already initialized")
+        try:
+            validate_password_strength(password)
+        except WeakPassword as e:
+            raise ProblemError(status=422, title="Weak password", detail=str(e)) from e
         admin = await self._users.create(email=email, pw_hash=hash_password(password), role="admin")
         await self._settings.upsert({})
         from paw.db.managed import ensure_embedding_column

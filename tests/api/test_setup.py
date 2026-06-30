@@ -20,7 +20,7 @@ async def test_first_run_needs_setup(client):
 
 _SETUP_BODY = {
     "email": "admin@example.com",
-    "password": "pw12345",
+    "password": "pw12345678901",
     "base_url": "https://api.example/v1",
     "api_key": "sk-x",
     "chat_model": "gpt-x",
@@ -45,7 +45,7 @@ async def test_setup_captures_dim_and_creates_vector_column(client, db_session):
         "/api/v1/setup",
         json={
             "email": "admin@example.com",
-            "password": "pw12345",
+            "password": "pw12345678901",
             "base_url": "https://api.example/v1",
             "api_key": "sk-x",
             "chat_model": "gpt-x",

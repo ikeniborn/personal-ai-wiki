@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paw.api.errors import ProblemError
 from paw.db.models import USER_ROLES, User
 from paw.db.repos.users import UserRepo
-from paw.security.passwords import hash_password
+from paw.security.passwords import WeakPassword, hash_password, validate_password_strength
 
 
 class UserService:
@@ -17,6 +17,10 @@ class UserService:
         return await self._repo.list()
 
     async def create(self, *, email: str, password: str, role: str) -> User:
+        try:
+            validate_password_strength(password)
+        except WeakPassword as e:
+            raise ProblemError(status=422, title="Weak password", detail=str(e)) from e
         u = await self._repo.create(email=email, pw_hash=hash_password(password), role=role)
         await self._s.commit()
         return u
