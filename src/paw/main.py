@@ -5,8 +5,10 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Receive, Scope, Send
 
 from paw.api.errors import install_error_handlers
+from paw.api.middleware.body_limit import BodySizeLimitMiddleware
 from paw.api.routers import api_keys as api_keys_router
 from paw.api.routers import articles as articles_router
 from paw.api.routers import auth as auth_router
@@ -21,6 +23,7 @@ from paw.api.routers import setup as setup_router
 from paw.api.routers import sources as sources_router
 from paw.api.routers import users as users_router
 from paw.api.web import routes as web_routes
+from paw.config import get_settings
 from paw.mcp.auth import MCPAuthMiddleware
 from paw.mcp.server import build_mcp
 from paw.obs import readiness as readiness_mod
@@ -95,7 +98,18 @@ def create_app() -> FastAPI:
     app.mount("/mcp", mcp_asgi)
     app.add_middleware(MCPAuthMiddleware)
     app.add_middleware(MetricsMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=get_settings().max_request_bytes)
     return app
 
 
-app = create_app()
+class _LazyApp:
+    def __init__(self) -> None:
+        self._app: FastAPI | None = None
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if self._app is None:
+            self._app = create_app()
+        await self._app(scope, receive, send)
+
+
+app = _LazyApp()
